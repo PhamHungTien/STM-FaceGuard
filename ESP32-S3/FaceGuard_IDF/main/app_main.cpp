@@ -1,6 +1,6 @@
 /*
  * app_main.cpp  —  FaceGuard ESP32-S3-CAM (AI-Thinker)
- * Face Recognition Door Lock — ESP-IDF 5.x
+ * Face Recognition Door Lock — ESP-IDF 5.x / 6.x  +  ESP-DL 3.x
  *
  * ── Wiring ────────────────────────────────────────────────────────────────────
  *   ESP32 GPIO47 TX  →  STM32 PA10 (USART1 RX)
@@ -14,34 +14,38 @@
  *
  * ── Protocol ESP32 → STM32 ───────────────────────────────────────────────────
  *   "READY\n"           boot complete
- *   "OPEN:<id>\n"       face recognised
+ *   "OPEN:<id>\n"       face recognised  (id = person index, 0-based)
  *   "DENIED\n"          face not recognised
  *   "ENROLLED:<id>\n"   new face saved
  *   "DELETED\n"         all faces cleared
- *   "ENROLL_FRONT\n"    step 1/5
- *   "ENROLL_LEFT\n"     step 2/5
- *   "ENROLL_RIGHT\n"    step 3/5
- *   "ENROLL_UP\n"       step 4/5
- *   "ENROLL_DOWN\n"     step 5/5
+ *   "ENROLL_FRONT\n"    pose 1/5
+ *   "ENROLL_LEFT\n"     pose 2/5
+ *   "ENROLL_RIGHT\n"    pose 3/5
+ *   "ENROLL_UP\n"       pose 4/5
+ *   "ENROLL_DOWN\n"     pose 5/5
+ *
+ * ── Face DB ───────────────────────────────────────────────────────────────────
+ *   Stored on SPIFFS partition labelled "fr", mounted at /fr.
+ *   5 feature-vector samples per person; person_id = db_entry_id / 5.
  */
 
 #include <cstring>
 #include <cstdio>
+#include <algorithm>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "freertos/queue.h"
 #include "freertos/semphr.h"
 
 #include "esp_log.h"
 #include "esp_camera.h"
+#include "esp_spiffs.h"
 #include "driver/uart.h"
-#include "driver/gpio.h"
 #include "nvs_flash.h"
 
-// Face AI — provided by espressif/esp-dl component
-#include "human_face_detect_msr01.hpp"
-#include "face_recognition_112_v1_s16.hpp"
+// Face AI — ESP-DL 3.x model components
+#include "human_face_detect.hpp"
+#include "human_face_recognition.hpp"
 
 static const char *TAG = "FaceGuard";
 
@@ -77,9 +81,9 @@ static const char *TAG = "FaceGuard";
 // ═══════════════════════════════════════════════════════════
 //  Face recognition config
 // ═══════════════════════════════════════════════════════════
-#define FACE_ID_MAX          7
-#define ENROLL_SAMPLES       5    // one per pose
-#define RECOG_THRESHOLD      0.8f
+#define ENROLL_SAMPLES       5      // feature vectors per person
+#define RECOG_THRESHOLD      0.55f  // cosine similarity threshold (0-1)
+#define FACE_DB_PATH         "/fr/face.db"
 
 #define NUM_POSES            5
 static const char *POSE_MSG[NUM_POSES] = {
@@ -96,17 +100,16 @@ static volatile int        g_pose_step = 0;
 static SemaphoreHandle_t   g_state_mutex;
 
 // ═══════════════════════════════════════════════════════════
-//  Face AI objects (constructed in main task)
+//  Face AI objects
 // ═══════════════════════════════════════════════════════════
-static HumanFaceDetectMSR01    *s_detector   = nullptr;
-static FaceRecognition112V1S16 *s_recognizer = nullptr;
+static HumanFaceDetect     *s_detector   = nullptr;
+static HumanFaceRecognizer *s_recognizer = nullptr;
 
 // ═══════════════════════════════════════════════════════════
 //  UART helpers
 // ═══════════════════════════════════════════════════════════
 static void uart_send(const char *msg)
 {
-    // Append \n if not present
     char buf[64];
     snprintf(buf, sizeof(buf), "%s\n", msg);
     uart_write_bytes(UART_STM32_PORT, buf, strlen(buf));
@@ -137,7 +140,7 @@ static void uart_init(void)
 static void uart_rx_task(void *arg)
 {
     uint8_t buf[64];
-    int  idx = 0;
+    int     idx = 0;
 
     while (1) {
         uint8_t byte;
@@ -222,6 +225,19 @@ static esp_err_t camera_init(void)
 }
 
 // ═══════════════════════════════════════════════════════════
+//  Convert camera frame to ESP-DL image descriptor
+// ═══════════════════════════════════════════════════════════
+static inline dl::image::img_t fb_to_img(const camera_fb_t *fb)
+{
+    return dl::image::img_t{
+        .data     = fb->buf,
+        .width    = fb->width,
+        .height   = fb->height,
+        .pix_type = dl::image::DL_IMAGE_PIX_TYPE_RGB565,
+    };
+}
+
+// ═══════════════════════════════════════════════════════════
 //  STATE_IDLE — run face recognition
 // ═══════════════════════════════════════════════════════════
 static void do_recognition(void)
@@ -229,19 +245,37 @@ static void do_recognition(void)
     camera_fb_t *fb = esp_camera_fb_get();
     if (!fb) return;
 
-    std::list<dl::detect::result_t> &detections = s_detector->infer(fb);
+    dl::image::img_t img = fb_to_img(fb);
+
+    std::list<dl::detect::result_t> &detections = s_detector->run(img);
 
     if (detections.empty()) {
         esp_camera_fb_return(fb);
         return;
     }
 
-    face_info_t info = s_recognizer->recognize(fb, detections.front().keypoint);
+    std::vector<dl::recognition::result_t> results =
+        s_recognizer->recognize(img, detections);
+
     esp_camera_fb_return(fb);
 
-    if (info.id >= 0 && info.similarity >= RECOG_THRESHOLD) {
+    if (results.empty()) {
+        uart_send("DENIED");
+        vTaskDelay(pdMS_TO_TICKS(3000));
+        return;
+    }
+
+    // Pick the result with the highest similarity score
+    auto best = std::max_element(results.begin(), results.end(),
+        [](const dl::recognition::result_t &a, const dl::recognition::result_t &b) {
+            return a.similarity < b.similarity;
+        });
+
+    if (best->similarity >= RECOG_THRESHOLD) {
+        // Map DB entry ID → person index  (ENROLL_SAMPLES entries per person)
+        int person_id = best->id / ENROLL_SAMPLES;
         char msg[24];
-        snprintf(msg, sizeof(msg), "OPEN:%d", info.id);
+        snprintf(msg, sizeof(msg), "OPEN:%d", person_id);
         uart_send(msg);
         vTaskDelay(pdMS_TO_TICKS(4000));
     } else {
@@ -258,7 +292,9 @@ static void do_enroll(void)
     camera_fb_t *fb = esp_camera_fb_get();
     if (!fb) { vTaskDelay(pdMS_TO_TICKS(50)); return; }
 
-    std::list<dl::detect::result_t> &detections = s_detector->infer(fb);
+    dl::image::img_t img = fb_to_img(fb);
+
+    std::list<dl::detect::result_t> &detections = s_detector->run(img);
 
     if (detections.empty()) {
         esp_camera_fb_return(fb);
@@ -266,10 +302,10 @@ static void do_enroll(void)
         return;
     }
 
-    int ret = s_recognizer->enroll_id(fb, detections.front().keypoint, "", true);
+    esp_err_t ret = s_recognizer->enroll(img, detections);
     esp_camera_fb_return(fb);
 
-    if (ret > 0) {
+    if (ret == ESP_OK) {
         xSemaphoreTake(g_state_mutex, portMAX_DELAY);
         g_pose_step++;
         int step = g_pose_step;
@@ -282,13 +318,13 @@ static void do_enroll(void)
             vTaskDelay(pdMS_TO_TICKS(800));
         }
 
-        if (ret == ENROLL_SAMPLES) {
-            int id = s_recognizer->get_enrolled_id_num() - 1;
+        if (step >= ENROLL_SAMPLES) {
+            int total     = s_recognizer->get_num_feats();
+            int person_id = (total - 1) / ENROLL_SAMPLES;
             char msg[24];
-            snprintf(msg, sizeof(msg), "ENROLLED:%d", id);
+            snprintf(msg, sizeof(msg), "ENROLLED:%d", person_id);
             uart_send(msg);
-            ESP_LOGI(TAG, "Face %d enrolled (total: %d)",
-                     id, s_recognizer->get_enrolled_id_num());
+            ESP_LOGI(TAG, "Face %d enrolled (total feats: %d)", person_id, total);
 
             xSemaphoreTake(g_state_mutex, portMAX_DELAY);
             g_state     = STATE_IDLE;
@@ -304,7 +340,7 @@ static void do_enroll(void)
 // ═══════════════════════════════════════════════════════════
 static void do_delete(void)
 {
-    s_recognizer->clear_id();
+    s_recognizer->clear_all_feats();
     uart_send("DELETED");
     ESP_LOGI(TAG, "All faces deleted");
 
@@ -314,7 +350,7 @@ static void do_delete(void)
 }
 
 // ═══════════════════════════════════════════════════════════
-//  Main face recognition task
+//  Main face recognition task (pinned to core 1)
 // ═══════════════════════════════════════════════════════════
 static void face_task(void *arg)
 {
@@ -338,11 +374,26 @@ extern "C" void app_main(void)
 {
     ESP_LOGI(TAG, "=== FaceGuard ESP32-S3 ===");
 
-    // NVS (needed for some internal components)
+    // NVS (needed by some IDF components)
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         nvs_flash_erase();
         nvs_flash_init();
+    }
+
+    // Mount SPIFFS partition "fr" at /fr — stores face feature database
+    esp_vfs_spiffs_conf_t spiffs_conf = {
+        .base_path              = "/fr",
+        .partition_label        = "fr",
+        .max_files              = 5,
+        .format_if_mount_failed = true,
+    };
+    ret = esp_vfs_spiffs_register(&spiffs_conf);
+    if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
+        ESP_LOGE(TAG, "SPIFFS mount failed: %s", esp_err_to_name(ret));
+        // Non-fatal: recognition will fail silently without a database
+    } else {
+        ESP_LOGI(TAG, "SPIFFS mounted at /fr");
     }
 
     // Mutex for state machine
@@ -357,23 +408,18 @@ extern "C" void app_main(void)
         esp_restart();
     }
 
-    // Face AI — create on heap to avoid stack overflow
-    s_detector   = new HumanFaceDetectMSR01(0.3f, 0.3f, 10, 0.3f);
-    s_recognizer = new FaceRecognition112V1S16(ENROLL_SAMPLES);
+    // Face AI objects (heap-allocated; lazy_load=true → model loaded on first run)
+    s_detector   = new HumanFaceDetect(HumanFaceDetect::MSRMNP_S8_V1, true);
+    s_recognizer = new HumanFaceRecognizer(FACE_DB_PATH);
 
-    // Load face database from "fr" partition
-    s_recognizer->set_partition(ESP_PARTITION_TYPE_DATA,
-                                ESP_PARTITION_SUBTYPE_ANY, "fr");
-    s_recognizer->set_ids_from_flash();
-    ESP_LOGI(TAG, "Faces in DB: %d", s_recognizer->get_enrolled_id_num());
+    ESP_LOGI(TAG, "Faces in DB: %d", s_recognizer->get_num_feats());
 
     // Start tasks
     xTaskCreatePinnedToCore(uart_rx_task, "uart_rx", 4096, NULL, 5, NULL, 0);
     xTaskCreatePinnedToCore(face_task,    "face",    8192, NULL, 5, NULL, 1);
 
-    // Signal STM32 we're ready
+    // Signal STM32 we are ready
     uart_send("READY");
 
-    // Main task can delete itself
     vTaskDelete(NULL);
 }

@@ -15,3 +15,9 @@ CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 
 # Stack
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
+# Force TIE728 vector path in ESP-DL (IDF v6.0 compatibility)
+CONFIG_TIE728_BOOST=y
+
+# SPIFFS for face feature database partition
+CONFIG_SPIFFS_MAX_PARTITIONS=2

@@ -1,0 +1,2 @@
+source /Users/phamhungtien/Documents/STM-FaceGuard/STM-FaceGuard/ESP32-S3/FaceGuard_IDF/build/gdbinit/symbols
+source /Users/phamhungtien/Documents/STM-FaceGuard/STM-FaceGuard/ESP32-S3/FaceGuard_IDF/build/gdbinit/connect
