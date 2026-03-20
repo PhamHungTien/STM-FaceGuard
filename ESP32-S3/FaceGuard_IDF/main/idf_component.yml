@@ -1,0 +1,9 @@
+## FaceGuard IDF — Component dependencies
+## IDF Component Manager auto-downloads these on first build
+dependencies:
+  idf:
+    version: ">=5.0.0"
+  espressif/esp-dl:
+    version: ">=2.0.0"
+  espressif/esp32-camera:
+    version: ">=2.0.0"

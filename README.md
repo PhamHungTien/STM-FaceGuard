@@ -53,14 +53,14 @@ Dự án đồ án môn học xây dựng một hệ thống khóa cửa thông 
        ▼                  ▼                    ▼
 ┌─────────────┐  ┌─────────────────┐  ┌──────────────────┐
 │ RELAY → 12V │  │  DFPlayer Mini  │  │   OLED 0.96"     │
-│ Solenoid LY │  │    + Loa 3W     │  │   128×64 px      │
+│ SM1373 Lock │  │    + Loa 3W     │  │   128×64 px      │
 └─────────────┘  └─────────────────┘  └──────────────────┘
 ```
 
 **Nguyên lý hoạt động:**
 1. ESP32-S3 liên tục thu ảnh từ Camera OV3660 và chạy thuật toán Face Recognition
 2. Khi nhận diện đúng khuôn mặt, gửi lệnh `OPEN:<ID>` qua UART1 → STM32
-3. STM32 kích Relay mở khóa Solenoid 3 giây, phát âm thanh chào mừng, hiển thị tên người dùng lên OLED
+3. STM32 kích Relay mở khóa SM1373 trong 3 giây, phát âm thanh chào mừng, hiển thị tên người dùng lên OLED
 4. Khi nhận diện thất bại, ESP32 gửi `DENIED`, STM32 phát cảnh báo và hiển thị "Từ chối"
 
 ---
@@ -98,7 +98,7 @@ Dự án đồ án môn học xây dựng một hệ thống khóa cửa thông 
 
 | STT | Tên linh kiện | Thông số kỹ thuật | Vai trò |
 |-----|--------------|-------------------|---------|
-| 11 | **Khóa Solenoid LY-01** | Điện áp 12 V DC | Cơ cấu chốt khóa vật lý cho cửa |
+| 11 | **Khóa cửa điện SM1373 (V3)** | 12 V DC, Fail-Secure, ~0.5 A | Cơ cấu chốt khóa vật lý cho cửa |
 | 12 | **Module Relay 5 V (1 kênh)** | Opto cách ly, kích mức thấp | Đóng/ngắt nguồn 12 V cho khóa từ tín hiệu 3,3 V của STM32 |
 | 13 | **Module Buck LM2596** | Hạ áp DC-DC, dòng tối đa 3 A | Hạ áp từ 12 V xuống 5 V nuôi Nucleo và ESP32-S3 |
 | 14 | **Adapter 12 V – 2 A** | Nguồn xung ổn định | Cung cấp năng lượng tổng cho toàn bộ hệ thống |
@@ -107,7 +107,7 @@ Dự án đồ án môn học xây dựng một hệ thống khóa cửa thông 
 
 | STT | Tên linh kiện | Vai trò |
 |-----|--------------|---------|
-| 15 | **Diode 1N4007** | Mắc song song cuộn dây Solenoid — chống dòng cảm ứng ngược bảo vệ Relay |
+| 15 | **Diode 1N4007** | Mắc song song cuộn dây SM1373 — chống dòng cảm ứng ngược bảo vệ Relay |
 | 16 | **Dây cắm Jumper** | Kết nối tín hiệu giữa các module (Đực-Đực, Đực-Cái, Cái-Cái) |
 | 17 | **Breadboard** | Mạch cắm thử nghiệm trước khi hàn cố định |
 
@@ -137,9 +137,9 @@ Dự án đồ án môn học xây dựng một hệ thống khóa cửa thông 
 
 ```
 Adapter 12V ──► LM2596 ──► 5V ──► Nucleo VIN & ESP32-S3 VCC
-            └──────────────────► Relay COM ──► Solenoid (+)
-                                               Solenoid (–) ──► GND
-                                               Diode 1N4007 song song Solenoid
+            └──────────────────► Relay COM ──► SM1373 (+) dây ĐỎ
+                                               SM1373 (–) dây ĐEN ──► GND
+                                               Diode 1N4007 song song SM1373
 ```
 
 > **Quan trọng:** Không lấy nguồn 3,3 V từ Nucleo để nuôi ESP32-S3. ESP32-S3 có thể tiêu tới 500 mA khi chạy AI — sẽ làm sụt áp và gây lỗi hệ thống.
@@ -206,7 +206,7 @@ Adapter 12V ──► LM2596 ──► 5V ──► Nucleo VIN & ESP32-S3 VCC
 ### Mở cửa từ bên trong (EXIT)
 1. Nhấn nút **EXIT** (PC13)
 2. STM32 kích Relay ngay lập tức (không qua ESP32)
-3. Solenoid mở chốt trong **3 giây**
+3. SM1373 mở chốt trong **3 giây**
 
 ### Nhận diện tự động
 - ESP32-S3 liên tục quét khuôn mặt
@@ -313,7 +313,7 @@ Yêu cầu thẻ nhớ:
 
 Dự án sử dụng **Module Relay 5V** lắp trên **đế cắm PTF08A** (socket 8 chân kiểu Finder). Đây là loại đế relay công nghiệp, cho phép tháo lắp relay dễ dàng mà không cần hàn.
 
-**Sơ đồ đấu dây relay với Solenoid Lock 12V:**
+**Sơ đồ đấu dây relay PTF08A với Khóa SM1373:**
 
 ```
 STM32 PB0 ──► IN (Module Relay)
@@ -321,17 +321,19 @@ STM32 PB0 ──► IN (Module Relay)
 GND         ──► GND (Module Relay)
 
 Relay COM   ──► 12V (từ Adapter)
-Relay NO    ──► (+) Solenoid Lock LY-01
-GND         ──► (–) Solenoid Lock LY-01
+Relay NO    ──► SM1373 dây ĐỎ (+)
+GND         ──► SM1373 dây ĐEN (–)
 
-Diode 1N4007: Cathode ──► (+) Solenoid, Anode ──► (–) Solenoid
+Diode 1N4007: Cathode ──► SM1373 (+), Anode ──► SM1373 (–)
               (mắc song song, chống dòng cảm ứng ngược)
 ```
 
-> **Lưu ý relay:**
-> - Module relay **active-HIGH**: PB0 = HIGH → relay đóng → cửa mở
-> - PTF08A hỗ trợ tối đa 10A/250VAC — dư sức cho Solenoid 12V/1A
-> - **Bắt buộc** lắp Diode 1N4007 song song với cuộn dây Solenoid để bảo vệ relay khỏi xung điện ngược khi ngắt nguồn
+> **Thông số SM1373:**
+> - Loại: Electric Strike, **Fail-Secure** (mất điện = khóa, có điện = mở)
+> - Điện áp: 12V DC, dòng ~0.5A
+> - Module relay **active-HIGH**: PB0 = HIGH → relay đóng → SM1373 có điện → cửa mở
+> - PTF08A hỗ trợ tối đa 10A/250VAC — dư sức cho SM1373 12V/0.5A
+> - **Bắt buộc** lắp Diode 1N4007 song song với cuộn dây SM1373 để bảo vệ relay khỏi xung điện ngược khi ngắt nguồn
 
 ### Nguồn điện
 
