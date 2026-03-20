@@ -21,17 +21,33 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "ssd1306.h"
+#include "dfplayer.h"
+#include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-
+typedef enum {
+    SYS_IDLE,
+    SYS_UNLOCKING,
+    SYS_ENROLLING,
+    SYS_DELETING,
+    SYS_DENIED
+} SystemState_t;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define RELAY_OPEN_MS       3000U   /* Door stays unlocked for 3 seconds       */
+#define DELETE_HOLD_MS      3000U   /* Hold DELETE button 3s to confirm        */
+#define DENIED_DISPLAY_MS   2500U   /* "Access Denied" shown for 2.5 seconds   */
+#define ENROLL_TIMEOUT_MS  15000U   /* Enrolling mode auto-cancels after 15s   */
+#define DEBOUNCE_MS          200U   /* Minimum ms between button events        */
 
+#define UART1_BUF_SIZE        64U   /* ESP32 message receive buffer            */
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -47,7 +63,23 @@ UART_HandleTypeDef huart2;
 UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN PV */
+/* --- Button flags (set in ISR, cleared in main loop) --- */
+static volatile uint8_t  btn_exit_flag   = 0;
+static volatile uint8_t  btn_enroll_flag = 0;
+static volatile uint8_t  btn_delete_flag = 0;
+static volatile uint32_t btn_exit_tick   = 0;
+static volatile uint32_t btn_enroll_tick = 0;
+static volatile uint32_t btn_delete_tick = 0;
 
+/* --- UART1 receive buffer (ESP32-S3 → STM32) --- */
+static uint8_t  uart1_rx_byte = 0;
+static char     uart1_line[UART1_BUF_SIZE];
+static uint16_t uart1_line_idx = 0;
+static volatile uint8_t uart1_line_ready = 0;
+
+/* --- System state machine --- */
+static SystemState_t sys_state  = SYS_IDLE;
+static uint32_t      state_tick = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -58,11 +90,319 @@ static void MX_I2C1_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_USART3_UART_Init(void);
 /* USER CODE BEGIN PFP */
-
+static void App_Init(void);
+static void App_Loop(void);
+static void Relay_Open(void);
+static void Relay_Close(void);
+static void Enter_Unlocked(uint8_t face_id, uint8_t from_exit_btn);
+static void Enter_Denied(void);
+static void Parse_ESP32_Msg(const char *msg);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+/* -----------------------------------------------------------------------
+ * HAL UART RX callback – called after each byte received on UART1 (ESP32)
+ * Accumulates bytes into uart1_line until '\n', then sets uart1_line_ready.
+ * ----------------------------------------------------------------------- */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+    if (huart->Instance == USART1) {
+        if (uart1_rx_byte == '\n') {
+            uart1_line[uart1_line_idx] = '\0';
+            uart1_line_idx  = 0;
+            uart1_line_ready = 1;
+        } else if (uart1_rx_byte != '\r') {
+            if (uart1_line_idx < UART1_BUF_SIZE - 1) {
+                uart1_line[uart1_line_idx++] = (char)uart1_rx_byte;
+            } else {
+                /* Buffer overflow guard: discard line */
+                uart1_line_idx = 0;
+            }
+        }
+        /* Restart reception for next byte */
+        HAL_UART_Receive_IT(&huart1, &uart1_rx_byte, 1);
+    }
+}
+
+/* -----------------------------------------------------------------------
+ * HAL GPIO EXTI callback – called from EXTI IRQ handlers for all buttons.
+ * Uses timestamps to debounce button presses.
+ * ----------------------------------------------------------------------- */
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+    uint32_t now = HAL_GetTick();
+
+    if (GPIO_Pin == BTN_EXIT_Pin) {
+        if ((now - btn_exit_tick) >= DEBOUNCE_MS) {
+            btn_exit_tick = now;
+            btn_exit_flag = 1;
+        }
+    } else if (GPIO_Pin == BTN_ENROLL_Pin) {
+        if ((now - btn_enroll_tick) >= DEBOUNCE_MS) {
+            btn_enroll_tick = now;
+            btn_enroll_flag = 1;
+        }
+    } else if (GPIO_Pin == BTN_DELETE_Pin) {
+        if ((now - btn_delete_tick) >= DEBOUNCE_MS) {
+            btn_delete_tick = now;
+            btn_delete_flag = 1;
+        }
+    }
+}
+
+/* ----------------------------------------------------------------------- */
+
+static void Relay_Open(void)
+{
+    /* Relay module is active-HIGH: set PB0 HIGH to energise coil → open lock */
+    HAL_GPIO_WritePin(RELAY_GPIO_Port, RELAY_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(LD2_GPIO_Port,   LD2_Pin,   GPIO_PIN_SET);
+}
+
+static void Relay_Close(void)
+{
+    HAL_GPIO_WritePin(RELAY_GPIO_Port, RELAY_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(LD2_GPIO_Port,   LD2_Pin,   GPIO_PIN_RESET);
+}
+
+static void Enter_Unlocked(uint8_t face_id, uint8_t from_exit_btn)
+{
+    Relay_Open();
+    sys_state  = SYS_UNLOCKING;
+    state_tick = HAL_GetTick();
+
+    if (from_exit_btn) {
+        SSD1306_ShowUnlockedExit();
+    } else {
+        SSD1306_ShowUnlocked(face_id);
+    }
+    DFPlayer_Play(DFP_TRACK_OPEN_DOOR);
+}
+
+static void Enter_Denied(void)
+{
+    sys_state  = SYS_DENIED;
+    state_tick = HAL_GetTick();
+    SSD1306_ShowDenied();
+    DFPlayer_Play(DFP_TRACK_DENIED);
+}
+
+/* -----------------------------------------------------------------------
+ * Parse a complete message line received from ESP32-S3.
+ *
+ * Protocol (ESP32 → STM32):
+ *   "OPEN:<id>"    Face recognised, <id> = face database ID
+ *   "DENIED"       Face not recognised
+ *   "ENROLLED:<id>" Enrolment success, new face ID
+ *   "DELETED"      All faces cleared from database
+ *   "READY"        ESP32 finished booting
+ * ----------------------------------------------------------------------- */
+static void Parse_ESP32_Msg(const char *msg)
+{
+    if (strncmp(msg, "OPEN:", 5) == 0) {
+        uint8_t id = (uint8_t)atoi(msg + 5);
+        Enter_Unlocked(id, 0);
+
+    } else if (strcmp(msg, "DENIED") == 0) {
+        if (sys_state == SYS_IDLE) {
+            Enter_Denied();
+        }
+
+    } else if (strncmp(msg, "ENROLLED:", 9) == 0) {
+        uint8_t id = (uint8_t)atoi(msg + 9);
+        sys_state  = SYS_IDLE;
+        state_tick = HAL_GetTick();
+        SSD1306_ShowEnrolled(id);
+        DFPlayer_Play(DFP_TRACK_ENROLLED);
+
+    } else if (strcmp(msg, "DELETED") == 0) {
+        sys_state  = SYS_IDLE;
+        state_tick = HAL_GetTick();
+        SSD1306_ShowDeleted();
+        DFPlayer_Play(DFP_TRACK_DELETED);
+
+    } else if (strcmp(msg, "READY") == 0) {
+        sys_state = SYS_IDLE;
+        SSD1306_ShowReady();
+    }
+}
+
+/* -----------------------------------------------------------------------
+ * Application initialisation (called once after all HAL inits)
+ * ----------------------------------------------------------------------- */
+static void App_Init(void)
+{
+    /* --- Reconfigure buttons: active-LOW (connect to GND), falling edge --- */
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+    GPIO_InitStruct.Mode  = GPIO_MODE_IT_FALLING;
+    GPIO_InitStruct.Pull  = GPIO_PULLUP;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+
+    GPIO_InitStruct.Pin = BTN_ENROLL_Pin | BTN_DELETE_Pin;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+    GPIO_InitStruct.Pin = BTN_EXIT_Pin;
+    HAL_GPIO_Init(BTN_EXIT_GPIO_Port, &GPIO_InitStruct);
+
+    /* --- Enable EXTI NVIC --- */
+    HAL_NVIC_SetPriority(EXTI0_IRQn,     1, 0); /* ENROLL */
+    HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+    HAL_NVIC_SetPriority(EXTI1_IRQn,     1, 0); /* DELETE */
+    HAL_NVIC_EnableIRQ(EXTI1_IRQn);
+    HAL_NVIC_SetPriority(EXTI15_10_IRQn, 2, 0); /* EXIT (PC13) */
+    HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
+
+    /* --- Enable USART1 NVIC (ESP32 receive) --- */
+    HAL_NVIC_SetPriority(USART1_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(USART1_IRQn);
+
+    /* --- OLED initialisation and boot screen --- */
+    SSD1306_Init();
+    SSD1306_ShowBoot();
+
+    /* --- DFPlayer initialisation (blocks ~1.6 s for SD card enumeration) --- */
+    DFPlayer_Init();
+
+    /* --- Start UART1 interrupt-driven receive --- */
+    HAL_UART_Receive_IT(&huart1, &uart1_rx_byte, 1);
+
+    /* --- Show ready screen --- */
+    SSD1306_ShowReady();
+}
+
+/* -----------------------------------------------------------------------
+ * Main application loop body
+ * ----------------------------------------------------------------------- */
+static void App_Loop(void)
+{
+    uint32_t now = HAL_GetTick();
+
+    /* ================================================================
+     * EXIT button — highest priority, opens relay immediately
+     * (works regardless of current sys_state)
+     * ================================================================ */
+    if (btn_exit_flag) {
+        btn_exit_flag = 0;
+        if (sys_state == SYS_UNLOCKING) {
+            /* Already open – just reset timer */
+            state_tick = HAL_GetTick();
+        } else {
+            Enter_Unlocked(0, 1 /* from_exit_btn */);
+        }
+    }
+
+    /* ================================================================
+     * ENROLL button — only act when idle
+     * ================================================================ */
+    if (btn_enroll_flag) {
+        btn_enroll_flag = 0;
+        if (sys_state == SYS_IDLE) {
+            sys_state  = SYS_ENROLLING;
+            state_tick = HAL_GetTick();
+            HAL_UART_Transmit(&huart1, (uint8_t *)"ENROLL\n", 7, 100);
+            SSD1306_ShowEnrolling();
+            DFPlayer_Play(DFP_TRACK_LOOK_AT_CAM);
+        }
+    }
+
+    /* ================================================================
+     * DELETE button — hold for 3 s to confirm
+     * This uses a blocking loop but still receives UART via interrupts.
+     * ================================================================ */
+    if (btn_delete_flag) {
+        btn_delete_flag = 0;
+        if (sys_state == SYS_IDLE) {
+            sys_state = SYS_DELETING;
+
+            uint32_t hold_start   = HAL_GetTick();
+            uint8_t  last_second  = 0xFF;
+            uint8_t  confirmed    = 0;
+
+            SSD1306_ShowHoldDelete(0);
+
+            while (HAL_GPIO_ReadPin(BTN_DELETE_GPIO_Port, BTN_DELETE_Pin) == GPIO_PIN_RESET) {
+                uint32_t held_ms = HAL_GetTick() - hold_start;
+                uint8_t  sec     = (uint8_t)(held_ms / 1000U);
+
+                /* Update progress display once per second */
+                if (sec != last_second) {
+                    last_second = sec;
+                    SSD1306_ShowHoldDelete(sec);
+                }
+
+                if (held_ms >= DELETE_HOLD_MS) {
+                    confirmed = 1;
+                    break;
+                }
+            }
+
+            if (confirmed) {
+                SSD1306_ShowDeleting();
+                HAL_UART_Transmit(&huart1, (uint8_t *)"DEL_ALL\n", 8, 100);
+                /* Remain in SYS_DELETING – Parse_ESP32_Msg handles "DELETED" */
+                state_tick = HAL_GetTick();
+            } else {
+                /* Released early – cancel */
+                sys_state = SYS_IDLE;
+                SSD1306_ShowReady();
+            }
+        }
+    }
+
+    /* ================================================================
+     * Process completed UART line from ESP32-S3
+     * ================================================================ */
+    if (uart1_line_ready) {
+        uart1_line_ready = 0;
+        Parse_ESP32_Msg(uart1_line);
+        now = HAL_GetTick(); /* Refresh time after potential state change */
+    }
+
+    /* ================================================================
+     * State timeout handlers
+     * ================================================================ */
+    switch (sys_state) {
+
+        case SYS_UNLOCKING:
+            if ((now - state_tick) >= RELAY_OPEN_MS) {
+                Relay_Close();
+                sys_state = SYS_IDLE;
+                SSD1306_ShowReady();
+            }
+            break;
+
+        case SYS_DENIED:
+            if ((now - state_tick) >= DENIED_DISPLAY_MS) {
+                sys_state = SYS_IDLE;
+                SSD1306_ShowReady();
+            }
+            break;
+
+        case SYS_ENROLLING:
+            if ((now - state_tick) >= ENROLL_TIMEOUT_MS) {
+                /* ESP32 did not respond – cancel enrolment */
+                sys_state = SYS_IDLE;
+                HAL_UART_Transmit(&huart1, (uint8_t *)"CANCEL\n", 7, 100);
+                SSD1306_ShowReady();
+            }
+            break;
+
+        case SYS_DELETING:
+            /* "DELETED" from ESP32 is handled in Parse_ESP32_Msg.
+             * Guard timeout in case ESP32 does not respond (10 s). */
+            if ((now - state_tick) >= 10000U) {
+                sys_state = SYS_IDLE;
+                SSD1306_ShowReady();
+            }
+            break;
+
+        default:
+            break;
+    }
+}
 
 /* USER CODE END 0 */
 
@@ -100,7 +440,7 @@ int main(void)
   MX_USART1_UART_Init();
   MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
-
+  App_Init();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -110,6 +450,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    App_Loop();
   }
   /* USER CODE END 3 */
 }
