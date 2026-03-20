@@ -257,6 +257,47 @@ void SSD1306_ShowEnrolling(void)
     draw_status("", "  Enrolling...", "", " Look at camera!");
 }
 
+/*
+ * Show guided enrollment step on OLED.
+ *
+ * step:  1=FRONT  2=LEFT  3=RIGHT  4=UP  5=DOWN
+ * total: total number of steps (e.g. 5)
+ *
+ * Layout example (step 2 of 5, LEFT):
+ *   Page 2:  "  Step 2 / 5    "
+ *   Page 3:  "  Turn LEFT     "
+ *   Page 4:  "  <---(O)       "   (ASCII arrow)
+ *   Page 5:  "  Hold still... "
+ */
+void SSD1306_ShowEnrollStep(uint8_t step, uint8_t total)
+{
+    char header[22];
+    snprintf(header, sizeof(header), "  Step %d / %d", step, total);
+
+    const char *direction = "";
+    const char *arrow     = "";
+
+    switch (step) {
+        case 1: direction = "  Look STRAIGHT "; arrow = "    --> (O) <-- "; break;
+        case 2: direction = "  Turn LEFT     "; arrow = "  <--- (O)      "; break;
+        case 3: direction = "  Turn RIGHT    "; arrow = "        (O) --->"; break;
+        case 4: direction = "  Tilt UP       "; arrow = "       (O)      "; break;  /* up arrow via text */
+        case 5: direction = "  Tilt DOWN     "; arrow = "       (O)      "; break;
+        default: direction = "  Look at cam  "; arrow = "      (O)       "; break;
+    }
+
+    /* For UP/DOWN, annotate the arrow line differently */
+    if (step == 4) arrow = "     /( O )     ";
+    if (step == 5) arrow = "     \\( O )     ";
+
+    SSD1306_WriteString(0, 2, header);
+    SSD1306_WriteString(0, 3, direction);
+    SSD1306_WriteString(0, 4, arrow);
+    SSD1306_WriteString(0, 5, "  Hold still... ");
+    SSD1306_FillPage(6, 0x00);
+    SSD1306_FillPage(7, 0x00);
+}
+
 void SSD1306_ShowEnrolled(uint8_t id)
 {
     char buf[22];

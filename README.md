@@ -15,6 +15,8 @@ Dự án đồ án môn học xây dựng một hệ thống khóa cửa thông 
 - [Cấu hình giao tiếp](#cấu-hình-giao-tiếp)
 - [Hướng dẫn sử dụng](#hướng-dẫn-sử-dụng)
 - [Giao thức UART](#giao-thức-uart)
+- [Chuẩn bị file âm thanh (DFPlayer)](#chuẩn-bị-file-âm-thanh-dfplayer)
+- [Lưu ý phần cứng](#lưu-ý-phần-cứng)
 - [Công cụ phát triển](#công-cụ-phát-triển)
 - [Cấu trúc dự án](#cấu-trúc-dự-án)
 
@@ -179,11 +181,21 @@ Adapter 12V ──► LM2596 ──► 5V ──► Nucleo VIN & ESP32-S3 VCC
 ## Hướng dẫn sử dụng
 
 ### Thêm khuôn mặt mới (ENROLL)
-1. Đứng trước Camera OV3660, khoảng cách 30–60 cm
+1. Đứng trước Camera OV3660, khoảng cách **30–60 cm**, ánh sáng đủ sáng
 2. Nhấn nút **ENROLL** (PA0)
-3. OLED hiển thị `"Scanning..."`, DFPlayer phát _"Mời bạn nhìn vào camera"_
-4. ESP32-S3 chụp và lưu đặc trưng khuôn mặt vào Flash
-5. OLED hiển thị `"Enrolled ID: X"`, DFPlayer phát _"Đã thêm thành công"_
+3. OLED hiển thị `"Enrolling..."`, loa phát _"Mời bạn nhìn vào camera"_
+4. ESP32-S3 bắt đầu thu thập 5 tư thế khuôn mặt — OLED và loa **hướng dẫn từng bước**:
+
+| Bước | OLED hiển thị | Loa phát | Hành động |
+|------|--------------|----------|-----------|
+| 1/5 | `Step 1/5` + `Look STRAIGHT` | Track 6 | Nhìn thẳng vào camera |
+| 2/5 | `Step 2/5` + `Turn LEFT` | Track 7 | Quay đầu sang **trái** ~30° |
+| 3/5 | `Step 3/5` + `Turn RIGHT` | Track 8 | Quay đầu sang **phải** ~30° |
+| 4/5 | `Step 4/5` + `Tilt UP` | Track 9 | Ngước đầu **lên** ~20° |
+| 5/5 | `Step 5/5` + `Tilt DOWN` | Track 10 | Cúi đầu **xuống** ~20° |
+
+5. Sau mỗi bước, giữ nguyên tư thế đến khi OLED chuyển sang bước tiếp theo
+6. Hoàn tất: OLED hiển thị `"Enrolled #X"`, loa phát _"Đã thêm khuôn mặt thành công"_
 
 ### Xóa toàn bộ khuôn mặt (DELETE)
 1. Nhấn và giữ nút **DELETE** (PA1) trong **3 giây**
@@ -213,6 +225,12 @@ Adapter 12V ──► LM2596 ──► 5V ──► Nucleo VIN & ESP32-S3 VCC
 | `DENIED\n` | Nhận diện thất bại |
 | `ENROLLED:<ID>\n` | Đã lưu khuôn mặt mới thành công |
 | `DELETED\n` | Đã xóa toàn bộ dữ liệu |
+| `READY\n` | ESP32 khởi động xong |
+| `ENROLL_FRONT\n` | Hướng dẫn bước 1: nhìn thẳng |
+| `ENROLL_LEFT\n` | Hướng dẫn bước 2: quay trái |
+| `ENROLL_RIGHT\n` | Hướng dẫn bước 3: quay phải |
+| `ENROLL_UP\n` | Hướng dẫn bước 4: ngước lên |
+| `ENROLL_DOWN\n` | Hướng dẫn bước 5: cúi xuống |
 
 ### STM32 → ESP32-S3 (Lệnh điều khiển)
 
@@ -222,7 +240,112 @@ Adapter 12V ──► LM2596 ──► 5V ──► Nucleo VIN & ESP32-S3 VCC
 | `DEL_ALL\n` | Xóa toàn bộ dữ liệu khuôn mặt |
 
 ### STM32 → DFPlayer Mini (UART3, 9600 baud)
-DFPlayer được điều khiển qua giao thức binary. STM32 gửi lệnh phát file MP3 theo số thứ tự tương ứng với từng sự kiện hệ thống.
+DFPlayer được điều khiển qua giao thức binary 10 byte:
+
+```
+0x7E  0xFF  0x06  CMD  0x00  ParamH  ParamL  CkH  CkL  0xEF
+```
+
+Checksum = `-(0xFF + 0x06 + CMD + 0x00 + ParamH + ParamL)`
+
+---
+
+## Chuẩn bị file âm thanh (DFPlayer)
+
+### Nội dung các file cần thu âm / tổng hợp giọng nói
+
+| Track | Tên file | Khi nào phát | Nội dung giọng nói tiếng Việt |
+|-------|----------|-------------|-------------------------------|
+| 1 | `0001.mp3` | Mở cửa thành công | *"Xin chào, cửa đã mở"* |
+| 2 | `0002.mp3` | Nhận diện thất bại | *"Không nhận diện được, vui lòng thử lại"* |
+| 3 | `0003.mp3` | Bắt đầu enroll | *"Mời bạn nhìn vào camera"* |
+| 4 | `0004.mp3` | Enroll thành công | *"Đã thêm khuôn mặt thành công"* |
+| 5 | `0005.mp3` | Xóa dữ liệu xong | *"Đã xóa toàn bộ dữ liệu khuôn mặt"* |
+| 6 | `0006.mp3` | Enroll bước 1 | *"Mời nhìn thẳng vào camera"* |
+| 7 | `0007.mp3` | Enroll bước 2 | *"Vui lòng quay đầu sang trái"* |
+| 8 | `0008.mp3` | Enroll bước 3 | *"Vui lòng quay đầu sang phải"* |
+| 9 | `0009.mp3` | Enroll bước 4 | *"Vui lòng ngước đầu lên một chút"* |
+| 10 | `0010.mp3` | Enroll bước 5 | *"Vui lòng cúi đầu xuống một chút"* |
+
+### Cách tạo file MP3 (chọn 1 trong 3 cách)
+
+**Cách 1 — VBee Studio (giọng Việt đẹp nhất):**
+- Truy cập [vbee.vn](https://vbee.vn) → Studio → nhập text → chọn giọng → tải MP3
+
+**Cách 2 — FreeText2Speech:**
+- Truy cập [freetts.com](https://freetts.com) → chọn ngôn ngữ **Vietnamese** → nhập text → Export MP3
+
+**Cách 3 — Google Translate (nhanh nhất):**
+- Mở Google Translate → nhập text tiếng Việt → nhấn nút loa → record âm thanh ra MP3
+
+### Cách đặt file lên thẻ nhớ MicroSD
+
+```
+Yêu cầu thẻ nhớ:
+- Format: FAT32
+- Dung lượng: 1 GB – 16 GB
+- Cấu trúc thư mục:
+
+  [Thư mục gốc thẻ nhớ]
+  ├── 0001.mp3   → "Xin chào, cửa đã mở"
+  ├── 0002.mp3   → "Không nhận diện được, vui lòng thử lại"
+  ├── 0003.mp3   → "Mời bạn nhìn vào camera"
+  ├── 0004.mp3   → "Đã thêm khuôn mặt thành công"
+  ├── 0005.mp3   → "Đã xóa toàn bộ dữ liệu khuôn mặt"
+  ├── 0006.mp3   → "Mời nhìn thẳng vào camera"
+  ├── 0007.mp3   → "Vui lòng quay đầu sang trái"
+  ├── 0008.mp3   → "Vui lòng quay đầu sang phải"
+  ├── 0009.mp3   → "Vui lòng ngước đầu lên một chút"
+  └── 0010.mp3   → "Vui lòng cúi đầu xuống một chút"
+```
+
+> **Quan trọng:**
+> - File phải đặt ở **thư mục gốc** (root), không được tạo thư mục con
+> - Tên file phải đúng định dạng `0001.mp3` đến `0005.mp3` (4 chữ số, không đổi tên)
+> - Copy file vào thẻ nhớ theo **đúng thứ tự từ 0001 → 0005** để DFPlayer đọc đúng track number
+> - Sau khi copy xong, **eject thẻ nhớ đúng cách** trước khi rút ra
+
+---
+
+## Lưu ý phần cứng
+
+### Relay PTF08A (Đế cắm relay Finder)
+
+Dự án sử dụng **Module Relay 5V** lắp trên **đế cắm PTF08A** (socket 8 chân kiểu Finder). Đây là loại đế relay công nghiệp, cho phép tháo lắp relay dễ dàng mà không cần hàn.
+
+**Sơ đồ đấu dây relay với Solenoid Lock 12V:**
+
+```
+STM32 PB0 ──► IN (Module Relay)
+5V          ──► VCC (Module Relay)
+GND         ──► GND (Module Relay)
+
+Relay COM   ──► 12V (từ Adapter)
+Relay NO    ──► (+) Solenoid Lock LY-01
+GND         ──► (–) Solenoid Lock LY-01
+
+Diode 1N4007: Cathode ──► (+) Solenoid, Anode ──► (–) Solenoid
+              (mắc song song, chống dòng cảm ứng ngược)
+```
+
+> **Lưu ý relay:**
+> - Module relay **active-HIGH**: PB0 = HIGH → relay đóng → cửa mở
+> - PTF08A hỗ trợ tối đa 10A/250VAC — dư sức cho Solenoid 12V/1A
+> - **Bắt buộc** lắp Diode 1N4007 song song với cuộn dây Solenoid để bảo vệ relay khỏi xung điện ngược khi ngắt nguồn
+
+### Nguồn điện
+
+> **Không** lấy nguồn 3,3V từ Nucleo để nuôi ESP32-S3. ESP32-S3 tiêu tối đa 500 mA khi chạy AI — sẽ gây sụt áp và reset hệ thống. Phải dùng LM2596 riêng từ Adapter 12V.
+
+### Nút nhấn
+
+Tất cả 3 nút kết nối theo sơ đồ **active-LOW**:
+
+```
+GPIO (PULLUP) ──[BTN]──► GND
+```
+
+Code đã cấu hình lại các chân PA0, PA1, PC13 thành **FALLING edge + PULLUP** tại runtime trong `App_Init()`.
 
 ---
 
@@ -253,14 +376,21 @@ Flash Mode: QIO 80MHz
 STM-FaceGuard/
 ├── Core/
 │   ├── Src/
-│   │   └── main.c          # Logic điều khiển chính
+│   │   ├── main.c              # State machine chính + UART/EXTI callbacks
+│   │   ├── ssd1306.c           # OLED driver (SSD1306) + font 5×7 + màn hình UI
+│   │   ├── dfplayer.c          # DFPlayer Mini UART protocol driver
+│   │   ├── stm32f3xx_it.c      # EXTI0/1/15-10 + USART1 IRQ handlers
+│   │   ├── stm32f3xx_hal_msp.c # HAL MSP init (tự động tạo bởi CubeMX)
+│   │   └── system_stm32f3xx.c  # System clock config
 │   └── Inc/
-│       └── main.h
+│       ├── main.h              # Pin definitions (tự động tạo bởi CubeMX)
+│       ├── ssd1306.h           # OLED driver header
+│       └── dfplayer.h          # DFPlayer driver header
 ├── Drivers/
-│   ├── CMSIS/              # CMSIS Core headers
-│   └── STM32F3xx_HAL_Driver/  # HAL Library STM32F3
-├── STM-FaceGuard.ioc       # File cấu hình STM32CubeMX
-├── STM32F303RETX_FLASH.ld  # Linker script
+│   ├── CMSIS/                  # CMSIS Core headers
+│   └── STM32F3xx_HAL_Driver/   # HAL Library STM32F3
+├── STM-FaceGuard.ioc           # File cấu hình STM32CubeMX
+├── STM32F303RETX_FLASH.ld      # Linker script
 └── README.md
 ```
 

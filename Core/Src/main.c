@@ -193,11 +193,18 @@ static void Enter_Denied(void)
  * Parse a complete message line received from ESP32-S3.
  *
  * Protocol (ESP32 → STM32):
- *   "OPEN:<id>"    Face recognised, <id> = face database ID
- *   "DENIED"       Face not recognised
- *   "ENROLLED:<id>" Enrolment success, new face ID
- *   "DELETED"      All faces cleared from database
- *   "READY"        ESP32 finished booting
+ *   "OPEN:<id>"       Face recognised, <id> = face database ID
+ *   "DENIED"          Face not recognised
+ *   "ENROLLED:<id>"   Enrolment success, new face ID
+ *   "DELETED"         All faces cleared from database
+ *   "READY"           ESP32 finished booting
+ *
+ * Enrollment step guidance (ESP32 sends these during ENROLL flow):
+ *   "ENROLL_FRONT"    Ask user to look straight (step 1 / 5)
+ *   "ENROLL_LEFT"     Ask user to turn left     (step 2 / 5)
+ *   "ENROLL_RIGHT"    Ask user to turn right    (step 3 / 5)
+ *   "ENROLL_UP"       Ask user to tilt up       (step 4 / 5)
+ *   "ENROLL_DOWN"     Ask user to tilt down     (step 5 / 5)
  * ----------------------------------------------------------------------- */
 static void Parse_ESP32_Msg(const char *msg)
 {
@@ -226,6 +233,32 @@ static void Parse_ESP32_Msg(const char *msg)
     } else if (strcmp(msg, "READY") == 0) {
         sys_state = SYS_IDLE;
         SSD1306_ShowReady();
+
+    /* --- Enrollment step guidance (5 poses, sent sequentially by ESP32) --- */
+    } else if (strcmp(msg, "ENROLL_FRONT") == 0) {
+        state_tick = HAL_GetTick(); /* Reset enrol timeout each step */
+        SSD1306_ShowEnrollStep(1, 5);
+        DFPlayer_Play(DFP_TRACK_ENROLL_FRONT);
+
+    } else if (strcmp(msg, "ENROLL_LEFT") == 0) {
+        state_tick = HAL_GetTick();
+        SSD1306_ShowEnrollStep(2, 5);
+        DFPlayer_Play(DFP_TRACK_ENROLL_LEFT);
+
+    } else if (strcmp(msg, "ENROLL_RIGHT") == 0) {
+        state_tick = HAL_GetTick();
+        SSD1306_ShowEnrollStep(3, 5);
+        DFPlayer_Play(DFP_TRACK_ENROLL_RIGHT);
+
+    } else if (strcmp(msg, "ENROLL_UP") == 0) {
+        state_tick = HAL_GetTick();
+        SSD1306_ShowEnrollStep(4, 5);
+        DFPlayer_Play(DFP_TRACK_ENROLL_UP);
+
+    } else if (strcmp(msg, "ENROLL_DOWN") == 0) {
+        state_tick = HAL_GetTick();
+        SSD1306_ShowEnrollStep(5, 5);
+        DFPlayer_Play(DFP_TRACK_ENROLL_DOWN);
     }
 }
 
