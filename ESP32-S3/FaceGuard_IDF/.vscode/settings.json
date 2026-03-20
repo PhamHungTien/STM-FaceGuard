@@ -1,9 +1,0 @@
-{
-    "idf.currentSetup": "/Users/phamhungtien/.espressif/v6.0/esp-idf",
-    "idf.openOcdConfigs": [
-        "board/esp32s3-builtin.cfg"
-    ],
-    "idf.customExtraVars": {
-        "IDF_TARGET": "esp32s3"
-    }
-}

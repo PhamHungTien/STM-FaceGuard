@@ -1,5 +1,0 @@
-## IDF Component dependencies for FaceGuard ESP32-S3
-## Arduino IDE 3.x will auto-download these when compiling
-dependencies:
-  espressif/esp-who:
-    version: ">=1.0.0"
