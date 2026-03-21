@@ -165,6 +165,8 @@ GND          ───  GND
 
 ### 3. OLED SSD1306 ↔ STM32F303RE (I2C1)
 
+![OLED SSD1306 Pinout](docs/oled-ssd1306_pinout.png)
+
 ```
 OLED SSD1306      STM32F303RE (Nucleo CN10)
 ────────────      ──────────────────────────
@@ -179,6 +181,8 @@ SDA          ──►  PB9 / D14  (I2C1 SDA)
 ---
 
 ### 4. DFPlayer Mini ↔ STM32F303RE (USART3)
+
+![DFPlayer Mini Pinout](docs/dfplayer-mini_pinout.png)
 
 ```
 DFPlayer Mini     STM32F303RE (Nucleo CN7)
@@ -281,6 +285,8 @@ Cả 3 nút dùng kiểu **active-LOW**: nhấn nút → chân GPIO nối GND �
 
 ### 8. Tổng hợp pinout STM32F303RE
 
+![Nucleo-F303RE Pinout](docs/nucleo-f303_pinout.png)
+
 | Chân STM32 | Connector Nucleo | Tín hiệu | Kết nối tới |
 |-----------|-----------------|----------|-------------|
 | **PA9** | CN10 – D8 | USART1 TX | ESP32-S3 **GPIO2** (RX) |
@@ -300,6 +306,8 @@ Cả 3 nút dùng kiểu **active-LOW**: nhấn nút → chân GPIO nối GND �
 ---
 
 ### 9. Tổng hợp pinout ESP32-S3 N16R8 CAM
+
+![ESP32-S3 N16R8 CAM Pinout](docs/esp32s3-cam_pinout.png)
 
 | GPIO | Chức năng | Kết nối |
 |------|----------|---------|
