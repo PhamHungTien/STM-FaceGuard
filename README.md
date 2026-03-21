@@ -131,21 +131,33 @@ Dự án đồ án môn học xây dựng hệ thống khóa cửa thông minh s
 Hệ thống sử dụng **3 mức điện áp riêng biệt** từ nguồn cấp sẵn:
 
 ```
-Nguồn 3.3V ──► Nucleo 3.3V pin (CN6)
-           ──► OLED VCC
+Nguồn 3.3V ──► OLED VCC
+           ──► Nucleo 3.3V pin (CN6 pin 4)   ← để Nucleo không bị sụt áp nội bộ
 
 Nguồn 5V   ──► ESP32-S3 5V pin
            ──► DFPlayer Mini VCC
 
-Nguồn 12V  ──► LY2N Coil A1 (+) [qua mạch BC547, xem mục 5]
-           ──► LY2N COM (tiếp điểm chung cho SM1373)
-
-GND chung  ──  Nối tất cả GND của mọi module lại với nhau
-               (Nucleo GND, ESP32-S3 GND, OLED GND, DFPlayer GND,
-                BC547 Emitter, SM1373 GND, nguồn 3.3V/5V/12V GND)
+Nguồn 12V  ──► LY2N Coil A1 (+)  [qua BC547, xem mục 5]
+           ──► LY2N COM           [tiếp điểm cấp 12V cho SM1373]
 ```
 
-> **Bắt buộc:** GND của tất cả 3 nguồn và tất cả module phải nối chung một điểm. Nếu GND không chung → UART mất tín hiệu, relay hoạt động sai.
+#### Điểm nối đất chung (GND) — bắt buộc
+
+Tất cả các dây GND sau đây phải nối về **cùng một điểm**:
+
+| Thiết bị | Chân GND cần nối |
+|----------|-----------------|
+| Nguồn 3.3V | GND (–) |
+| Nguồn 5V | GND (–) |
+| Nguồn 12V | GND (–) |
+| Nucleo-F303RE | CN6 pin 6 (GND) |
+| ESP32-S3 | GND pin |
+| OLED SSD1306 | GND pin |
+| DFPlayer Mini | GND pin |
+| BC547 | Emitter (chân E) |
+| SM1373 | Dây ĐEN (–) |
+
+> **Lý do:** UART giữa STM32 và ESP32-S3 cần GND chung làm điện áp tham chiếu. Nếu thiếu → tín hiệu UART nhiễu hoặc mất hoàn toàn → hệ thống không hoạt động.
 
 ---
 
@@ -173,10 +185,10 @@ GPIO2  (RX)  ◄──  PA9  / D8  (USART1 TX)
 ![OLED SSD1306 Pinout](docs/oled-ssd1306_pinout.png)
 
 ```
-OLED SSD1306      STM32F303RE (Nucleo CN10)     Nguồn
-────────────      ──────────────────────────    ──────
-VCC          ◄──  (không nối STM32)         ◄── Nguồn 3.3V
-GND          ───  GND                       ─── GND chung
+OLED SSD1306      STM32F303RE (Nucleo CN10)     Nguồn ngoài
+────────────      ──────────────────────────    ────────────
+VCC          ◄──────────────────────────────── Nguồn 3.3V
+GND          ──────────────────────────────── GND chung
 SCL          ──►  PB8 / D15  (I2C1 SCL)
 SDA          ──►  PB9 / D14  (I2C1 SDA)
 ```
