@@ -1,5 +1,4 @@
 #include "ssd1306.h"
-#include "ssd1306_assets.h"
 
 /* -----------------------------------------------------------------------
  * 5×7 ASCII font, characters 32 (space) … 126 (~)
@@ -103,29 +102,29 @@ static const uint8_t font5x7[][5] = {
     {0x10,0x08,0x08,0x10,0x08}, /* 126 ~    */
 };
 
-static uint8_t oled_fb[SSD1306_WIDTH * SSD1306_PAGES];
+/* ----------------------------------------------------------------------- */
 
 static void OLED_Cmd(uint8_t cmd)
 {
     uint8_t buf[2] = {0x00, cmd};
     if (HAL_I2C_Master_Transmit(&hi2c1, SSD1306_I2C_ADDR, buf, 2, 10) != HAL_OK) {
-        /* Recover once if the I2C bus stalls during a screen refresh. */
+        /* I2C bus stuck – recover by reinitialising the peripheral */
         HAL_I2C_DeInit(&hi2c1);
         HAL_Delay(2);
         HAL_I2C_Init(&hi2c1);
+        /* Retry once */
         HAL_I2C_Master_Transmit(&hi2c1, SSD1306_I2C_ADDR, buf, 2, 10);
     }
 }
 
 static void OLED_Data(const uint8_t *data, uint16_t len)
 {
+    /* Prepend 0x40 control byte using a local buffer (max 129 bytes) */
     uint8_t buf[129];
-    if (len > 128U) {
-        len = 128U;
-    }
+    if (len > 128) len = 128;
     buf[0] = 0x40;
     memcpy(&buf[1], data, len);
-    HAL_I2C_Master_Transmit(&hi2c1, SSD1306_I2C_ADDR, buf, len + 1U, 50);
+    HAL_I2C_Master_Transmit(&hi2c1, SSD1306_I2C_ADDR, buf, len + 1, 50);
 }
 
 static void OLED_SetCursor(uint8_t col, uint8_t page)
@@ -135,424 +134,245 @@ static void OLED_SetCursor(uint8_t col, uint8_t page)
     OLED_Cmd(0x10 | ((col >> 4) & 0x0F));
 }
 
-static void OLED_ClearBuffer(void)
-{
-    memset(oled_fb, 0, sizeof(oled_fb));
-}
-
-static void OLED_FlushPage(uint8_t page)
-{
-    if (page >= SSD1306_PAGES) {
-        return;
-    }
-
-    OLED_SetCursor(0, page);
-    OLED_Data(&oled_fb[page * SSD1306_WIDTH], SSD1306_WIDTH);
-}
-
-static void OLED_Flush(void)
-{
-    for (uint8_t page = 0; page < SSD1306_PAGES; ++page) {
-        OLED_FlushPage(page);
-    }
-}
-
-static void OLED_SetPixel(int16_t x, int16_t y)
-{
-    uint16_t index;
-
-    if (x < 0 || x >= SSD1306_WIDTH || y < 0 || y >= SSD1306_HEIGHT) {
-        return;
-    }
-
-    index = ((uint16_t)(y >> 3) * SSD1306_WIDTH) + (uint16_t)x;
-    oled_fb[index] |= (uint8_t)(1U << (y & 0x07));
-}
-
-static void OLED_DrawHLine(uint8_t y, uint8_t x0, uint8_t x1)
-{
-    if (y >= SSD1306_HEIGHT) {
-        return;
-    }
-    if (x0 > x1) {
-        uint8_t tmp = x0;
-        x0 = x1;
-        x1 = tmp;
-    }
-    if (x1 >= SSD1306_WIDTH) {
-        x1 = SSD1306_WIDTH - 1U;
-    }
-    for (uint8_t x = x0; x <= x1; ++x) {
-        OLED_SetPixel(x, y);
-    }
-}
-
-static void OLED_DrawFrame(uint8_t x, uint8_t y, uint8_t w, uint8_t h)
-{
-    if (w < 2U || h < 2U) {
-        return;
-    }
-
-    OLED_DrawHLine(y, x, (uint8_t)(x + w - 1U));
-    OLED_DrawHLine((uint8_t)(y + h - 1U), x, (uint8_t)(x + w - 1U));
-    for (uint8_t row = y; row < (uint8_t)(y + h); ++row) {
-        OLED_SetPixel(x, row);
-        OLED_SetPixel((uint8_t)(x + w - 1U), row);
-    }
-}
-
-static void OLED_FillRect(uint8_t x, uint8_t y, uint8_t w, uint8_t h)
-{
-    for (uint8_t row = y; row < (uint8_t)(y + h); ++row) {
-        for (uint8_t col = x; col < (uint8_t)(x + w); ++col) {
-            OLED_SetPixel(col, row);
-        }
-    }
-}
-
-static void OLED_DrawBitmap(int16_t x, int16_t y, const SSD1306_Bitmap *bitmap)
-{
-    if (bitmap == NULL || bitmap->data == NULL) {
-        return;
-    }
-
-    uint8_t bytes_per_row = (uint8_t)((bitmap->width + 7U) / 8U);
-    for (uint8_t row = 0; row < bitmap->height; ++row) {
-        for (uint8_t col = 0; col < bitmap->width; ++col) {
-            uint8_t byte = bitmap->data[(row * bytes_per_row) + (col >> 3)];
-            if ((byte & (uint8_t)(0x80U >> (col & 0x07U))) != 0U) {
-                OLED_SetPixel((int16_t)(x + col), (int16_t)(y + row));
-            }
-        }
-    }
-}
-
-static void OLED_DrawBitmapCentered(uint8_t y, const SSD1306_Bitmap *bitmap)
-{
-    int16_t x;
-
-    if (bitmap == NULL) {
-        return;
-    }
-
-    x = (int16_t)(SSD1306_WIDTH - bitmap->width) / 2;
-    if (x < 0) {
-        x = 0;
-    }
-    OLED_DrawBitmap(x, y, bitmap);
-}
-
-static void OLED_DrawCharPage(uint8_t x, uint8_t page, char c)
-{
-    uint16_t base;
-
-    if (page >= SSD1306_PAGES || (x + CHAR_W) > SSD1306_WIDTH) {
-        return;
-    }
-    if (c < 32 || c > 126) {
-        c = ' ';
-    }
-
-    base = ((uint16_t)page * SSD1306_WIDTH) + x;
-    memcpy(&oled_fb[base], font5x7[c - 32], 5);
-    oled_fb[base + 5U] = 0x00;
-}
-
-static uint8_t OLED_TextWidth(const char *str)
-{
-    size_t len = (str != NULL) ? strlen(str) : 0U;
-    size_t width = len * CHAR_W;
-
-    if (width > SSD1306_WIDTH) {
-        width = SSD1306_WIDTH;
-    }
-    return (uint8_t)width;
-}
-
-static void OLED_DrawStringPage(uint8_t x, uint8_t page, const char *str)
-{
-    uint8_t col = x;
-
-    if (str == NULL || page >= SSD1306_PAGES) {
-        return;
-    }
-
-    while (*str != '\0' && (col + CHAR_W) <= SSD1306_WIDTH) {
-        OLED_DrawCharPage(col, page, *str++);
-        col = (uint8_t)(col + CHAR_W);
-    }
-}
-
-static void OLED_DrawCenteredStringPage(uint8_t page, const char *str)
-{
-    uint8_t width = OLED_TextWidth(str);
-    uint8_t x = (width < SSD1306_WIDTH) ? (uint8_t)((SSD1306_WIDTH - width) / 2U) : 0U;
-    OLED_DrawStringPage(x, page, str);
-}
-
-static void OLED_DrawBitmapTextRow(uint8_t y, const SSD1306_Bitmap *bitmap,
-                                   uint8_t text_page, const char *text)
-{
-    uint16_t total_width = bitmap->width;
-    uint8_t text_width = OLED_TextWidth(text);
-    int16_t x;
-
-    if (text != NULL && *text != '\0') {
-        total_width = (uint16_t)(total_width + 4U + text_width);
-    }
-
-    x = (int16_t)(SSD1306_WIDTH - total_width) / 2;
-    if (x < 0) {
-        x = 0;
-    }
-
-    OLED_DrawBitmap(x, y, bitmap);
-    if (text != NULL && *text != '\0') {
-        OLED_DrawStringPage((uint8_t)(x + bitmap->width + 4U), text_page, text);
-    }
-}
-
-static void OLED_BeginScreen(const SSD1306_Bitmap *main_bitmap, uint8_t main_y,
-                             const SSD1306_Bitmap *sub_bitmap, uint8_t sub_y)
-{
-    OLED_ClearBuffer();
-    OLED_DrawBitmapCentered(2, &oled_vi_title);
-    OLED_DrawHLine(15, 10, 117);
-
-    if (main_bitmap != NULL) {
-        OLED_DrawBitmapCentered(main_y, main_bitmap);
-    }
-    if (sub_bitmap != NULL) {
-        OLED_DrawBitmapCentered(sub_y, sub_bitmap);
-    }
-}
-
-static void OLED_DrawProgressBar(uint8_t x, uint8_t y, uint8_t w, uint8_t h,
-                                 uint8_t value, uint8_t max_value)
-{
-    uint8_t inner_w;
-    uint8_t fill_w;
-
-    if (w < 3U || h < 3U || max_value == 0U) {
-        return;
-    }
-
-    if (value > max_value) {
-        value = max_value;
-    }
-
-    OLED_DrawFrame(x, y, w, h);
-    inner_w = (uint8_t)(w - 2U);
-    fill_w = (uint8_t)(((uint16_t)inner_w * value) / max_value);
-    if (fill_w > 0U) {
-        OLED_FillRect((uint8_t)(x + 1U), (uint8_t)(y + 1U), fill_w, (uint8_t)(h - 2U));
-    }
-}
+/* ----------------------------------------------------------------------- */
 
 void SSD1306_Init(void)
 {
-    HAL_Delay(200);
+    HAL_Delay(200); /* Wait for OLED power-up */
 
+    /* Diagnostic: if OLED does not ACK on I2C, blink LD2 (green LED, PA5)
+     * 10 times rapidly then return.  No blinking = I2C OK. */
     if (HAL_I2C_IsDeviceReady(&hi2c1, SSD1306_I2C_ADDR, 3, 100) != HAL_OK) {
-        for (uint8_t i = 0; i < 20U; ++i) {
+        for (uint8_t i = 0; i < 20; i++) {
             HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
             HAL_Delay(100);
         }
         HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
-        return;
+        return; /* I2C not working – skip init */
     }
 
     static const uint8_t init_seq[] = {
-        0xAE,
-        0xD5, 0x80,
-        0xA8, 0x3F,
-        0xD3, 0x00,
-        0x40,
-        0x8D, 0x14,
-        0x20, 0x02,
-        0xA1,
-        0xC8,
-        0xDA, 0x12,
-        0x81, 0xCF,
-        0xD9, 0xF1,
-        0xDB, 0x40,
-        0xA4,
-        0xA6,
-        0xAF,
+        0xAE,       /* Display off                      */
+        0xD5, 0x80, /* Clock: fosc, div=1               */
+        0xA8, 0x3F, /* Multiplex: 64 rows               */
+        0xD3, 0x00, /* Display offset: 0                */
+        0x40,       /* Start line: 0                    */
+        0x8D, 0x14, /* Charge pump: enabled             */
+        0x20, 0x02, /* Mem mode: page addressing         */
+        0xA1,       /* Segment remap col127=SEG0        */
+        0xC8,       /* COM scan: remapped               */
+        0xDA, 0x12, /* COM pins: alternative            */
+        0x81, 0xCF, /* Contrast: 207                    */
+        0xD9, 0xF1, /* Pre-charge                       */
+        0xDB, 0x40, /* VCOM deselect                    */
+        0xA4,       /* Show RAM content                 */
+        0xA6,       /* Normal (not inverted)            */
+        0xAF,       /* Display on                       */
     };
 
-    for (uint8_t i = 0; i < sizeof(init_seq); ++i) {
+    for (uint8_t i = 0; i < sizeof(init_seq); i++) {
         OLED_Cmd(init_seq[i]);
     }
-
-    OLED_ClearBuffer();
-    OLED_Flush();
 }
 
 void SSD1306_FillPage(uint8_t page, uint8_t byte_val)
 {
-    if (page >= SSD1306_PAGES) {
-        return;
-    }
-
-    memset(&oled_fb[page * SSD1306_WIDTH], byte_val, SSD1306_WIDTH);
-    OLED_FlushPage(page);
+    uint8_t blank[128];
+    memset(blank, byte_val, 128);
+    OLED_SetCursor(0, page);
+    OLED_Data(blank, 128);
 }
 
 void SSD1306_Clear(void)
 {
-    OLED_ClearBuffer();
-    OLED_Flush();
+    for (uint8_t p = 0; p < SSD1306_PAGES; p++) {
+        SSD1306_FillPage(p, 0x00);
+    }
 }
 
+/* Write a string starting at (x, page), padding remainder with spaces */
 void SSD1306_WriteString(uint8_t x, uint8_t page, const char *str)
 {
     uint8_t col = x;
+    uint8_t char_buf[6];
+    char_buf[5] = 0x00; /* Column gap always blank */
 
-    if (page >= SSD1306_PAGES || x >= SSD1306_WIDTH) {
-        return;
+    OLED_SetCursor(col, page);
+
+    while (col + CHAR_W <= SSD1306_WIDTH) {
+        char c = (*str != '\0') ? *str++ : ' ';
+        if (c < 32 || c > 126) c = ' ';
+        memcpy(char_buf, font5x7[c - 32], 5);
+        OLED_Data(char_buf, 6);
+        col += CHAR_W;
     }
+}
 
-    while ((col + CHAR_W) <= SSD1306_WIDTH) {
-        char c = (str != NULL && *str != '\0') ? *str++ : ' ';
-        OLED_DrawCharPage(col, page, c);
-        col = (uint8_t)(col + CHAR_W);
-    }
+/* ----------------------------------------------------------------------- *
+ * High-level screen helpers
+ * Each function redraws only the changing pages (2-7).
+ * Page 0: title bar (fixed after boot)
+ * Page 1: separator line (fixed after boot)
+ * Pages 2-3: main status
+ * Pages 4-5: sub-status / detail
+ * Pages 6-7: blank / extra info
+ * ----------------------------------------------------------------------- */
 
-    OLED_FlushPage(page);
+static void draw_title(void)
+{
+    SSD1306_WriteString(0, 0, " >> STM-FaceGuard");
+    SSD1306_FillPage(1, 0xFF); /* Solid separator line */
+}
+
+static void draw_status(const char *line2, const char *line3,
+                         const char *line4, const char *line5)
+{
+    SSD1306_WriteString(0, 2, line2);
+    SSD1306_WriteString(0, 3, line3);
+    SSD1306_WriteString(0, 4, line4);
+    SSD1306_WriteString(0, 5, line5);
+    SSD1306_FillPage(6, 0x00);
+    SSD1306_FillPage(7, 0x00);
 }
 
 void SSD1306_ShowBoot(void)
 {
-    OLED_BeginScreen(&oled_vi_boot_main, 21, &oled_vi_boot_sub, 44);
-    OLED_Flush();
+    SSD1306_Clear();
+    draw_title();
+    draw_status("", "   Booting...", "", "   Please wait");
 }
 
 void SSD1306_ShowConnecting(void)
 {
-    OLED_BeginScreen(&oled_vi_connect_main, 21, &oled_vi_connect_sub, 44);
-    OLED_Flush();
+    draw_status("", "  Connecting...", "", "   Please wait");
 }
 
 void SSD1306_ShowESP32Offline(void)
 {
-    OLED_BeginScreen(&oled_vi_offline_main, 21, &oled_vi_offline_sub, 42);
-    OLED_Flush();
+    draw_status("", "  ESP32 OFFLINE ", "", " Check CAM/UART ");
 }
 
 void SSD1306_ShowReady(void)
 {
-    SSD1306_ShowReadyFaces(0);
+    draw_status("", "   ** READY **", "", "  Scan your face");
 }
 
 void SSD1306_ShowReadyFaces(uint8_t count)
 {
-    char buf[8];
-
-    if (count == 0U) {
-        OLED_BeginScreen(&oled_vi_ready_main, 21, &oled_vi_ready_zero, 45);
+    char buf[22];
+    if (count == 0) {
+        draw_status("", "   ** READY **", "", " Press [ENROLL]!");
     } else {
-        snprintf(buf, sizeof(buf), "%u/7", count);
-        OLED_BeginScreen(&oled_vi_ready_main, 21, NULL, 0);
-        OLED_DrawBitmapTextRow(45, &oled_vi_ready_saved, 6, buf);
+        snprintf(buf, sizeof(buf), "  %d face(s) stored", count);
+        draw_status("", "   ** READY **", "", buf);
     }
-    OLED_Flush();
 }
 
 void SSD1306_ShowDbFull(void)
 {
-    OLED_BeginScreen(&oled_vi_db_full_main, 21, &oled_vi_db_full_sub, 43);
-    OLED_Flush();
+    draw_status("", "  DB is FULL!", "", "Delete to enroll");
 }
 
 void SSD1306_ShowLockout(void)
 {
-    OLED_BeginScreen(&oled_vi_lock_main, 21, &oled_vi_lock_sub, 43);
-    OLED_Flush();
+    draw_status("", " !! LOCKED OUT !!", "", " Too many attempts");
 }
 
 void SSD1306_ShowScanning(void)
 {
-    OLED_BeginScreen(&oled_vi_scan_main, 21, &oled_vi_scan_sub, 43);
-    OLED_Flush();
+    draw_status("", "  Scanning...", "", "  Hold still...");
 }
 
 void SSD1306_ShowUnlocked(uint8_t id)
 {
-    char buf[10];
-
-    OLED_BeginScreen(&oled_vi_open_main, 21, &oled_vi_open_exit_sub, 43);
-    snprintf(buf, sizeof(buf), "ID %u", id);
-    OLED_DrawCenteredStringPage(7, buf);
-    OLED_Flush();
+    char buf[22];
+    draw_status("", " ** UNLOCKED **", "", "");
+    snprintf(buf, sizeof(buf), "  Face ID: %d", id);
+    SSD1306_WriteString(0, 5, buf);
 }
 
 void SSD1306_ShowUnlockedExit(void)
 {
-    OLED_BeginScreen(&oled_vi_open_main, 21, &oled_vi_open_exit_sub, 43);
-    OLED_Flush();
+    draw_status("", " ** UNLOCKED **", "", "  (Exit button)");
 }
 
 void SSD1306_ShowDenied(void)
 {
-    OLED_BeginScreen(&oled_vi_denied_main, 21, &oled_vi_denied_sub, 43);
-    OLED_Flush();
+    draw_status("", " ** DENIED **", "", " Face not found!");
 }
 
 void SSD1306_ShowEnrolling(void)
 {
-    OLED_BeginScreen(&oled_vi_enroll_main, 21, &oled_vi_enroll_sub, 43);
-    OLED_Flush();
+    draw_status("", "  Enrolling...", "", " Look at camera!");
 }
 
+/*
+ * Show guided enrollment step on OLED.
+ *
+ * step:  1=FRONT  2=LEFT  3=RIGHT  4=UP  5=DOWN
+ * total: total number of steps (e.g. 5)
+ *
+ * Layout example (step 2 of 5, LEFT):
+ *   Page 2:  "  Step 2 / 5    "
+ *   Page 3:  "  Turn LEFT     "
+ *   Page 4:  "  <---(O)       "   (ASCII arrow)
+ *   Page 5:  "  Hold still... "
+ */
 void SSD1306_ShowEnrollStep(uint8_t step, uint8_t total)
 {
-    const SSD1306_Bitmap *step_bitmap = &oled_vi_enroll_main;
-    char buf[8];
+    char header[22];
+    snprintf(header, sizeof(header), "  Step %d / %d", step, total);
+
+    const char *direction = "";
+    const char *arrow     = "";
 
     switch (step) {
-        case 1: step_bitmap = &oled_vi_step1; break;
-        case 2: step_bitmap = &oled_vi_step2; break;
-        case 3: step_bitmap = &oled_vi_step3; break;
-        case 4: step_bitmap = &oled_vi_step4; break;
-        case 5: step_bitmap = &oled_vi_step5; break;
-        default: break;
+        case 1: direction = "  Look STRAIGHT "; arrow = "    --> (O) <-- "; break;
+        case 2: direction = "  Turn LEFT     "; arrow = "  <--- (O)      "; break;
+        case 3: direction = "  Turn RIGHT    "; arrow = "        (O) --->"; break;
+        case 4: direction = "  Tilt UP       "; arrow = "       (O)      "; break;  /* up arrow via text */
+        case 5: direction = "  Tilt DOWN     "; arrow = "       (O)      "; break;
+        default: direction = "  Look at cam  "; arrow = "      (O)       "; break;
     }
 
-    OLED_BeginScreen(step_bitmap, 21, &oled_vi_scan_sub, 43);
-    snprintf(buf, sizeof(buf), "%u/%u", step, total);
-    OLED_DrawCenteredStringPage(7, buf);
-    OLED_Flush();
+    /* For UP/DOWN, annotate the arrow line differently */
+    if (step == 4) arrow = "     /( O )     ";
+    if (step == 5) arrow = "     \\( O )     ";
+
+    SSD1306_WriteString(0, 2, header);
+    SSD1306_WriteString(0, 3, direction);
+    SSD1306_WriteString(0, 4, arrow);
+    SSD1306_WriteString(0, 5, "  Hold still... ");
+    SSD1306_FillPage(6, 0x00);
+    SSD1306_FillPage(7, 0x00);
 }
 
 void SSD1306_ShowEnrolled(uint8_t id, uint8_t count, uint8_t max_count)
 {
-    char count_buf[8];
-    char id_buf[10];
-
-    OLED_BeginScreen(&oled_vi_enrolled_main, 21, NULL, 0);
-    snprintf(count_buf, sizeof(count_buf), "%u/%u", count, max_count);
-    OLED_DrawBitmapTextRow(43, &oled_vi_ready_saved, 6, count_buf);
-    snprintf(id_buf, sizeof(id_buf), "ID %u", id);
-    OLED_DrawCenteredStringPage(7, id_buf);
-    OLED_Flush();
+    char line4[22], line5[22];
+    snprintf(line4, sizeof(line4), "  Face #%d saved!", id);
+    snprintf(line5, sizeof(line5), "  (%d / %d slots used)", count, max_count);
+    draw_status("", " ** ENROLLED **", line4, line5);
 }
 
 void SSD1306_ShowHoldDelete(uint8_t seconds)
 {
-    OLED_BeginScreen(&oled_vi_hold_main, 21, &oled_vi_hold_sub, 43);
-    OLED_DrawProgressBar(16, 56, 96, 7, seconds, 3);
-    OLED_Flush();
+    char buf[22];
+    /* Progress bar: max 3 seconds → 10 chars */
+    uint8_t prog = (seconds >= 3) ? 10 : (seconds * 10 / 3);
+    char bar[11];
+    for (uint8_t i = 0; i < 10; i++) bar[i] = (i < prog) ? '=' : '-';
+    bar[10] = '\0';
+    snprintf(buf, sizeof(buf), " [%s]", bar);
+    draw_status("", " Hold 3s: Delete", "", buf);
 }
 
 void SSD1306_ShowDeleting(void)
 {
-    OLED_BeginScreen(&oled_vi_deleting_main, 21, &oled_vi_deleting_sub, 44);
-    OLED_Flush();
+    draw_status("", "  Deleting...", "", "  Please wait");
 }
 
 void SSD1306_ShowDeleted(void)
 {
-    OLED_BeginScreen(&oled_vi_deleted_main, 21, &oled_vi_deleted_sub, 44);
-    OLED_Flush();
+    draw_status("", " ** DELETED **", "", " All faces cleared");
 }

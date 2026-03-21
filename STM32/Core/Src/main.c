@@ -94,6 +94,7 @@ static volatile uint32_t uart1_error_count = 0; /* Counts HW errors — for diag
 /* --- System state machine --- */
 static SystemState_t sys_state       = SYS_IDLE;
 static uint32_t      state_tick      = 0;
+static uint32_t      esp32_sync_start_tick = 0;
 static uint32_t      esp32_status_tick = 0;
 static uint8_t       esp32_ready     = 0;
 
@@ -123,6 +124,7 @@ static void Enter_Denied(void);
 static void Parse_ESP32_Msg(const char *msg);
 static void Show_Ready(void);   /* Wrapper: shows ReadyFaces with enrolled_faces count */
 static void Show_ESP32_LinkState(void);
+static void Restore_LinkAwareIdle(void);
 static void Mark_ESP32_Alive(void);
 static void Mark_ESP32_Offline(void);
 static void ESP32_RequestStatus(uint8_t force);
@@ -251,10 +253,29 @@ static void Show_Ready(void)
 
 static void Show_ESP32_LinkState(void)
 {
-    if (esp32_ready && sys_state != SYS_OFFLINE) {
+    if (esp32_ready) {
         Show_Ready();
+    } else if (sys_state != SYS_OFFLINE &&
+               ((HAL_GetTick() - esp32_sync_start_tick) < CONNECT_TIMEOUT_MS)) {
+        SSD1306_ShowConnecting();
     } else {
         SSD1306_ShowESP32Offline();
+    }
+}
+
+static void Restore_LinkAwareIdle(void)
+{
+    if (esp32_ready) {
+        sys_state = SYS_IDLE;
+        Show_Ready();
+        return;
+    }
+
+    if ((HAL_GetTick() - esp32_sync_start_tick) < CONNECT_TIMEOUT_MS) {
+        sys_state = SYS_CONNECTING;
+        SSD1306_ShowConnecting();
+    } else {
+        Mark_ESP32_Offline();
     }
 }
 
@@ -452,6 +473,7 @@ static void App_Init(void)
     uart1_line_idx  = 0;
     uart1_queue_head = 0;
     uart1_queue_tail = 0;
+    esp32_sync_start_tick = HAL_GetTick();
     esp32_status_tick = 0;
 
     /* --- Enable USART1 NVIC (ESP32 receive) --- */
@@ -512,7 +534,7 @@ static void App_Loop(void)
         now = HAL_GetTick(); /* Refresh time after potential state change */
     }
 
-    if (sys_state == SYS_CONNECTING || sys_state == SYS_OFFLINE) {
+    if (!esp32_ready) {
         ESP32_RequestStatus(0);
     }
 
@@ -592,15 +614,13 @@ static void App_Loop(void)
         case SYS_UNLOCKING:
             if ((now - state_tick) >= RELAY_OPEN_MS) {
                 Relay_Close();
-                sys_state = SYS_IDLE;
-                Show_Ready();
+                Restore_LinkAwareIdle();
             }
             break;
 
         case SYS_DENIED:
             if ((now - state_tick) >= DENIED_DISPLAY_MS) {
-                sys_state = SYS_IDLE;
-                Show_Ready();
+                Restore_LinkAwareIdle();
             }
             break;
 
@@ -626,8 +646,7 @@ static void App_Loop(void)
         case SYS_RESULT:
             /* Auto-return to Ready after showing ENROLLED / DELETED / DB_FULL */
             if ((now - state_tick) >= RESULT_DISPLAY_MS) {
-                sys_state = SYS_IDLE;
-                Show_Ready();
+                Restore_LinkAwareIdle();
             }
             break;
 
@@ -635,8 +654,7 @@ static void App_Loop(void)
             /* STM32-side fallback: if ESP32 never sends LOCKOUT_CLEAR,
              * unlock after 5 minutes to prevent permanent deadlock. */
             if ((now - state_tick) >= LOCKOUT_DISPLAY_MS) {
-                sys_state = SYS_IDLE;
-                Show_Ready();
+                Restore_LinkAwareIdle();
             }
             break;
 

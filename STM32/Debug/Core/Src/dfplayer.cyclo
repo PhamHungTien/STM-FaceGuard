@@ -2,4 +2,5 @@
 ../Core/Src/dfplayer.c:14:13:dfp_send	1
 ../Core/Src/dfplayer.c:33:6:DFPlayer_Init	1
 ../Core/Src/dfplayer.c:42:6:DFPlayer_Play	1
-../Core/Src/dfplayer.c:47:6:DFPlayer_SetVolume	2
+../Core/Src/dfplayer.c:47:6:DFPlayer_Stop	1
+../Core/Src/dfplayer.c:52:6:DFPlayer_SetVolume	2
