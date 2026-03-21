@@ -98,6 +98,10 @@
 #define FACE_LIGHT_NEOPIXEL_ENABLE     1
 #define FACE_LIGHT_NEOPIXEL_GPIO      48
 #define FACE_LIGHT_NEOPIXEL_WHITE    160
+#define FACE_LIGHT_STATUS_ENABLE       1
+#define FACE_LIGHT_STATUS_GPIO         2
+#define FACE_LIGHT_STATUS_ACTIVE_LEVEL LOW
+#define FACE_LIGHT_STATUS_IDLE_LEVEL   HIGH
 #define FACE_LIGHT_HOLD_MS          1200
 
 // ── Tham số tuning ────────────────────────────────────────────────────────────
@@ -253,6 +257,10 @@ static void face_light_apply(bool on)
         neopixelWrite(FACE_LIGHT_NEOPIXEL_GPIO, 0, 0, 0);
     }
   #endif
+  #if FACE_LIGHT_STATUS_ENABLE
+    digitalWrite(FACE_LIGHT_STATUS_GPIO, on ? FACE_LIGHT_STATUS_ACTIVE_LEVEL
+                                            : FACE_LIGHT_STATUS_IDLE_LEVEL);
+  #endif
 #endif
     faceLightOn = on;
 }
@@ -263,6 +271,9 @@ static void face_light_init()
   #if FACE_LIGHT_DIGITAL_ENABLE
     pinMode(FACE_LIGHT_DIGITAL_GPIO, OUTPUT);
   #endif
+  #if FACE_LIGHT_STATUS_ENABLE
+    pinMode(FACE_LIGHT_STATUS_GPIO, OUTPUT);
+  #endif
 #endif
     face_light_apply(false);
 }
@@ -270,10 +281,32 @@ static void face_light_init()
 static void face_light_self_test()
 {
 #if FACE_LIGHT_ENABLE
-    Serial.println("[LIGHT] Self-test ON");
-    face_light_apply(true);
+    Serial.println("[LIGHT] Self-test GPIO47");
+  #if FACE_LIGHT_DIGITAL_ENABLE
+    digitalWrite(FACE_LIGHT_DIGITAL_GPIO, FACE_LIGHT_ACTIVE_LEVEL);
+  #endif
     delay(250);
-    face_light_apply(false);
+  #if FACE_LIGHT_DIGITAL_ENABLE
+    digitalWrite(FACE_LIGHT_DIGITAL_GPIO, FACE_LIGHT_IDLE_LEVEL);
+  #endif
+
+    Serial.println("[LIGHT] Self-test GPIO48");
+  #if FACE_LIGHT_NEOPIXEL_ENABLE
+    neopixelWrite(FACE_LIGHT_NEOPIXEL_GPIO,
+                  FACE_LIGHT_NEOPIXEL_WHITE,
+                  FACE_LIGHT_NEOPIXEL_WHITE,
+                  FACE_LIGHT_NEOPIXEL_WHITE);
+    delay(250);
+    neopixelWrite(FACE_LIGHT_NEOPIXEL_GPIO, 0, 0, 0);
+  #endif
+
+    Serial.println("[LIGHT] Self-test GPIO2");
+  #if FACE_LIGHT_STATUS_ENABLE
+    digitalWrite(FACE_LIGHT_STATUS_GPIO, FACE_LIGHT_STATUS_ACTIVE_LEVEL);
+    delay(250);
+    digitalWrite(FACE_LIGHT_STATUS_GPIO, FACE_LIGHT_STATUS_IDLE_LEVEL);
+  #endif
+
     Serial.println("[LIGHT] Self-test OFF");
 #endif
 }
