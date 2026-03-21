@@ -27,6 +27,7 @@ void SSD1306_ShowConnecting(void);
 void SSD1306_ShowReady(void);
 void SSD1306_ShowReadyFaces(uint8_t count);  /* Shows face count below READY */
 void SSD1306_ShowDbFull(void);               /* DB at capacity, cannot enroll */
+void SSD1306_ShowLockout(void);              /* Security lockout — too many failures */
 void SSD1306_ShowScanning(void);
 void SSD1306_ShowUnlocked(uint8_t id);
 void SSD1306_ShowUnlockedExit(void);

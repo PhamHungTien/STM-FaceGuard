@@ -37,12 +37,14 @@ typedef enum {
     SYS_ENROLLING,
     SYS_DELETING,
     SYS_DENIED,
-    SYS_RESULT      /* Showing ENROLLED/DELETED/DB_FULL; auto-returns after 3 s  */
+    SYS_RESULT,     /* Showing ENROLLED/DELETED/DB_FULL; auto-returns after 3 s  */
+    SYS_LOCKED      /* Security lockout: too many failed attempts                */
 } SystemState_t;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define LOCKOUT_DISPLAY_MS  300000U  /* STM32-side lockout fallback: 5 minutes  */
 #define RELAY_OPEN_MS         3000U  /* Door stays unlocked for 3 seconds       */
 #define DELETE_HOLD_MS        3000U  /* Hold DELETE button 3s to confirm        */
 #define DENIED_DISPLAY_MS     2500U  /* "Access Denied" shown for 2.5 seconds   */
@@ -77,10 +79,11 @@ static volatile uint32_t btn_enroll_tick = 0;
 static volatile uint32_t btn_delete_tick = 0;
 
 /* --- UART1 receive buffer (ESP32-S3 → STM32) --- */
-static uint8_t  uart1_rx_byte = 0;
+static uint8_t  uart1_rx_byte    = 0;
 static char     uart1_line[UART1_BUF_SIZE];
-static uint16_t uart1_line_idx = 0;
-static volatile uint8_t uart1_line_ready = 0;
+static uint16_t uart1_line_idx   = 0;
+static volatile uint8_t  uart1_line_ready  = 0;
+static volatile uint32_t uart1_error_count = 0; /* Counts HW errors — for diagnostics */
 
 /* --- System state machine --- */
 static SystemState_t sys_state       = SYS_IDLE;
@@ -131,6 +134,23 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
             }
         }
         /* Restart reception for next byte */
+        HAL_UART_Receive_IT(&huart1, &uart1_rx_byte, 1);
+    }
+}
+
+/* -----------------------------------------------------------------------
+ * HAL UART Error callback – called when UART1 reports a hardware error
+ * (overrun, framing, noise). Clears the error flag and re-arms reception
+ * so the link to ESP32 recovers automatically without requiring a reset.
+ * ----------------------------------------------------------------------- */
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
+{
+    if (huart->Instance == USART1) {
+        __HAL_UART_CLEAR_OREFLAG(huart);   /* Clear Overrun  */
+        __HAL_UART_CLEAR_NEFLAG(huart);    /* Clear Noise    */
+        __HAL_UART_CLEAR_FEFLAG(huart);    /* Clear Framing  */
+        uart1_line_idx = 0;                /* Discard partial line */
+        uart1_error_count++;               /* Track for diagnostics */
         HAL_UART_Receive_IT(&huart1, &uart1_rx_byte, 1);
     }
 }
@@ -208,10 +228,14 @@ static void Show_Ready(void)
  *
  * Protocol (ESP32 → STM32):
  *   "OPEN:<id>"       Face recognised, <id> = face database ID
- *   "DENIED"          Face not recognised
+ *   "DENIED"          Face not recognised (after voting + cooldown)
  *   "ENROLLED:<id>"   Enrolment success, new face ID
  *   "DELETED"         All faces cleared from database
  *   "READY"           ESP32 finished booting
+ *   "FACES:<n>"       Face count update (sent right after READY)
+ *   "DB_FULL"         Face DB at capacity, enrolment rejected
+ *   "LOCKOUT"         Too many failures — security lockout started
+ *   "LOCKOUT_CLEAR"   Lockout period expired — system back to normal
  *
  * Enrollment step guidance (ESP32 sends these during ENROLL flow):
  *   "ENROLL_FRONT"    Ask user to look straight (step 1 / 5)
@@ -290,6 +314,19 @@ static void Parse_ESP32_Msg(const char *msg)
         state_tick = HAL_GetTick();
         SSD1306_ShowEnrollStep(5, 5);
         DFPlayer_Play(DFP_TRACK_ENROLL_DOWN);
+
+    } else if (strcmp(msg, "LOCKOUT") == 0) {
+        /* Security lockout: too many failed attempts */
+        sys_state  = SYS_LOCKED;
+        state_tick = HAL_GetTick();
+        SSD1306_ShowLockout();
+        DFPlayer_Play(DFP_TRACK_DENIED);
+
+    } else if (strcmp(msg, "LOCKOUT_CLEAR") == 0) {
+        if (sys_state == SYS_LOCKED) {
+            sys_state = SYS_IDLE;
+            Show_Ready();
+        }
     }
 }
 
@@ -332,6 +369,7 @@ static void App_Init(void)
  * ----------------------------------------------------------------------- */
 static void App_Loop(void)
 {
+    IWDG->KR = 0xAAAAU;         /* Feed watchdog — proves main loop is alive */
     uint32_t now = HAL_GetTick();
 
     /* ================================================================
@@ -340,8 +378,8 @@ static void App_Loop(void)
      * ================================================================ */
     if (btn_exit_flag) {
         btn_exit_flag = 0;
-        if (sys_state == SYS_CONNECTING) {
-            /* System not ready yet – discard */
+        if (sys_state == SYS_CONNECTING || sys_state == SYS_LOCKED) {
+            /* System not ready / locked out – discard exit request */
         } else if (sys_state == SYS_UNLOCKING) {
             /* Already open – just reset timer */
             state_tick = HAL_GetTick();
@@ -380,6 +418,7 @@ static void App_Loop(void)
             SSD1306_ShowHoldDelete(0);
 
             while (HAL_GPIO_ReadPin(BTN_DELETE_GPIO_Port, BTN_DELETE_Pin) == GPIO_PIN_RESET) {
+                IWDG->KR = 0xAAAAU; /* Feed watchdog during blocking hold   */
                 uint32_t held_ms = HAL_GetTick() - hold_start;
                 uint8_t  sec     = (uint8_t)(held_ms / 1000U);
 
@@ -478,6 +517,15 @@ static void App_Loop(void)
             }
             break;
 
+        case SYS_LOCKED:
+            /* STM32-side fallback: if ESP32 never sends LOCKOUT_CLEAR,
+             * unlock after 5 minutes to prevent permanent deadlock. */
+            if ((now - state_tick) >= LOCKOUT_DISPLAY_MS) {
+                sys_state = SYS_IDLE;
+                Show_Ready();
+            }
+            break;
+
         default:
             break;
     }
@@ -520,6 +568,20 @@ int main(void)
   MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
   App_Init();
+
+  /* ── Independent Watchdog (IWDG) ──────────────────────────────────────────
+   * Started AFTER App_Init so long HAL_Delay calls during DFPlayer init do
+   * not trigger a spurious reset.
+   * LSI ≈ 40 kHz, prescaler = 64 (/64), reload = 3124 → timeout ≈ 5.0 s.
+   * Feed in App_Loop (every iteration) and inside the DELETE hold loop.
+   * If the main loop ever hangs for > 5 s the MCU resets automatically.
+   * ─────────────────────────────────────────────────────────────────────── */
+  IWDG->KR  = 0xCCCCU;           /* Enable IWDG                            */
+  IWDG->KR  = 0x5555U;           /* Unlock PR / RLR registers              */
+  IWDG->PR  = IWDG_PR_PR_2;      /* Prescaler = 64                         */
+  IWDG->RLR = 3124U;             /* Reload → 3124 × (64/40000) ≈ 5.0 s    */
+  while (IWDG->SR != 0U) {}      /* Wait for PR/RLR to be updated in HW    */
+  IWDG->KR  = 0xAAAAU;           /* Reload counter (arm watchdog)          */
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -530,6 +592,17 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
     App_Loop();
+    /* Low-power sleep: enter only when no work is pending.
+     * Double-check pattern: disable IRQs, re-test flags, then __WFI.
+     * This prevents sleeping if an ISR set a flag between the App_Loop
+     * check and the __WFI instruction. SysTick (1 ms) wakes the CPU
+     * in the worst case, so timeouts remain accurate. */
+    __disable_irq();
+    if (!uart1_line_ready && !btn_exit_flag &&
+        !btn_enroll_flag  && !btn_delete_flag) {
+        __WFI();           /* CPU sleeps; any IRQ (including SysTick) wakes it */
+    }
+    __enable_irq();
   }
   /* USER CODE END 3 */
 }

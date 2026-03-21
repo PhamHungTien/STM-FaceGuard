@@ -268,6 +268,11 @@ void SSD1306_ShowDbFull(void)
     draw_status("", "  DB is FULL!", "", "Delete to enroll");
 }
 
+void SSD1306_ShowLockout(void)
+{
+    draw_status("", " !! LOCKED OUT !!", "", " Too many attempts");
+}
+
 void SSD1306_ShowScanning(void)
 {
     draw_status("", "  Scanning...", "", "  Hold still...");

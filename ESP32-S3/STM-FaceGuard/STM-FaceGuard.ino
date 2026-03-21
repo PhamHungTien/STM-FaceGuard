@@ -71,10 +71,17 @@
 #define MAX_ENROLLED_FACES           7   // giới hạn thư viện ESP32 face recognition
 #define RX_BUF_MAX_LEN              32   // bảo vệ rxBuf khỏi overflow
 
-// Ngưỡng độ tương đồng tối thiểu để chấp nhận khuôn mặt là khớp.
-// Giá trị cao hơn = an toàn hơn nhưng dễ từ chối người dùng hợp lệ hơn.
-// Khuyến nghị: 0.55–0.65 (thư viện dùng cosine similarity, ~0.5 là ngưỡng mặc định)
+// ── Ngưỡng nhận diện ──────────────────────────────────────────────────────────
+// Giá trị cao hơn = an toàn hơn. Điều chỉnh 0.55–0.65 theo môi trường ánh sáng.
 #define RECOGNITION_THRESHOLD     0.60F
+
+// ── Voting: yêu cầu N frame liên tiếp khớp trước khi mở cửa ─────────────────
+// Loại bỏ false positive từ 1 frame nhiễu. N=2 thêm ~0.2 s độ trễ (chấp nhận được).
+#define REQUIRED_MATCHES             2
+
+// ── Lockout: khoá sau N lần thất bại liên tiếp ────────────────────────────────
+#define MAX_FAILURES                 5
+#define LOCKOUT_DURATION_MS  (5UL * 60UL * 1000UL)   // 5 phút
 
 // ── Chuỗi prompt gửi STM32 khi đăng ký ───────────────────────────────────────
 static const char * const ENROLL_STEPS[ENROLL_TOTAL_STEPS] = {
@@ -98,9 +105,17 @@ static HumanFaceDetectMSR01   detector(0.3F, 0.3F, 10, 0.3F);
 static FaceRecognition112V1S8 recognizer;   // tự nạp face DB từ NVS/flash
 
 // ── Misc ──────────────────────────────────────────────────────────────────────
-static uint32_t lastOpenMs   = 0;   // cooldown sau OPEN
-static uint32_t lastDeniedMs = 0;   // cooldown sau DENIED
-static String   rxBuf;              // bộ đệm dòng UART từ STM32
+static uint32_t lastOpenMs      = 0;   // cooldown sau OPEN
+static uint32_t lastDeniedMs    = 0;   // cooldown sau DENIED
+static String   rxBuf;                 // bộ đệm dòng UART từ STM32
+
+// ── Voting state ──────────────────────────────────────────────────────────────
+static int      matchCount      = 0;   // số frame khớp liên tiếp
+static int      lastMatchId     = -1;  // ID đang vote
+
+// ── Lockout state ─────────────────────────────────────────────────────────────
+static int      failureCount    = 0;           // lần thất bại liên tiếp
+static uint32_t lockoutUntilMs  = 0;           // khóa đến thời điểm này
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Khởi tạo camera
@@ -175,7 +190,9 @@ static void process_cmd(const String &cmd)
     }
     else if (cmd == "DEL_ALL") {
         recognizer.clear_id();
-        appState = STATE_IDLE;
+        appState     = STATE_IDLE;
+        failureCount = 0;      // clear failure counter after admin delete
+        lockoutUntilMs = 0;    // also clear any active lockout
         Serial1.println("DELETED");
         Serial.println("[SYS] Face DB cleared");
     }
@@ -275,35 +292,73 @@ static void process_frame()
 
         uint32_t now = millis();
 
-        // Kiểm tra cooldown TRƯỚC khi gọi recognize() (tránh tốn CPU)
-        bool openCooldown   = (now - lastOpenMs)   < OPEN_COOLDOWN_MS;
-        bool deniedCooldown = (now - lastDeniedMs) < DENIED_COOLDOWN_MS;
-        if (openCooldown && deniedCooldown) {
+        // ── Lockout check ─────────────────────────────────────────────────────
+        if (now < lockoutUntilMs) {
             esp_camera_fb_return(fb);
             return;
         }
 
+        // ── Cooldown: khi đang trong open cooldown, reset vote và skip ────────
+        if ((now - lastOpenMs) < OPEN_COOLDOWN_MS) {
+            matchCount  = 0;
+            lastMatchId = -1;
+            esp_camera_fb_return(fb);
+            return;
+        }
+
+        // Skip nếu denied cooldown còn hiệu lực
+        if ((now - lastDeniedMs) < DENIED_COOLDOWN_MS) {
+            esp_camera_fb_return(fb);
+            return;
+        }
+
+        // ── Nhận diện ─────────────────────────────────────────────────────────
         face_info_t res = recognizer.recognize(img, face.keypoint);
 
         if (res.id >= 0 && res.similarity >= RECOGNITION_THRESHOLD) {
-            if (openCooldown) {
-                esp_camera_fb_return(fb);
-                return;
+            // ── VOTING: tích lũy frame khớp liên tiếp ─────────────────────────
+            if (res.id == lastMatchId) {
+                matchCount++;
+            } else {
+                matchCount  = 1;
+                lastMatchId = res.id;
             }
-            lastOpenMs = now;
-            Serial1.printf("OPEN:%d\n", res.id);
-            Serial.printf("[RECOG] MATCH  id=%d  similarity=%.3f\n",
-                          res.id, res.similarity);
+            Serial.printf("[RECOG] Vote %d/%d  id=%d  sim=%.3f\n",
+                          matchCount, REQUIRED_MATCHES, res.id, res.similarity);
+
+            if (matchCount >= REQUIRED_MATCHES) {
+                // Xác nhận — mở cửa
+                failureCount = 0;      // reset failure counter on success
+                matchCount   = 0;
+                lastMatchId  = -1;
+                lastOpenMs   = now;
+                Serial1.printf("OPEN:%d\n", res.id);
+                Serial.printf("[RECOG] CONFIRMED  id=%d  sim=%.3f\n",
+                              res.id, res.similarity);
+            }
         }
         else {
-            if (deniedCooldown) {
-                esp_camera_fb_return(fb);
-                return;
-            }
+            // Không khớp — reset vote
+            matchCount  = 0;
+            lastMatchId = -1;
+
             lastDeniedMs = now;
-            Serial1.println("DENIED");
-            Serial.printf("[RECOG] NO MATCH  id=%d  similarity=%.3f  threshold=%.2f\n",
-                          res.id, res.similarity, (float)RECOGNITION_THRESHOLD);
+            failureCount++;
+            Serial.printf("[RECOG] NO MATCH  id=%d  sim=%.3f  failures=%d/%d\n",
+                          res.id, res.similarity, failureCount, MAX_FAILURES);
+
+            // ── Lockout trigger ───────────────────────────────────────────────
+            if (failureCount >= MAX_FAILURES) {
+                failureCount   = 0;
+                lockoutUntilMs = now + LOCKOUT_DURATION_MS;
+                Serial1.println("LOCKOUT");
+                Serial.printf("[SECURITY] LOCKOUT for %lu ms\n", LOCKOUT_DURATION_MS);
+
+                // Gửi LOCKOUT_CLEAR sau khi hết thời gian (dùng một lần trigger)
+                // — được xử lý bởi lockout_check() trong loop()
+            } else {
+                Serial1.println("DENIED");
+            }
         }
     }
 
@@ -346,6 +401,16 @@ void setup()
 void loop()
 {
     esp_task_wdt_reset();   // reset WDT mỗi vòng loop để chứng minh không bị kẹt
+
+    // ── Kiểm tra hết lockout ──────────────────────────────────────────────────
+    if (lockoutUntilMs > 0 && millis() >= lockoutUntilMs) {
+        lockoutUntilMs = 0;
+        failureCount   = 0;
+        matchCount     = 0;
+        lastMatchId    = -1;
+        Serial1.println("LOCKOUT_CLEAR");
+        Serial.println("[SECURITY] Lockout cleared");
+    }
 
     // ── Đọc UART từ STM32 ────────────────────────────────────────────────────
     while (Serial1.available()) {
