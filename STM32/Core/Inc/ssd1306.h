@@ -33,7 +33,7 @@ void SSD1306_ShowUnlockedExit(void);
 void SSD1306_ShowDenied(void);
 void SSD1306_ShowEnrolling(void);
 void SSD1306_ShowEnrollStep(uint8_t step, uint8_t total);
-void SSD1306_ShowEnrolled(uint8_t id);
+void SSD1306_ShowEnrolled(uint8_t id, uint8_t count, uint8_t max_count);
 void SSD1306_ShowHoldDelete(uint8_t seconds);
 void SSD1306_ShowDeleting(void);
 void SSD1306_ShowDeleted(void);

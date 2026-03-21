@@ -31,24 +31,28 @@
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 typedef enum {
+    SYS_CONNECTING, /* Waiting for ESP32 READY after boot                        */
     SYS_IDLE,
     SYS_UNLOCKING,
     SYS_ENROLLING,
     SYS_DELETING,
     SYS_DENIED,
-    SYS_RESULT  /* Showing ENROLLED/DELETED/DB_FULL result; auto-returns after 3 s */
+    SYS_RESULT      /* Showing ENROLLED/DELETED/DB_FULL; auto-returns after 3 s  */
 } SystemState_t;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define RELAY_OPEN_MS       3000U   /* Door stays unlocked for 3 seconds       */
-#define DELETE_HOLD_MS      3000U   /* Hold DELETE button 3s to confirm        */
-#define DENIED_DISPLAY_MS   2500U   /* "Access Denied" shown for 2.5 seconds   */
-#define ENROLL_TIMEOUT_MS  15000U   /* Enrolling mode auto-cancels after 15s   */
-#define DEBOUNCE_MS          200U   /* Minimum ms between button events        */
+#define RELAY_OPEN_MS         3000U  /* Door stays unlocked for 3 seconds       */
+#define DELETE_HOLD_MS        3000U  /* Hold DELETE button 3s to confirm        */
+#define DENIED_DISPLAY_MS     2500U  /* "Access Denied" shown for 2.5 seconds   */
+#define ENROLL_TIMEOUT_MS    15000U  /* Enrolling mode auto-cancels after 15s   */
+#define CONNECT_TIMEOUT_MS   30000U  /* Fallback if ESP32 never sends READY     */
+#define RESULT_DISPLAY_MS     3000U  /* ENROLLED/DELETED/DB_FULL display time   */
+#define DEBOUNCE_MS            200U  /* Minimum ms between button events        */
+#define MAX_ENROLLED_FACES_STM32 7U  /* Must match MAX_ENROLLED_FACES on ESP32  */
 
-#define UART1_BUF_SIZE        64U   /* ESP32 message receive buffer            */
+#define UART1_BUF_SIZE          64U  /* ESP32 message receive buffer            */
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -232,7 +236,7 @@ static void Parse_ESP32_Msg(const char *msg)
         if (enrolled_faces < 255) enrolled_faces++;
         sys_state  = SYS_RESULT;
         state_tick = HAL_GetTick();
-        SSD1306_ShowEnrolled(id);
+        SSD1306_ShowEnrolled(id, enrolled_faces, MAX_ENROLLED_FACES_STM32);
         DFPlayer_Play(DFP_TRACK_ENROLLED);
 
     } else if (strcmp(msg, "DELETED") == 0) {
@@ -317,7 +321,9 @@ static void App_Init(void)
     /* --- Start UART1 interrupt-driven receive --- */
     HAL_UART_Receive_IT(&huart1, &uart1_rx_byte, 1);
 
-    /* --- Show connecting screen (waits for READY from ESP32) --- */
+    /* --- Enter CONNECTING state: buttons blocked until READY received --- */
+    sys_state  = SYS_CONNECTING;
+    state_tick = HAL_GetTick();
     SSD1306_ShowConnecting();
 }
 
@@ -334,7 +340,9 @@ static void App_Loop(void)
      * ================================================================ */
     if (btn_exit_flag) {
         btn_exit_flag = 0;
-        if (sys_state == SYS_UNLOCKING) {
+        if (sys_state == SYS_CONNECTING) {
+            /* System not ready yet – discard */
+        } else if (sys_state == SYS_UNLOCKING) {
             /* Already open – just reset timer */
             state_tick = HAL_GetTick();
         } else {
@@ -420,6 +428,14 @@ static void App_Loop(void)
      * ================================================================ */
     switch (sys_state) {
 
+        case SYS_CONNECTING:
+            /* Fallback: if ESP32 never sends READY within 30 s, go to IDLE */
+            if ((now - state_tick) >= CONNECT_TIMEOUT_MS) {
+                sys_state = SYS_IDLE;
+                Show_Ready();
+            }
+            break;
+
         case SYS_UNLOCKING:
             if ((now - state_tick) >= RELAY_OPEN_MS) {
                 Relay_Close();
@@ -456,7 +472,7 @@ static void App_Loop(void)
 
         case SYS_RESULT:
             /* Auto-return to Ready after showing ENROLLED / DELETED / DB_FULL */
-            if ((now - state_tick) >= 3000U) {
+            if ((now - state_tick) >= RESULT_DISPLAY_MS) {
                 sys_state = SYS_IDLE;
                 Show_Ready();
             }

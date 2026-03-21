@@ -337,11 +337,12 @@ void SSD1306_ShowEnrollStep(uint8_t step, uint8_t total)
     SSD1306_FillPage(7, 0x00);
 }
 
-void SSD1306_ShowEnrolled(uint8_t id)
+void SSD1306_ShowEnrolled(uint8_t id, uint8_t count, uint8_t max_count)
 {
-    char buf[22];
-    snprintf(buf, sizeof(buf), "  Face #%d saved!", id);
-    draw_status("", " ** ENROLLED **", "", buf);
+    char line4[22], line5[22];
+    snprintf(line4, sizeof(line4), "  Face #%d saved!", id);
+    snprintf(line5, sizeof(line5), "  (%d / %d slots used)", count, max_count);
+    draw_status("", " ** ENROLLED **", line4, line5);
 }
 
 void SSD1306_ShowHoldDelete(uint8_t seconds)

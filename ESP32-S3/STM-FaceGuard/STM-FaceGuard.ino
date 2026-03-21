@@ -71,6 +71,11 @@
 #define MAX_ENROLLED_FACES           7   // giới hạn thư viện ESP32 face recognition
 #define RX_BUF_MAX_LEN              32   // bảo vệ rxBuf khỏi overflow
 
+// Ngưỡng độ tương đồng tối thiểu để chấp nhận khuôn mặt là khớp.
+// Giá trị cao hơn = an toàn hơn nhưng dễ từ chối người dùng hợp lệ hơn.
+// Khuyến nghị: 0.55–0.65 (thư viện dùng cosine similarity, ~0.5 là ngưỡng mặc định)
+#define RECOGNITION_THRESHOLD     0.60F
+
 // ── Chuỗi prompt gửi STM32 khi đăng ký ───────────────────────────────────────
 static const char * const ENROLL_STEPS[ENROLL_TOTAL_STEPS] = {
     "ENROLL_FRONT",   // bước 1: nhìn thẳng
@@ -280,7 +285,7 @@ static void process_frame()
 
         face_info_t res = recognizer.recognize(img, face.keypoint);
 
-        if (res.id >= 0) {
+        if (res.id >= 0 && res.similarity >= RECOGNITION_THRESHOLD) {
             if (openCooldown) {
                 esp_camera_fb_return(fb);
                 return;
@@ -297,7 +302,8 @@ static void process_frame()
             }
             lastDeniedMs = now;
             Serial1.println("DENIED");
-            Serial.printf("[RECOG] NO MATCH  similarity=%.3f\n", res.similarity);
+            Serial.printf("[RECOG] NO MATCH  id=%d  similarity=%.3f  threshold=%.2f\n",
+                          res.id, res.similarity, (float)RECOGNITION_THRESHOLD);
         }
     }
 
