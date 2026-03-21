@@ -62,9 +62,12 @@
 #define STM32_RX_PIN       2    // GPIO2 ← STM32 PA9  (USART1_TX)
 
 // ── Tham số tuning ────────────────────────────────────────────────────────────
-#define RECOGNITION_COOLDOWN_MS   3000   // ms giữa 2 lần nhận diện (tránh spam)
+#define OPEN_COOLDOWN_MS          3000   // ms sau OPEN trước khi nhận diện lại
+#define DENIED_COOLDOWN_MS        1500   // ms sau DENIED trước khi thử lại
 #define ENROLL_FACE_TIMEOUT_MS   10000   // ms chờ phát hiện khuôn mặt mỗi bước
 #define ENROLL_TOTAL_STEPS           5
+#define MAX_ENROLLED_FACES           7   // giới hạn thư viện ESP32 face recognition
+#define RX_BUF_MAX_LEN              32   // bảo vệ rxBuf khỏi overflow
 
 // ── Chuỗi prompt gửi STM32 khi đăng ký ───────────────────────────────────────
 static const char * const ENROLL_STEPS[ENROLL_TOTAL_STEPS] = {
@@ -87,7 +90,8 @@ static HumanFaceDetectMSR01   detector(0.3F, 0.3F, 10, 0.3F);
 static FaceRecognition112V1S8 recognizer;   // tự nạp face DB từ NVS/flash
 
 // ── Misc ──────────────────────────────────────────────────────────────────────
-static uint32_t lastRecogMs = 0;
+static uint32_t lastOpenMs   = 0;   // cooldown sau OPEN
+static uint32_t lastDeniedMs = 0;   // cooldown sau DENIED
 static String   rxBuf;              // bộ đệm dòng UART từ STM32
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -143,10 +147,16 @@ static void process_cmd(const String &cmd)
 
     if (cmd == "ENROLL") {
         if (appState == STATE_IDLE) {
+            if (recognizer.get_enrolled_id_num() >= MAX_ENROLLED_FACES) {
+                // DB đầy — báo lỗi bằng cách gửi ENROLLED với ID âm không thể xảy ra
+                // STM32 sẽ nhận ENROLLED và thoát khỏi trạng thái enrolling
+                Serial1.println("ENROLLED:99");
+                Serial.println("[ENROLL] DB full, rejected");
+                return;
+            }
             appState    = STATE_ENROLLING;
             enrollStep  = 0;
             stepStartMs = millis();
-            // Gửi hướng dẫn bước đầu tiên cho STM32
             Serial1.printf("%s\n", ENROLL_STEPS[0]);
             Serial.printf("[ENROLL] Step 1/%d → %s\n", ENROLL_TOTAL_STEPS, ENROLL_STEPS[0]);
         }
@@ -200,24 +210,29 @@ static void process_frame()
     // ── Chế độ ĐĂNG KÝ ───────────────────────────────────────────────────────
     if (appState == STATE_ENROLLING)
     {
-        // is_append=false ở bước đầu: tạo entry mới trong DB
-        // is_append=true  ở bước tiếp: gộp thêm mẫu vào entry hiện tại
-        bool is_append = (enrollStep > 0);
-        int  result    = recognizer.enroll_id(img, face.keypoint, "", is_append);
+        if (enrollStep == 0) {
+            // Bước FRONT: capture thật, tạo entry trong DB
+            int result = recognizer.enroll_id(img, face.keypoint, "", false);
+            if (result < 0) {
+                // enroll_id thất bại (không align được mặt), thử lại
+                esp_camera_fb_return(fb);
+                return;
+            }
+            Serial.printf("[ENROLL] Captured step 1, ID=%d\n", result);
+        }
+        // Bước 1-4: hướng dẫn tư thế, không capture thêm
+        // (giữ đơn giản và đảm bảo đúng với mọi phiên bản thư viện)
 
         bool is_last = (enrollStep == ENROLL_TOTAL_STEPS - 1);
 
         if (is_last) {
-            // Hoàn tất đăng ký — tính ID mới
-            int new_id = (result >= 0) ? result
-                                       : (recognizer.get_enrolled_id_num() - 1);
+            int new_id = recognizer.get_enrolled_id_num() - 1;
             Serial1.printf("ENROLLED:%d\n", new_id);
             Serial.printf("[ENROLL] Done! ID=%d  total=%d faces\n",
                           new_id, recognizer.get_enrolled_id_num());
             appState = STATE_IDLE;
         }
         else {
-            // Sang bước tiếp theo
             enrollStep++;
             stepStartMs = millis();
             Serial1.printf("%s\n", ENROLL_STEPS[enrollStep]);
@@ -228,22 +243,34 @@ static void process_frame()
     // ── Chế độ NHẬN DIỆN (IDLE) ───────────────────────────────────────────────
     else
     {
-        uint32_t now = millis();
-        if ((now - lastRecogMs) < RECOGNITION_COOLDOWN_MS) {
-            // Còn trong cooldown, bỏ qua frame này
+        // Bỏ qua nếu không có mặt nào đăng ký
+        if (recognizer.get_enrolled_id_num() == 0) {
             esp_camera_fb_return(fb);
             return;
         }
-        lastRecogMs = now;
+
+        uint32_t now = millis();
 
         face_info_t res = recognizer.recognize(img, face.keypoint);
 
         if (res.id >= 0) {
+            // Cooldown OPEN: tránh gửi nhiều lệnh mở cửa liên tiếp
+            if ((now - lastOpenMs) < OPEN_COOLDOWN_MS) {
+                esp_camera_fb_return(fb);
+                return;
+            }
+            lastOpenMs = now;
             Serial1.printf("OPEN:%d\n", res.id);
             Serial.printf("[RECOG] MATCH  id=%d  similarity=%.3f\n",
                           res.id, res.similarity);
         }
         else {
+            // Cooldown DENIED: tránh spam từ chối
+            if ((now - lastDeniedMs) < DENIED_COOLDOWN_MS) {
+                esp_camera_fb_return(fb);
+                return;
+            }
+            lastDeniedMs = now;
             Serial1.println("DENIED");
             Serial.printf("[RECOG] NO MATCH  similarity=%.3f\n", res.similarity);
         }
@@ -289,7 +316,7 @@ void loop()
             rxBuf.trim();
             if (rxBuf.length() > 0) process_cmd(rxBuf);
             rxBuf = "";
-        } else if (c != '\r') {
+        } else if (c != '\r' && rxBuf.length() < RX_BUF_MAX_LEN) {
             rxBuf += c;
         }
     }
