@@ -34,6 +34,8 @@
  */
 
 #include "esp_camera.h"
+#include "esp_err.h"
+#include "esp_system.h"
 #include "human_face_detect_msr01.hpp"
 #include "face_recognition_tool.hpp"
 #include "face_recognition_112_v1_s8.hpp"
@@ -118,6 +120,26 @@ static int      lastMatchId     = -1;  // ID đang vote
 // ── Lockout state ─────────────────────────────────────────────────────────────
 static int      failureCount    = 0;           // lần thất bại liên tiếp
 static uint32_t lockoutUntilMs  = 0;           // khóa đến thời điểm này
+static esp_err_t cameraInitErr  = ESP_OK;      // lưu lỗi init camera để chẩn đoán
+static bool     cameraReady     = false;
+static uint32_t lastCamFailTxMs = 0;
+
+static const char *reset_reason_name(esp_reset_reason_t reason)
+{
+    switch (reason) {
+        case ESP_RST_POWERON: return "POWERON";
+        case ESP_RST_EXT: return "EXT";
+        case ESP_RST_SW: return "SW";
+        case ESP_RST_PANIC: return "PANIC";
+        case ESP_RST_INT_WDT: return "INT_WDT";
+        case ESP_RST_TASK_WDT: return "TASK_WDT";
+        case ESP_RST_WDT: return "WDT";
+        case ESP_RST_DEEPSLEEP: return "DEEPSLEEP";
+        case ESP_RST_BROWNOUT: return "BROWNOUT";
+        case ESP_RST_SDIO: return "SDIO";
+        default: return "UNKNOWN";
+    }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Khởi tạo camera
@@ -150,7 +172,10 @@ static bool camera_init()
     cfg.fb_location   = psramFound() ? CAMERA_FB_IN_PSRAM : CAMERA_FB_IN_DRAM;
     cfg.grab_mode     = CAMERA_GRAB_WHEN_EMPTY;
 
-    if (esp_camera_init(&cfg) != ESP_OK) return false;
+    cameraInitErr = esp_camera_init(&cfg);
+    if (cameraInitErr != ESP_OK) {
+        return false;
+    }
 
     sensor_t *s = esp_camera_sensor_get();
     if (s) {
@@ -172,6 +197,11 @@ static bool camera_init()
 // ─────────────────────────────────────────────────────────────────────────────
 static void send_status()
 {
+    if (!cameraReady) {
+        Serial1.printf("CAM_FAIL:%d\n", (int)cameraInitErr);
+        return;
+    }
+
     uint32_t now = millis();
     if ((now - lastStatusTxMs) < 100U) {
         return;
@@ -398,21 +428,25 @@ static void process_frame()
 void setup()
 {
     Serial.begin(115200);
-    Serial.println("\n[SYS] STM-FaceGuard ESP32-S3 starting...");
+    Serial.printf("\n[SYS] STM-FaceGuard ESP32-S3 starting... reset=%s\n",
+                  reset_reason_name(esp_reset_reason()));
 
     // UART tới STM32
     Serial1.begin(STM32_BAUD, SERIAL_8N1, STM32_RX_PIN, STM32_TX_PIN);
     rxBuf.reserve(32);
+    Serial1.println("BOOTING");
 
     // Khởi tạo camera
-    if (!camera_init()) {
-        Serial.println("[SYS] Camera init FAILED — kiem tra ket noi, halting");
-        while (true) { delay(1000); }
+    cameraReady = camera_init();
+    if (!cameraReady) {
+        Serial.printf("[SYS] Camera init FAILED err=0x%04X (%s)\n",
+                      (unsigned int)cameraInitErr,
+                      esp_err_to_name(cameraInitErr));
+    } else {
+        Serial.printf("[SYS] Camera OK  PSRAM=%s  free_heap=%u\n",
+                      psramFound() ? "yes" : "NO",
+                      esp_get_free_heap_size());
     }
-    Serial.printf("[SYS] Camera OK  PSRAM=%s  free_heap=%u\n",
-                  psramFound() ? "yes" : "NO",
-                  esp_get_free_heap_size());
-
     // Hiển thị số khuôn mặt đã đăng ký (nạp từ NVS flash)
     Serial.printf("[SYS] Enrolled faces: %d\n", recognizer.get_enrolled_id_num());
 
@@ -421,7 +455,9 @@ void setup()
     esp_task_wdt_add(NULL);        // theo dõi task hiện tại (loopTask)
 
     delay(300);
-    send_status();
+    if (cameraReady) {
+        send_status();
+    }
 }
 
 void loop()
@@ -448,6 +484,15 @@ void loop()
         } else if (c != '\r' && rxBuf.length() < RX_BUF_MAX_LEN) {
             rxBuf += c;
         }
+    }
+
+    if (!cameraReady) {
+        if ((millis() - lastCamFailTxMs) >= 1000U) {
+            lastCamFailTxMs = millis();
+            Serial1.printf("CAM_FAIL:%d\n", (int)cameraInitErr);
+        }
+        delay(10);
+        return;
     }
 
     // ── Xử lý một frame camera ───────────────────────────────────────────────

@@ -125,6 +125,7 @@ static void Parse_ESP32_Msg(const char *msg);
 static void Show_Ready(void);   /* Wrapper: shows ReadyFaces with enrolled_faces count */
 static void Show_ESP32_LinkState(void);
 static void Restore_LinkAwareIdle(void);
+static void Note_ESP32_Traffic(void);
 static void Mark_ESP32_Alive(void);
 static void Mark_ESP32_Offline(void);
 static void ESP32_RequestStatus(uint8_t force);
@@ -263,6 +264,11 @@ static void Show_ESP32_LinkState(void)
     }
 }
 
+static void Note_ESP32_Traffic(void)
+{
+    esp32_status_tick = HAL_GetTick();
+}
+
 static void Restore_LinkAwareIdle(void)
 {
     if (esp32_ready) {
@@ -282,7 +288,7 @@ static void Restore_LinkAwareIdle(void)
 static void Mark_ESP32_Alive(void)
 {
     esp32_ready = 1;
-    esp32_status_tick = HAL_GetTick();
+    Note_ESP32_Traffic();
 }
 
 static void Mark_ESP32_Offline(void)
@@ -370,6 +376,21 @@ static void Parse_ESP32_Msg(const char *msg)
         state_tick = HAL_GetTick();
         SSD1306_ShowDeleted();
         DFPlayer_Play(DFP_TRACK_DELETED);
+
+    } else if (strcmp(msg, "BOOTING") == 0) {
+        esp32_ready = 0;
+        delete_hold_active = 0;
+        Note_ESP32_Traffic();
+        if (sys_state != SYS_UNLOCKING) {
+            sys_state = SYS_CONNECTING;
+            SSD1306_ShowConnecting();
+        }
+
+    } else if (strncmp(msg, "CAM_FAIL:", 9) == 0) {
+        esp32_ready = 0;
+        delete_hold_active = 0;
+        Note_ESP32_Traffic();
+        Mark_ESP32_Offline();
 
     } else if (strcmp(msg, "READY") == 0) {
         Mark_ESP32_Alive();
