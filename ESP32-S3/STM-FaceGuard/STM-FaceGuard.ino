@@ -86,17 +86,23 @@
 #define CAMERA_JPEG_QUALITY            12
 
 // ── Đèn trợ sáng khuôn mặt ───────────────────────────────────────────────────
-// Pin flash LED được chỉnh theo pinout board do người dùng cung cấp.
-// Nếu board thực tế không có flash LED trên GPIO48, đặt FACE_LIGHT_ENABLE = 0.
+// Nhiều board ESP32-S3-CAM kiểu này có cả:
+// - flash LED trắng thường ở GPIO47
+// - RGB/NeoPixel ở GPIO48
+// Ta bật cả hai kiểu để bao phủ các biến thể board phổ biến.
 #define FACE_LIGHT_ENABLE              1
-#define FACE_LIGHT_GPIO               48
+#define FACE_LIGHT_DIGITAL_ENABLE      1
+#define FACE_LIGHT_DIGITAL_GPIO       47
 #define FACE_LIGHT_ACTIVE_LEVEL     HIGH
 #define FACE_LIGHT_IDLE_LEVEL       LOW
+#define FACE_LIGHT_NEOPIXEL_ENABLE     1
+#define FACE_LIGHT_NEOPIXEL_GPIO      48
+#define FACE_LIGHT_NEOPIXEL_WHITE    160
 #define FACE_LIGHT_HOLD_MS          1200
 
 // ── Tham số tuning ────────────────────────────────────────────────────────────
 #define OPEN_COOLDOWN_MS          3000   // ms sau OPEN trước khi nhận diện lại
-#define DENIED_COOLDOWN_MS        1500   // ms sau DENIED trước khi thử lại
+#define DENIED_COOLDOWN_MS         800   // ms sau DENIED trước khi thử lại
 #define ENROLL_FACE_TIMEOUT_MS   10000   // ms chờ phát hiện khuôn mặt mỗi bước
 #define ENROLL_STEP_DELAY_MS      2500   // ms tối thiểu giữ mỗi tư thế (bước 2–5)
 #define ENROLL_TOTAL_STEPS           5
@@ -105,12 +111,15 @@
 #define AUTO_STATUS_BEACON_MS     2000   // phát READY/FACES định kỳ khi rảnh
 
 // ── Ngưỡng nhận diện ──────────────────────────────────────────────────────────
-// Giá trị cao hơn = an toàn hơn. Điều chỉnh 0.55–0.65 theo môi trường ánh sáng.
-#define RECOGNITION_THRESHOLD     0.60F
+// Giá trị cao hơn = an toàn hơn. 0.55 giúp dễ nhận hơn trong nhà nhưng vẫn tương đối an toàn.
+#define RECOGNITION_THRESHOLD     0.55F
 
 // ── Voting: yêu cầu N frame liên tiếp khớp trước khi mở cửa ─────────────────
 // Loại bỏ false positive từ 1 frame nhiễu. N=2 thêm ~0.2 s độ trễ (chấp nhận được).
 #define REQUIRED_MATCHES             2
+
+// ── Negative voting: chỉ DENIED sau N frame liên tiếp không khớp ────────────
+#define REQUIRED_NO_MATCHES          2
 
 // ── Lockout: khoá sau N lần thất bại liên tiếp ────────────────────────────────
 #define MAX_FAILURES                 5
@@ -134,7 +143,8 @@ static int      enrolledId  = -1;    // ID thực tế từ enroll_id() bước 
 
 // ── Face AI objects ───────────────────────────────────────────────────────────
 // Detector params: score_threshold, nms_threshold, top_k, min_face_size
-static HumanFaceDetectMSR01   detector(0.3F, 0.3F, 10, 0.3F);
+// Nới min_face_size về 0.2 để bắt mặt xa hơn một chút; nms=0.5 bám sát example ESP32-S3.
+static HumanFaceDetectMSR01   detector(0.3F, 0.5F, 10, 0.2F);
 static FaceRecognition112V1S8 recognizer;   // tự nạp face DB từ NVS/flash
 
 // ── Misc ──────────────────────────────────────────────────────────────────────
@@ -150,6 +160,7 @@ static wl_status_t previewLastStaStatus = WL_IDLE_STATUS;
 // ── Voting state ──────────────────────────────────────────────────────────────
 static int      matchCount      = 0;   // số frame khớp liên tiếp
 static int      lastMatchId     = -1;  // ID đang vote
+static int      noMatchCount    = 0;   // số frame liên tiếp không khớp
 
 // ── Lockout state ─────────────────────────────────────────────────────────────
 static int      failureCount    = 0;           // lần thất bại liên tiếp
@@ -229,7 +240,19 @@ static bool ensure_rgb_frame_buf(size_t width, size_t height)
 static void face_light_apply(bool on)
 {
 #if FACE_LIGHT_ENABLE
-    digitalWrite(FACE_LIGHT_GPIO, on ? FACE_LIGHT_ACTIVE_LEVEL : FACE_LIGHT_IDLE_LEVEL);
+  #if FACE_LIGHT_DIGITAL_ENABLE
+    digitalWrite(FACE_LIGHT_DIGITAL_GPIO, on ? FACE_LIGHT_ACTIVE_LEVEL : FACE_LIGHT_IDLE_LEVEL);
+  #endif
+  #if FACE_LIGHT_NEOPIXEL_ENABLE
+    if (on) {
+        neopixelWrite(FACE_LIGHT_NEOPIXEL_GPIO,
+                      FACE_LIGHT_NEOPIXEL_WHITE,
+                      FACE_LIGHT_NEOPIXEL_WHITE,
+                      FACE_LIGHT_NEOPIXEL_WHITE);
+    } else {
+        neopixelWrite(FACE_LIGHT_NEOPIXEL_GPIO, 0, 0, 0);
+    }
+  #endif
 #endif
     faceLightOn = on;
 }
@@ -237,9 +260,22 @@ static void face_light_apply(bool on)
 static void face_light_init()
 {
 #if FACE_LIGHT_ENABLE
-    pinMode(FACE_LIGHT_GPIO, OUTPUT);
+  #if FACE_LIGHT_DIGITAL_ENABLE
+    pinMode(FACE_LIGHT_DIGITAL_GPIO, OUTPUT);
+  #endif
 #endif
     face_light_apply(false);
+}
+
+static void face_light_self_test()
+{
+#if FACE_LIGHT_ENABLE
+    Serial.println("[LIGHT] Self-test ON");
+    face_light_apply(true);
+    delay(250);
+    face_light_apply(false);
+    Serial.println("[LIGHT] Self-test OFF");
+#endif
 }
 
 static void face_light_touch(uint32_t holdMs = FACE_LIGHT_HOLD_MS)
@@ -645,6 +681,7 @@ static void process_frame()
 
     if (faces.empty()) {
         // Không thấy khuôn mặt
+        noMatchCount = 0;
         if (appState == STATE_ENROLLING) {
             if ((millis() - stepStartMs) >= ENROLL_FACE_TIMEOUT_MS) {
                 // Hết giờ chờ, nhắc lại bước hiện tại
@@ -716,6 +753,7 @@ static void process_frame()
     {
         // Bỏ qua nếu không có mặt nào đăng ký
         if (recognizer.get_enrolled_id_num() == 0) {
+            noMatchCount = 0;
             esp_camera_fb_return(fb);
             return;
         }
@@ -724,6 +762,7 @@ static void process_frame()
 
         // ── Lockout check ─────────────────────────────────────────────────────
         if (now < lockoutUntilMs) {
+            noMatchCount = 0;
             esp_camera_fb_return(fb);
             return;
         }
@@ -732,12 +771,14 @@ static void process_frame()
         if ((now - lastOpenMs) < OPEN_COOLDOWN_MS) {
             matchCount  = 0;
             lastMatchId = -1;
+            noMatchCount = 0;
             esp_camera_fb_return(fb);
             return;
         }
 
         // Skip nếu denied cooldown còn hiệu lực
         if ((now - lastDeniedMs) < DENIED_COOLDOWN_MS) {
+            noMatchCount = 0;
             esp_camera_fb_return(fb);
             return;
         }
@@ -746,6 +787,7 @@ static void process_frame()
         face_info_t res = recognizer.recognize(img, face.keypoint);
 
         if (res.id >= 0 && res.similarity >= RECOGNITION_THRESHOLD) {
+            noMatchCount = 0;
             // ── VOTING: tích lũy frame khớp liên tiếp ─────────────────────────
             if (res.id == lastMatchId) {
                 matchCount++;
@@ -771,11 +813,20 @@ static void process_frame()
             // Không khớp — reset vote
             matchCount  = 0;
             lastMatchId = -1;
+            noMatchCount++;
+            Serial.printf("[RECOG] NO MATCH  vote=%d/%d  id=%d  sim=%.3f\n",
+                          noMatchCount, REQUIRED_NO_MATCHES, res.id, res.similarity);
 
+            if (noMatchCount < REQUIRED_NO_MATCHES) {
+                esp_camera_fb_return(fb);
+                return;
+            }
+
+            noMatchCount = 0;
             lastDeniedMs = now;
             failureCount++;
-            Serial.printf("[RECOG] NO MATCH  id=%d  sim=%.3f  failures=%d/%d\n",
-                          res.id, res.similarity, failureCount, MAX_FAILURES);
+            Serial.printf("[RECOG] DENIED  failures=%d/%d\n",
+                          failureCount, MAX_FAILURES);
 
             // ── Lockout trigger ───────────────────────────────────────────────
             if (failureCount >= MAX_FAILURES) {
@@ -803,6 +854,7 @@ void setup()
     Serial.printf("\n[SYS] STM-FaceGuard ESP32-S3 starting... reset=%s\n",
                   reset_reason_name(esp_reset_reason()));
     face_light_init();
+    face_light_self_test();
 
     // UART tới STM32
     Serial1.begin(STM32_BAUD, SERIAL_8N1, STM32_RX_PIN, STM32_TX_PIN);

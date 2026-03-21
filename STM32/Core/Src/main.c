@@ -80,6 +80,9 @@ static volatile uint8_t  btn_delete_flag = 0;
 static volatile uint32_t btn_exit_tick   = 0;
 static volatile uint32_t btn_enroll_tick = 0;
 static volatile uint32_t btn_delete_tick = 0;
+static volatile uint8_t  btn_exit_armed   = 0;
+static volatile uint8_t  btn_enroll_armed = 0;
+static volatile uint8_t  btn_delete_armed = 0;
 
 /* --- UART1 receive buffer (ESP32-S3 → STM32) --- */
 static uint8_t  uart1_rx_byte    = 0;
@@ -125,6 +128,18 @@ static void Parse_ESP32_Msg(const char *msg);
 static void Show_Ready(void);   /* Wrapper: shows ReadyFaces with enrolled_faces count */
 static void Show_ESP32_LinkState(void);
 static void Restore_LinkAwareIdle(void);
+static uint8_t Button_IsPressed(GPIO_TypeDef *port, uint16_t pin);
+static void Button_PollPress(volatile uint8_t *armed,
+                             volatile uint8_t *flag,
+                             volatile uint32_t *tick,
+                             GPIO_TypeDef *port,
+                             uint16_t pin,
+                             uint32_t now);
+static void Button_PollRelease(volatile uint8_t *armed,
+                               volatile uint32_t *tick,
+                               GPIO_TypeDef *port,
+                               uint16_t pin,
+                               uint32_t now);
 static void Note_ESP32_Traffic(void);
 static void Mark_ESP32_Alive(void);
 static void Mark_ESP32_Offline(void);
@@ -193,19 +208,12 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     uint32_t now = HAL_GetTick();
 
     if (GPIO_Pin == BTN_EXIT_Pin) {
-        if ((now - btn_exit_tick) >= DEBOUNCE_MS) {
+        if (btn_exit_armed &&
+            Button_IsPressed(BTN_EXIT_GPIO_Port, BTN_EXIT_Pin) &&
+            ((now - btn_exit_tick) >= DEBOUNCE_MS)) {
             btn_exit_tick = now;
+            btn_exit_armed = 0;
             btn_exit_flag = 1;
-        }
-    } else if (GPIO_Pin == BTN_ENROLL_Pin) {
-        if ((now - btn_enroll_tick) >= DEBOUNCE_MS) {
-            btn_enroll_tick = now;
-            btn_enroll_flag = 1;
-        }
-    } else if (GPIO_Pin == BTN_DELETE_Pin) {
-        if ((now - btn_delete_tick) >= DEBOUNCE_MS) {
-            btn_delete_tick = now;
-            btn_delete_flag = 1;
         }
     }
 }
@@ -261,6 +269,55 @@ static void Show_ESP32_LinkState(void)
         SSD1306_ShowConnecting();
     } else {
         SSD1306_ShowESP32Offline();
+    }
+}
+
+static uint8_t Button_IsPressed(GPIO_TypeDef *port, uint16_t pin)
+{
+    return (HAL_GPIO_ReadPin(port, pin) == GPIO_PIN_RESET) ? 1U : 0U;
+}
+
+static void Button_PollPress(volatile uint8_t *armed,
+                             volatile uint8_t *flag,
+                             volatile uint32_t *tick,
+                             GPIO_TypeDef *port,
+                             uint16_t pin,
+                             uint32_t now)
+{
+    if (!*armed) {
+        return;
+    }
+
+    if (!Button_IsPressed(port, pin)) {
+        *tick = now;
+        return;
+    }
+
+    if ((now - *tick) >= DEBOUNCE_MS) {
+        *armed = 0;
+        *flag = 1;
+        *tick = now;
+    }
+}
+
+static void Button_PollRelease(volatile uint8_t *armed,
+                               volatile uint32_t *tick,
+                               GPIO_TypeDef *port,
+                               uint16_t pin,
+                               uint32_t now)
+{
+    if (*armed) {
+        return;
+    }
+
+    if (Button_IsPressed(port, pin)) {
+        *tick = now;
+        return;
+    }
+
+    if ((now - *tick) >= DEBOUNCE_MS) {
+        *armed = 1;
+        *tick = now;
     }
 }
 
@@ -481,6 +538,8 @@ static void Parse_ESP32_Msg(const char *msg)
  * ----------------------------------------------------------------------- */
 static void App_Init(void)
 {
+    uint32_t now = HAL_GetTick();
+
     /* Buttons configured correctly in CubeMX (Falling edge + Pull-up).
      * Clear any spurious EXTI flags that may have been set at boot. */
     __HAL_GPIO_EXTI_CLEAR_IT(BTN_ENROLL_Pin);
@@ -489,6 +548,12 @@ static void App_Init(void)
     btn_enroll_flag = 0;
     btn_delete_flag = 0;
     btn_exit_flag   = 0;
+    btn_exit_tick   = now;
+    btn_enroll_tick = now;
+    btn_delete_tick = now;
+    btn_exit_armed   = Button_IsPressed(BTN_EXIT_GPIO_Port, BTN_EXIT_Pin) ? 0U : 1U;
+    btn_enroll_armed = Button_IsPressed(BTN_ENROLL_GPIO_Port, BTN_ENROLL_Pin) ? 0U : 1U;
+    btn_delete_armed = Button_IsPressed(BTN_DELETE_GPIO_Port, BTN_DELETE_Pin) ? 0U : 1U;
     esp32_ready     = 0;
     delete_hold_active = 0;
     uart1_line_idx  = 0;
@@ -527,6 +592,14 @@ static void App_Loop(void)
     IWDG->KR = 0xAAAAU;         /* Feed watchdog — proves main loop is alive */
     uint32_t now = HAL_GetTick();
     char uart1_msg[UART1_BUF_SIZE];
+
+    Button_PollPress(&btn_enroll_armed, &btn_enroll_flag, &btn_enroll_tick,
+                     BTN_ENROLL_GPIO_Port, BTN_ENROLL_Pin, now);
+    Button_PollPress(&btn_delete_armed, &btn_delete_flag, &btn_delete_tick,
+                     BTN_DELETE_GPIO_Port, BTN_DELETE_Pin, now);
+    Button_PollRelease(&btn_exit_armed, &btn_exit_tick, BTN_EXIT_GPIO_Port, BTN_EXIT_Pin, now);
+    Button_PollRelease(&btn_enroll_armed, &btn_enroll_tick, BTN_ENROLL_GPIO_Port, BTN_ENROLL_Pin, now);
+    Button_PollRelease(&btn_delete_armed, &btn_delete_tick, BTN_DELETE_GPIO_Port, BTN_DELETE_Pin, now);
 
     /* ================================================================
      * EXIT button — highest priority, opens relay immediately
@@ -999,7 +1072,7 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pins : BTN_ENROLL_Pin BTN_DELETE_Pin */
   GPIO_InitStruct.Pin = BTN_ENROLL_Pin|BTN_DELETE_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
@@ -1018,12 +1091,6 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(RELAY_GPIO_Port, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
-  HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(EXTI0_IRQn);
-
-  HAL_NVIC_SetPriority(EXTI1_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(EXTI1_IRQn);
-
   HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
