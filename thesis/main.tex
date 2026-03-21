@@ -50,7 +50,7 @@
 \titleformat{\chapter}[block]
   {\normalfont\Large\bfseries\centering}
   {CHƯƠNG \thechapter.}{0.6em}{\MakeUppercase}
-\titlespacing*{\chapter}{0pt}{0pt}{24pt}
+\titlespacing*{\chapter}{0pt}{0pt}{30pt}
 
 \titleformat{\section}
   {\normalfont\large\bfseries}
@@ -165,6 +165,7 @@
 
 % ── Hyperlinks (phải load sau cùng, trước cleveref) ─────────
 \usepackage{csquotes}               % bắt buộc với biblatex + polyglossia
+\DeclareQuoteAlias{german}{vietnamese}  % fallback quote style cho tiếng Việt
 \usepackage[
   colorlinks  = true,
   linkcolor   = black,
@@ -210,6 +211,9 @@
 \setlist[itemize]{topsep=4pt, itemsep=2pt, parsep=0pt}
 \setlist[enumerate]{topsep=4pt, itemsep=2pt, parsep=0pt}
 \usepackage{microtype}
+\raggedbottom                       % tránh Underfull vbox
+\emergencystretch=2em               % tránh Overfull hbox do từ dài
+\hyphenation{MobileFaceNet}
 \usepackage{emptypage}              % trang trắng không có header/footer
 
 % ============================================================

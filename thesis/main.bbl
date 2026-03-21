@@ -134,7 +134,7 @@
       \verb 10.1016/j.neucom.2020.10.081
       \endverb
     \endentry
-    \entry{chen2018}{article}{}{}
+    \entry{chen2018}{misc}{}{}
       \name{author}{4}{}{%
         {{hash=64288176f389838aa5917ebca5ce2455}{%
            family={Chen},
@@ -169,7 +169,7 @@
       \field{sortinithash}{9381316451d1b9788675a07e972a12a7}
       \field{labelnamesource}{author}
       \field{labeltitlesource}{title}
-      \field{journaltitle}{arXiv preprint arXiv:1804.07573}
+      \field{note}{arXiv preprint arXiv:1804.07573}
       \field{title}{{MobileFaceNet}: Efficient {CNNs} for Accurate Real-Time Face Verification on Mobile Devices}
       \field{year}{2018}
     \endentry
