@@ -101,14 +101,14 @@
 #define FACE_LIGHT_DIGITAL_GPIO       47
 #define FACE_LIGHT_ACTIVE_LEVEL     HIGH
 #define FACE_LIGHT_IDLE_LEVEL       LOW
-#define FACE_LIGHT_NEOPIXEL_ENABLE     1
+#define FACE_LIGHT_NEOPIXEL_ENABLE     0
 #define FACE_LIGHT_NEOPIXEL_GPIO      48
-#define FACE_LIGHT_NEOPIXEL_WHITE    160
-#define FACE_LIGHT_STATUS_ENABLE       1
+#define FACE_LIGHT_NEOPIXEL_WHITE     96
+#define FACE_LIGHT_STATUS_ENABLE       0
 #define FACE_LIGHT_STATUS_GPIO         2
 #define FACE_LIGHT_STATUS_ACTIVE_LEVEL LOW
 #define FACE_LIGHT_STATUS_IDLE_LEVEL   HIGH
-#define FACE_LIGHT_HOLD_MS          1200
+#define FACE_LIGHT_HOLD_MS           250
 
 // ── Tham số tuning ────────────────────────────────────────────────────────────
 #define OPEN_COOLDOWN_MS          3000   // ms sau OPEN trước khi nhận diện lại
@@ -990,8 +990,13 @@ static void process_frame()
 void setup()
 {
     Serial.begin(115200);
+    esp_reset_reason_t rr = esp_reset_reason();
     Serial.printf("\n[SYS] STM-FaceGuard ESP32-S3 starting... reset=%s\n",
-                  reset_reason_name(esp_reset_reason()));
+                  reset_reason_name(rr));
+    if (rr == ESP_RST_BROWNOUT || rr == ESP_RST_PANIC ||
+        rr == ESP_RST_WDT || rr == ESP_RST_TASK_WDT || rr == ESP_RST_INT_WDT) {
+        Serial.println("[SYS] Warning: previous reset indicates power instability or runtime crash");
+    }
     face_light_init();
     face_light_self_test();
 
