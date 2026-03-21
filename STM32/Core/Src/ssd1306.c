@@ -351,7 +351,7 @@ void SSD1306_ShowEnrolled(uint8_t id, uint8_t count, uint8_t max_count)
 {
     char line4[22], line5[22];
     snprintf(line4, sizeof(line4), "  Face #%d saved!", id);
-    snprintf(line5, sizeof(line5), "  (%d / %d slots used)", count, max_count);
+    snprintf(line5, sizeof(line5), "  (%d/%d slots)", count, max_count);
     draw_status("", " ** ENROLLED **", line4, line5);
 }
 

@@ -50,6 +50,7 @@ typedef enum {
 #define DELETE_HOLD_MS        3000U  /* Hold DELETE button 3s to confirm        */
 #define DENIED_DISPLAY_MS     2500U  /* "Access Denied" shown for 2.5 seconds   */
 #define ENROLL_TIMEOUT_MS    15000U  /* Enrolling mode auto-cancels after 15s   */
+#define ENROLL_RETRY_MAX         2U  /* Retries if ENROLL command seems lost     */
 #define CONNECT_TIMEOUT_MS   30000U  /* Fallback if ESP32 never sends READY     */
 #define RESULT_DISPLAY_MS     3000U  /* ENROLLED/DELETED/DB_FULL display time   */
 #define DEBOUNCE_MS            200U  /* Minimum ms between button events        */
@@ -103,6 +104,7 @@ static uint8_t       esp32_ready     = 0;
 
 /* --- Enrolled face count (updated from ESP32 FACES/ENROLLED/DELETED msgs) --- */
 static uint8_t       enrolled_faces  = 0;
+static uint8_t       enroll_retry_count = 0;
 
 /* --- DELETE hold state (non-blocking) --- */
 static uint8_t       delete_hold_active = 0;
@@ -489,6 +491,7 @@ static void Parse_ESP32_Msg(const char *msg)
     /* --- Enrollment step guidance (5 poses, sent sequentially by ESP32) --- */
     } else if (strcmp(msg, "ENROLL_FRONT") == 0) {
         Mark_ESP32_Alive();
+        enroll_retry_count = 0;
         sys_state = SYS_ENROLLING;
         state_tick = HAL_GetTick(); /* Reset enrol timeout each step */
         SSD1306_ShowEnrollStep(1, 5);
@@ -496,6 +499,7 @@ static void Parse_ESP32_Msg(const char *msg)
 
     } else if (strcmp(msg, "ENROLL_LEFT") == 0) {
         Mark_ESP32_Alive();
+        enroll_retry_count = 0;
         sys_state = SYS_ENROLLING;
         state_tick = HAL_GetTick();
         SSD1306_ShowEnrollStep(2, 5);
@@ -503,6 +507,7 @@ static void Parse_ESP32_Msg(const char *msg)
 
     } else if (strcmp(msg, "ENROLL_RIGHT") == 0) {
         Mark_ESP32_Alive();
+        enroll_retry_count = 0;
         sys_state = SYS_ENROLLING;
         state_tick = HAL_GetTick();
         SSD1306_ShowEnrollStep(3, 5);
@@ -510,6 +515,7 @@ static void Parse_ESP32_Msg(const char *msg)
 
     } else if (strcmp(msg, "ENROLL_UP") == 0) {
         Mark_ESP32_Alive();
+        enroll_retry_count = 0;
         sys_state = SYS_ENROLLING;
         state_tick = HAL_GetTick();
         SSD1306_ShowEnrollStep(4, 5);
@@ -517,6 +523,7 @@ static void Parse_ESP32_Msg(const char *msg)
 
     } else if (strcmp(msg, "ENROLL_DOWN") == 0) {
         Mark_ESP32_Alive();
+        enroll_retry_count = 0;
         sys_state = SYS_ENROLLING;
         state_tick = HAL_GetTick();
         SSD1306_ShowEnrollStep(5, 5);
@@ -682,6 +689,7 @@ static void App_Loop(void)
     if (btn_enroll_flag) {
         btn_enroll_flag = 0;
         if (sys_state == SYS_IDLE && esp32_ready) {
+            enroll_retry_count = 0;
             sys_state  = SYS_ENROLLING;
             state_tick = HAL_GetTick();
             HAL_UART_Transmit(&huart1, (uint8_t *)"ENROLL\n", 7, 100);
@@ -737,11 +745,27 @@ static void App_Loop(void)
 
         case SYS_ENROLLING:
             if ((now - state_tick) >= ENROLL_TIMEOUT_MS) {
-                /* ESP32 did not respond to ENROLL/step sync – mark link suspect. */
-                btn_enroll_flag = 0; /* Discard any button press queued during enrol */
+                /* Retry ENROLL first: UART command can be dropped occasionally. */
+                if (esp32_ready && (enroll_retry_count < ENROLL_RETRY_MAX)) {
+                    enroll_retry_count++;
+                    state_tick = now;
+                    HAL_UART_Transmit(&huart1, (uint8_t *)"ENROLL\n", 7, 100);
+                    SSD1306_ShowEnrolling();
+                    break;
+                }
+
+                btn_enroll_flag = 0; /* Discard queued presses during enrol timeout */
                 HAL_UART_Transmit(&huart1, (uint8_t *)"CANCEL\n", 7, 100);
-                Mark_ESP32_Offline();
-                ESP32_RequestStatus(1);
+                enroll_retry_count = 0;
+
+                if (esp32_ready) {
+                    /* Link still alive: return to READY instead of false OFFLINE. */
+                    Restore_LinkAwareIdle();
+                    ESP32_RequestStatus(1);
+                } else {
+                    Mark_ESP32_Offline();
+                    ESP32_RequestStatus(1);
+                }
             }
             break;
 

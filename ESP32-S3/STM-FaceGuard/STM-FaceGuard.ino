@@ -78,7 +78,13 @@
 #define PREVIEW_ENABLE                  1
 #define PREVIEW_AP_SSID  "STM-FaceGuard-Preview"
 #define PREVIEW_AP_PASS  "faceguard123"
-#define PREVIEW_AP_CHANNEL              6
+#define PREVIEW_AP_CHANNEL              1
+#define PREVIEW_AP_FALLBACK_CHANNEL     6
+#define PREVIEW_AP_MAX_CONN             2
+#define PREVIEW_AP_ALLOW_OPEN_FALLBACK  1
+#define PREVIEW_AP_HEALTHCHECK_MS    5000
+#define PREVIEW_AP_RESTART_GAP_MS    3000
+#define PREVIEW_STA_ENABLE              0
 #define PREVIEW_STA_SSID               ""
 #define PREVIEW_STA_PASS               ""
 #define PREVIEW_REFRESH_MS            700
@@ -160,6 +166,9 @@ static String   rxBuf;                 // bộ đệm dòng UART từ STM32
 static WebServer previewServer(80);
 static bool     previewServerStarted = false;
 static wl_status_t previewLastStaStatus = WL_IDLE_STATUS;
+static bool     previewApReady = false;
+static uint32_t previewLastApCheckMs = 0;
+static uint32_t previewLastApRestartMs = 0;
 
 // ── Voting state ──────────────────────────────────────────────────────────────
 static int      matchCount      = 0;   // số frame khớp liên tiếp
@@ -511,22 +520,74 @@ static void preview_start_server()
     Serial.println("[PREVIEW] HTTP server ready");
 }
 
+static bool preview_start_ap_try(int channel, bool openMode)
+{
+    bool apReady = openMode
+        ? WiFi.softAP(PREVIEW_AP_SSID, nullptr, channel, 0, PREVIEW_AP_MAX_CONN)
+        : WiFi.softAP(PREVIEW_AP_SSID, PREVIEW_AP_PASS, channel, 0, PREVIEW_AP_MAX_CONN);
+
+    if (apReady) {
+        // Ưu tiên tương thích client: b/g/n + HT20, TX power tối đa.
+        esp_err_t protocolErr = esp_wifi_set_protocol(
+            WIFI_IF_AP,
+            WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N
+        );
+        esp_err_t bwErr = esp_wifi_set_bandwidth(WIFI_IF_AP, WIFI_BW_HT20);
+        esp_err_t txErr = esp_wifi_set_max_tx_power(80);  // 20 dBm theo bảng mapping IDF
+
+        if (protocolErr != ESP_OK || bwErr != ESP_OK || txErr != ESP_OK) {
+            Serial.printf("[PREVIEW] AP radio tune warning  protocol=%s  bw=%s  tx=%s\n",
+                          esp_err_to_name(protocolErr),
+                          esp_err_to_name(bwErr),
+                          esp_err_to_name(txErr));
+        }
+    }
+
+    Serial.printf("[PREVIEW] AP %s  mode=%s  ch=%d  SSID=%s  URL=http://%s/\n",
+                  apReady ? "OK" : "FAILED",
+                  openMode ? "OPEN" : "WPA2",
+                  channel,
+                  PREVIEW_AP_SSID,
+                  WiFi.softAPIP().toString().c_str());
+    return apReady;
+}
+
+static bool preview_start_ap_with_fallback()
+{
+    bool apReady = preview_start_ap_try(PREVIEW_AP_CHANNEL, false);
+    if (!apReady && PREVIEW_AP_FALLBACK_CHANNEL != PREVIEW_AP_CHANNEL) {
+        apReady = preview_start_ap_try(PREVIEW_AP_FALLBACK_CHANNEL, false);
+    }
+#if PREVIEW_AP_ALLOW_OPEN_FALLBACK
+    if (!apReady) {
+        apReady = preview_start_ap_try(PREVIEW_AP_FALLBACK_CHANNEL, true);
+    }
+#endif
+    previewApReady = apReady;
+    return apReady;
+}
+
 static void preview_start_network()
 {
     WiFi.persistent(false);
+    WiFi.disconnect(true, true);
+    delay(100);
+    WiFi.mode(WIFI_MODE_NULL);
+    delay(100);
 
-    const bool wantSta = (strlen(PREVIEW_STA_SSID) > 0);
+    // Để ổn định preview AP, mặc định tắt AP+STA (STA có thể ép AP đổi channel).
+    const bool wantSta = (PREVIEW_STA_ENABLE != 0) && (strlen(PREVIEW_STA_SSID) > 0);
     WiFi.mode(wantSta ? WIFI_AP_STA : WIFI_AP);
     delay(100);
 
     WiFi.setSleep(false);
     esp_wifi_set_ps(WIFI_PS_NONE);
+    WiFi.setTxPower(WIFI_POWER_19_5dBm);
 
-    bool apReady = WiFi.softAP(PREVIEW_AP_SSID, PREVIEW_AP_PASS, PREVIEW_AP_CHANNEL, 0, 2);
-    Serial.printf("[PREVIEW] AP %s  SSID=%s  URL=http://%s/\n",
-                  apReady ? "OK" : "FAILED",
-                  PREVIEW_AP_SSID,
-                  WiFi.softAPIP().toString().c_str());
+    bool apReady = preview_start_ap_with_fallback();
+    if (!apReady) {
+        Serial.println("[PREVIEW] AP FAILED in all fallback modes");
+    }
 
     if (wantSta) {
         WiFi.begin(PREVIEW_STA_SSID, PREVIEW_STA_PASS);
@@ -541,6 +602,19 @@ static void preview_poll()
 {
     if (previewServerStarted) {
         previewServer.handleClient();
+    }
+
+    uint32_t now = millis();
+    if ((now - previewLastApCheckMs) >= PREVIEW_AP_HEALTHCHECK_MS) {
+        previewLastApCheckMs = now;
+        bool apSeemsDown = !previewApReady || (WiFi.softAPIP()[0] == 0);
+        if (apSeemsDown && ((now - previewLastApRestartMs) >= PREVIEW_AP_RESTART_GAP_MS)) {
+            previewLastApRestartMs = now;
+            Serial.println("[PREVIEW] AP healthcheck failed -> restarting AP");
+            WiFi.softAPdisconnect(true);
+            delay(60);
+            preview_start_ap_with_fallback();
+        }
     }
 
     if (strlen(PREVIEW_STA_SSID) == 0) {
