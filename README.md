@@ -1,8 +1,8 @@
 # STM-FaceGuard
 
-**Hệ thống Khóa thông minh nhận diện khuôn mặt trên STM32**
+**Hệ thống Khóa cửa thông minh nhận diện khuôn mặt — Dual-MCU**
 
-Dự án đồ án môn học xây dựng một hệ thống khóa cửa thông minh sử dụng kiến trúc Dual-MCU: **STM32F303RE** đảm nhận vai trò điều khiển trung tâm, **ESP32-S3 N16R8** chạy thuật toán AI nhận diện khuôn mặt thời gian thực qua Camera OV3660. Hệ thống hỗ trợ phản hồi âm thanh tiếng Việt qua DFPlayer Mini và hiển thị trạng thái trên màn hình OLED.
+Dự án đồ án môn học xây dựng hệ thống khóa cửa thông minh sử dụng kiến trúc Dual-MCU: **STM32F303RE** đảm nhận vai trò điều khiển trung tâm, **ESP32-S3 N16R8 CAM** (tích hợp camera OV3660 3MP) chạy thuật toán AI nhận diện khuôn mặt thời gian thực. Hệ thống hỗ trợ phản hồi âm thanh tiếng Việt qua DFPlayer Mini và hiển thị trạng thái trên màn hình OLED SSD1306.
 
 ---
 
@@ -11,12 +11,11 @@ Dự án đồ án môn học xây dựng một hệ thống khóa cửa thông 
 - [Tính năng](#tính-năng)
 - [Kiến trúc hệ thống](#kiến-trúc-hệ-thống)
 - [Danh sách linh kiện](#danh-sách-linh-kiện)
-- [Sơ đồ kết nối chân (Pinout)](#sơ-đồ-kết-nối-chân-pinout)
+- [Hướng dẫn kết nối chi tiết](#hướng-dẫn-kết-nối-chi-tiết)
 - [Cấu hình giao tiếp](#cấu-hình-giao-tiếp)
 - [Hướng dẫn sử dụng](#hướng-dẫn-sử-dụng)
 - [Giao thức UART](#giao-thức-uart)
-- [Chuẩn bị file âm thanh (DFPlayer)](#chuẩn-bị-file-âm-thanh-dfplayer)
-- [Lưu ý phần cứng](#lưu-ý-phần-cứng)
+- [Chuẩn bị file âm thanh](#chuẩn-bị-file-âm-thanh-dfplayer)
 - [Công cụ phát triển](#công-cụ-phát-triển)
 - [Cấu trúc dự án](#cấu-trúc-dự-án)
 
@@ -24,44 +23,48 @@ Dự án đồ án môn học xây dựng một hệ thống khóa cửa thông 
 
 ## Tính năng
 
-- **Nhận diện khuôn mặt thời gian thực** — ESP32-S3 xử lý AI, nhận diện trong vòng dưới 1 giây
-- **Quản lý người dùng bằng nút nhấn** — Thêm và xóa khuôn mặt hoàn toàn offline, không cần máy tính
-- **Phản hồi âm thanh tiếng Việt** — DFPlayer Mini phát file MP3 chào mừng hoặc cảnh báo
-- **Hiển thị trạng thái OLED** — Màn hình 128×64 px hiển thị thông tin người dùng và hướng dẫn
-- **Mở cửa từ bên trong** — Nút EXIT vật lý ưu tiên cao nhất, hoạt động ngay lập tức
-- **Lưu trữ tối ưu 50–100 khuôn mặt** — Dữ liệu lưu trong Flash 16MB của ESP32-S3
+- **Nhận diện khuôn mặt thời gian thực** — ESP32-S3 xử lý AI với camera OV3660 3MP
+- **Quản lý người dùng bằng nút nhấn** — Thêm và xóa khuôn mặt offline, không cần máy tính
+- **Phản hồi âm thanh tiếng Việt** — DFPlayer Mini phát 10 file MP3 hướng dẫn
+- **Hiển thị trạng thái OLED** — Màn hình 128×64 px hiển thị thông tin và hướng dẫn từng bước
+- **Mở cửa từ bên trong** — Nút EXIT (PC13) ưu tiên cao nhất, hoạt động ngay lập tức
+- **Lưu khuôn mặt vào Flash** — Tối đa 7 khuôn mặt lưu trong NVS Flash của ESP32-S3
 
 ---
 
 ## Kiến trúc hệ thống
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                      TẦNG ĐẦU VÀO                           │
-│   [Camera OV3660] ──► [ESP32-S3 N16R8]  [BTN_EXIT  PC13]   │
-│                              │           [BTN_ENROLL PA0 ]   │
-│                              │           [BTN_DELETE PA1 ]   │
-└──────────────────────────────┼──────────────────────────────┘
-                               │ UART1 (115200 baud)
-                               ▼
-┌─────────────────────────────────────────────────────────────┐
-│                  TẦNG ĐIỀU KHIỂN TRUNG TÂM                  │
-│                    STM32F303RE (72 MHz)                      │
-│                    Nucleo-F303RE Board                       │
-└──────┬──────────────────┬────────────────────┬──────────────┘
-       │ GPIO (PB0)       │ UART3 (9600 baud)  │ I2C1 Fast
-       ▼                  ▼                    ▼
-┌─────────────┐  ┌─────────────────┐  ┌──────────────────┐
-│ RELAY → 12V │  │  DFPlayer Mini  │  │   OLED 0.96"     │
-│ SM1373 Lock │  │    + Loa 3W     │  │   128×64 px      │
-└─────────────┘  └─────────────────┘  └──────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                        TẦNG ĐẦU VÀO                             │
+│  [Camera OV3660 3MP]                 [BTN_EXIT   PC13 / Nucleo] │
+│       tích hợp trong                [BTN_ENROLL  PA0          ] │
+│  [ESP32-S3 N16R8 CAM]               [BTN_DELETE  PA1          ] │
+│         │                                                        │
+└─────────┼────────────────────────────────────────────────────────┘
+          │ UART1 115200 baud
+          │ PA9 (TX) ←→ GPIO2 (RX)
+          │ PA10(RX) ←→ GPIO1 (TX)
+          ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                   TẦNG ĐIỀU KHIỂN TRUNG TÂM                     │
+│                     STM32F303RE (72 MHz)                         │
+│                     Nucleo-F303RE Board                          │
+└────────┬─────────────────────┬──────────────────────┬───────────┘
+         │ GPIO PB0            │ USART3 9600 baud      │ I2C1 Fast
+         ▼                     ▼                       ▼
+┌──────────────────┐  ┌─────────────────────┐  ┌────────────────┐
+│ BC547 → LY2N     │  │   DFPlayer Mini     │  │  OLED SSD1306  │
+│ 12VDC Relay      │  │   + Loa 3070 3W     │  │  128×64 px     │
+│      │           │  └─────────────────────┘  └────────────────┘
+│ SM1373 12V Lock  │
+└──────────────────┘
 ```
 
 **Nguyên lý hoạt động:**
-1. ESP32-S3 liên tục thu ảnh từ Camera OV3660 và chạy thuật toán Face Recognition
-2. Khi nhận diện đúng khuôn mặt, gửi lệnh `OPEN:<ID>` qua UART1 → STM32
-3. STM32 kích Relay mở khóa SM1373 trong 3 giây, phát âm thanh chào mừng, hiển thị tên người dùng lên OLED
-4. Khi nhận diện thất bại, ESP32 gửi `DENIED`, STM32 phát cảnh báo và hiển thị "Từ chối"
+1. ESP32-S3 liên tục thu ảnh từ camera OV3660 tích hợp và chạy thuật toán Face Recognition
+2. Khi nhận diện đúng → gửi `OPEN:<ID>` qua UART → STM32 kích relay mở khóa 3 giây
+3. Khi thất bại → gửi `DENIED` → STM32 phát cảnh báo và hiển thị "Access Denied"
 
 ---
 
@@ -69,178 +72,356 @@ Dự án đồ án môn học xây dựng một hệ thống khóa cửa thông 
 
 ### I. Khối Điều khiển & AI
 
-| STT | Tên linh kiện | Thông số kỹ thuật | Vai trò |
-|-----|--------------|-------------------|---------|
-| 1 | **Nucleo-F303RE** | ARM Cortex-M4, 72 MHz, 512 KB Flash, 64 KB RAM | Bộ não trung tâm: quản lý logic, đọc nút nhấn, điều khiển Relay và hiển thị |
-| 2 | **ESP32-S3 N16R8** | Dual-core Xtensa LX7, 240 MHz, 16 MB Flash, 8 MB PSRAM | Mắt thần AI: chạy thuật toán Face Recognition, giao tiếp UART với STM32 |
-| 3 | **Camera OV3660** | Độ phân giải 3 MP, kết nối FPC | Thu thập hình ảnh khuôn mặt chất lượng cao cho ESP32-S3 |
+| STT | Tên linh kiện | Thông số | Vai trò |
+|-----|--------------|----------|---------|
+| 1 | **Nucleo-F303RE** | STM32F303RE, Cortex-M4, 72 MHz, 512 KB Flash | Bộ não trung tâm: state machine, relay, OLED, DFPlayer |
+| 2 | **ESP32-S3 N16R8 CAM** | Dual-core 240 MHz, 16 MB Flash, 8 MB PSRAM OPI | AI node: nhận diện khuôn mặt, giao tiếp UART STM32 |
+| 3 | **Camera OV3660** | 3 MP, tích hợp sẵn trên board ESP32-S3 N16R8 CAM | Thu ảnh khuôn mặt chất lượng cao |
 
-### II. Khối Nút nhấn Chức năng
+### II. Nút nhấn
 
-| STT | Tên linh kiện | Chân STM32 | Chức năng |
-|-----|--------------|-----------|-----------|
-| 4 | **Nút EXIT** | PC13 (EXTI13) | Mở cửa ngay lập tức từ bên trong — ưu tiên cao nhất |
-| 5 | **Nút ENROLL** | PA0 (EXTI0) | Nhấn để kích hoạt chế độ học và lưu khuôn mặt mới |
-| 6 | **Nút DELETE** | PA1 (EXTI1) | Nhấn giữ 3 giây để xóa toàn bộ dữ liệu khuôn mặt |
+| STT | Nút | Chân STM32 | Chức năng |
+|-----|-----|-----------|-----------|
+| 4 | **Nút EXIT** | PC13 (Blue Button Nucleo) | Mở cửa ngay từ bên trong — ưu tiên tuyệt đối |
+| 5 | **Nút ENROLL** | PA0 (EXTI0) | Kích hoạt chế độ đăng ký khuôn mặt mới |
+| 6 | **Nút DELETE** | PA1 (EXTI1) | Giữ 3 giây để xóa toàn bộ khuôn mặt |
 
-> **Lưu ý:** PC13 tận dụng nút xanh Blue Button có sẵn trên board Nucleo-F303RE để test nhanh.
+> PC13 tận dụng nút xanh (Blue Button) có sẵn trên Nucleo-F303RE.
 
-### III. Khối Phản hồi & Hiển thị
+### III. Phản hồi & Hiển thị
 
-| STT | Tên linh kiện | Thông số kỹ thuật | Vai trò |
-|-----|--------------|-------------------|---------|
-| 7 | **Màn hình OLED 0.96"** | 128×64 px, giao tiếp I2C | Hiển thị trạng thái, tên người dùng và hướng dẫn thao tác |
-| 8 | **Module DFPlayer Mini** | Giải mã MP3, điều khiển qua UART | Quản lý và phát file âm thanh hướng dẫn tiếng Việt |
-| 9 | **Loa chữ nhật 3070** | 8 Ω, 3 W | Phát âm thanh chào mừng hoặc cảnh báo |
-| 10 | **Thẻ nhớ MicroSD** | 1 GB – 16 GB, FAT32 | Lưu trữ file âm thanh `.mp3` cho DFPlayer |
+| STT | Linh kiện | Thông số | Vai trò |
+|-----|----------|----------|---------|
+| 7 | **OLED SSD1306** | 0.96", 128×64 px, I2C | Hiển thị trạng thái, hướng dẫn đăng ký |
+| 8 | **DFPlayer Mini** | Giải mã MP3, UART 9600 baud | Phát âm thanh tiếng Việt |
+| 9 | **Loa 3070** | 8 Ω, 3 W | Phát âm thanh |
+| 10 | **Thẻ MicroSD** | 1–16 GB, FAT32 | Lưu 10 file MP3 cho DFPlayer |
 
-### IV. Khối Chấp hành & Nguồn
+### IV. Chấp hành & Nguồn
 
-| STT | Tên linh kiện | Thông số kỹ thuật | Vai trò |
-|-----|--------------|-------------------|---------|
-| 11 | **Khóa cửa điện SM1373 (V3)** | 12 V DC, Fail-Secure, ~0.5 A | Cơ cấu chốt khóa vật lý cho cửa |
-| 12 | **Module Relay 5 V (1 kênh)** | Opto cách ly, kích mức thấp | Đóng/ngắt nguồn 12 V cho khóa từ tín hiệu 3,3 V của STM32 |
-| 13 | **Module Buck LM2596** | Hạ áp DC-DC, dòng tối đa 3 A | Hạ áp từ 12 V xuống 5 V nuôi Nucleo và ESP32-S3 |
-| 14 | **Adapter 12 V – 2 A** | Nguồn xung ổn định | Cung cấp năng lượng tổng cho toàn bộ hệ thống |
+| STT | Linh kiện | Thông số | Vai trò |
+|-----|----------|----------|---------|
+| 11 | **Khóa SM1373 V3** | 12 V DC, Fail-Secure, ~0.5 A | Cơ cấu chốt khóa cửa |
+| 12 | **Relay LY2N 12VDC** | Cuộn hút 12 V, tiếp điểm 10 A | Đóng/ngắt 12 V cho SM1373 |
+| 13 | **Đế relay PTF08A** | 8 chân, socket kiểu Finder | Gắn relay LY2N dễ tháo lắp |
+| 14 | **Transistor BC547** | NPN, 100 mA, 45 V | Kích relay LY2N từ GPIO 3.3 V của STM32 |
+| 15 | **Module Buck LM2596** | 12 V → 5 V, 3 A | Hạ áp nuôi Nucleo + ESP32-S3 |
+| 16 | **Adapter 12 V – 2 A** | Nguồn xung ổn định | Cấp nguồn tổng |
 
-### V. Phụ kiện Bảo vệ & Kết nối
+### V. Phụ kiện
 
-| STT | Tên linh kiện | Vai trò |
-|-----|--------------|---------|
-| 15 | **Diode 1N4007** | Mắc song song cuộn dây SM1373 — chống dòng cảm ứng ngược bảo vệ Relay |
-| 16 | **Dây cắm Jumper** | Kết nối tín hiệu giữa các module (Đực-Đực, Đực-Cái, Cái-Cái) |
-| 17 | **Breadboard** | Mạch cắm thử nghiệm trước khi hàn cố định |
+| STT | Linh kiện | Vai trò |
+|-----|----------|---------|
+| 17 | **Điện trở 1 kΩ** | Hạn dòng Base của BC547 |
+| 18 | **Diode 1N4007** (×2) | Chống dòng ngược (1 cái cho relay, 1 cái cho SM1373) |
+| 19 | **Dây Jumper** | Kết nối tín hiệu giữa các module |
+| 20 | **Breadboard** | Mạch thử nghiệm |
 
 ---
 
-## Sơ đồ kết nối chân (Pinout)
+## Hướng dẫn kết nối chi tiết
 
-### STM32F303RE (Nucleo-F303RE) — Toàn bộ chân sử dụng
+> **Quy ước:** `→` là nguồn tín hiệu/điện, `←` là đích nhận.
 
-| Chân STM32 | Nhãn trong CubeMX | Kết nối tới | Giao thức |
-|-----------|------------------|------------|-----------|
-| **PA9** | `ESP32_TX` | ESP32-S3 RX | USART1 TX |
-| **PA10** | `ESP32_RX` | ESP32-S3 TX | USART1 RX |
-| **PC10** | `DFP_TX` | DFPlayer RX | USART3 TX |
-| **PC11** | `DFP_RX` | DFPlayer TX | USART3 RX |
-| **PA2** | `USART_TX` | ST-Link Virtual COM | USART2 TX |
-| **PA3** | `USART_RX` | ST-Link Virtual COM | USART2 RX |
-| **PB8** | `OLED_SCL` | OLED SCL | I2C1 SCL |
-| **PB9** | `OLED_SDA` | OLED SDA | I2C1 SDA |
-| **PB0** | `RELAY` | Module Relay IN | GPIO Output |
-| **PA5** | `LD2 [Green Led]` | LED xanh trên board | GPIO Output |
-| **PC13** | `BTN_EXIT` | Nút EXIT (GND) | EXTI13 Pull-up |
-| **PA0** | `BTN_ENROLL` | Nút ENROLL (GND) | EXTI0 Pull-up |
-| **PA1** | `BTN_DELETE` | Nút DELETE (GND) | EXTI1 Pull-up |
+---
 
-### Kết nối nguồn điện
+### 1. Sơ đồ nguồn điện tổng thể
 
 ```
-Adapter 12V ──► LM2596 ──► 5V ──► Nucleo VIN & ESP32-S3 VCC
-            └──────────────────► Relay COM ──► SM1373 (+) dây ĐỎ
-                                               SM1373 (–) dây ĐEN ──► GND
-                                               Diode 1N4007 song song SM1373
+Adapter 12V/2A
+      │
+      ├──► LM2596 IN+  ──►  LM2596 OUT+ (chỉnh 5V) ──► Nucleo VIN (CN6 pin 8)
+      │                                               ──► ESP32-S3 5V pin
+      │
+      ├──► LY2N Coil A1 (+) [qua mạch BC547, xem mục 5]
+      │
+      └──► LY2N COM (tiếp điểm chung)
+
+LM2596 OUT–  ──► GND chung (nối tất cả GND lại)
+LM2596 IN–   ──► GND chung
 ```
 
-> **Quan trọng:** Không lấy nguồn 3,3 V từ Nucleo để nuôi ESP32-S3. ESP32-S3 có thể tiêu tới 500 mA khi chạy AI — sẽ làm sụt áp và gây lỗi hệ thống.
+> **Quan trọng:** Không cấp nguồn ESP32-S3 từ chân 3.3V của Nucleo. ESP32-S3 tiêu tối đa 500 mA khi chạy AI, sẽ làm sụt áp Nucleo.
+
+---
+
+### 2. ESP32-S3 N16R8 CAM ↔ STM32F303RE (UART1)
+
+Đây là kết nối quan trọng nhất — chú ý **TX nối RX, RX nối TX**.
+
+```
+ESP32-S3          STM32F303RE (Nucleo CN10)
+─────────         ──────────────────────────
+GPIO1  (TX)  ──►  PA10 / D2  (USART1 RX)
+GPIO2  (RX)  ◄──  PA9  / D8  (USART1 TX)
+GND          ───  GND
+```
+
+> Camera OV3660 tích hợp sẵn trên board ESP32-S3, **không cần nối thêm dây nào** cho camera.
+
+**Lưu ý điện áp:** ESP32-S3 và STM32F303RE đều giao tiếp mức 3.3V — kết nối trực tiếp, không cần level shifter.
+
+---
+
+### 3. OLED SSD1306 ↔ STM32F303RE (I2C1)
+
+```
+OLED SSD1306      STM32F303RE (Nucleo CN10)
+────────────      ──────────────────────────
+VCC          ──►  3.3V
+GND          ───  GND
+SCL          ──►  PB8 / D15  (I2C1 SCL)
+SDA          ──►  PB9 / D14  (I2C1 SDA)
+```
+
+> Địa chỉ I2C mặc định của module: **0x3C**. Không cần điện trở pull-up thêm nếu module đã tích hợp sẵn.
+
+---
+
+### 4. DFPlayer Mini ↔ STM32F303RE (USART3)
+
+```
+DFPlayer Mini     STM32F303RE (Nucleo CN7)
+─────────────     ──────────────────────────
+VCC          ──►  5V  (từ LM2596 hoặc Nucleo 5V pin)
+GND          ───  GND
+RX           ◄──  [1 kΩ] ── PC10  (USART3 TX)  ← bắt buộc có điện trở 1kΩ
+TX           ──►  PC11  (USART3 RX)
+SPK+         ──►  Loa 3070 chân (+)
+SPK–         ──►  Loa 3070 chân (–)
+```
+
+> **Bắt buộc** đặt điện trở **1 kΩ** nối tiếp trên dây PC10 → DFPlayer RX để bảo vệ chip DFPlayer khỏi mức điện áp cao.
+
+---
+
+### 5. Mạch kích Relay LY2N 12VDC (BC547 + STM32 PB0)
+
+Relay LY2N có cuộn hút **12V / ~40mA** — không thể kích trực tiếp từ GPIO 3.3V. Cần transistor BC547 làm công tắc.
+
+#### Sơ đồ mạch BC547:
+
+```
+STM32 PB0 (3.3V)
+      │
+    [1kΩ]
+      │
+      ├──► BC547 Base  (chân B)
+             │
+      BC547 Collector (chân C) ──► LY2N A2 (cuộn âm, chân 12 đế PTF08A)
+      BC547 Emitter   (chân E) ──► GND
+
+12V ──────────────────────────► LY2N A1 (cuộn dương, chân 11 đế PTF08A)
+
+1N4007 (flyback): Anode → A2, Cathode → A1  [bảo vệ BC547 khỏi xung cảm ứng]
+```
+
+#### Sơ đồ chân BC547 nhìn từ mặt phẳng (chữ nổi hướng ra ngoài):
+
+```
+  [B]  [C]  [E]
+  Base Collector Emitter
+```
+
+#### Nguyên lý:
+- PB0 = **HIGH (3.3V)** → BC547 dẫn → Relay LY2N có điện (12V) → Tiếp điểm NO đóng → SM1373 mở khóa
+- PB0 = **LOW (0V)**  → BC547 tắt → Relay nhả → Tiếp điểm NO mở → SM1373 khóa
+
+---
+
+### 6. Relay LY2N + Đế PTF08A ↔ Khóa SM1373
+
+#### Sơ đồ chân PTF08A (nhìn từ phía cắm dây):
+
+```
+   ┌─────────────────────────────┐
+   │  11  12  14  │  21  22  24  │   ← hàng tiếp điểm
+   │                             │
+   │       1    2                │   ← chân cuộn dây A1, A2
+   └─────────────────────────────┘
+   (Số chân theo chuẩn Omron/Finder — kiểm tra nhãn trên đế thực tế)
+```
+
+| Chân PTF08A | Nối tới | Ghi chú |
+|------------|---------|---------|
+| A1 (cuộn +) | 12V | Nguồn cuộn hút |
+| A2 (cuộn –) | BC547 Collector | Qua BC547 xuống GND |
+| COM (chân 12) | 12V | Cấp nguồn qua tiếp điểm |
+| NO  (chân 11) | SM1373 dây ĐỎ (+) | Normally Open — đóng khi relay có điện |
+
+```
+Kết nối SM1373:
+12V ──► LY2N COM (chân 12 PTF08A)
+        LY2N NO  (chân 11 PTF08A) ──► SM1373 dây ĐỎ  (+)
+GND ─────────────────────────────── SM1373 dây ĐEN (–)
+
+1N4007 (bảo vệ SM1373): Anode → dây ĐEN, Cathode → dây ĐỎ
+(mắc song song với SM1373, chống xung ngược khi ngắt điện)
+```
+
+> **SM1373 V3 — Fail-Secure:** Mất điện = khóa cứng. Có điện = mở chốt.
+
+---
+
+### 7. Nút nhấn ↔ STM32F303RE
+
+Cả 3 nút dùng kiểu **active-LOW**: nhấn nút → chân GPIO nối GND → phát EXTI.
+
+```
+3.3V (pull-up nội bộ trong STM32)
+  │
+  ├── PA0  (BTN_ENROLL) ──[Nút ENROLL]── GND
+  ├── PA1  (BTN_DELETE) ──[Nút DELETE]── GND
+  └── PC13 (BTN_EXIT)   ──[Blue Button Nucleo]── GND  (đã có sẵn trên board)
+```
+
+> Code đã cấu hình PULLUP + FALLING edge cho PA0, PA1, PC13 trong `App_Init()`.
+
+---
+
+### 8. Tổng hợp pinout STM32F303RE
+
+| Chân STM32 | Connector Nucleo | Tín hiệu | Kết nối tới |
+|-----------|-----------------|----------|-------------|
+| **PA9** | CN10 – D8 | USART1 TX | ESP32-S3 **GPIO2** (RX) |
+| **PA10** | CN10 – D2 | USART1 RX | ESP32-S3 **GPIO1** (TX) |
+| **PC10** | CN7 – D45 | USART3 TX | DFPlayer **RX** (qua 1kΩ) |
+| **PC11** | CN7 – D44 | USART3 RX | DFPlayer **TX** |
+| **PA2** | CN10 – D1 | USART2 TX | ST-Link Virtual COM (debug) |
+| **PA3** | CN10 – D0 | USART2 RX | ST-Link Virtual COM (debug) |
+| **PB8** | CN10 – D15 | I2C1 SCL | OLED **SCL** |
+| **PB9** | CN10 – D14 | I2C1 SDA | OLED **SDA** |
+| **PB0** | CN10 – D3 | GPIO OUT | [1kΩ] → **BC547 Base** |
+| **PA5** | CN10 – D13 | GPIO OUT | LED xanh trên Nucleo (LD2) |
+| **PC13** | — | EXTI13 | Blue Button Nucleo (BTN_EXIT) |
+| **PA0** | CN10 – D2\* | EXTI0 | Nút **ENROLL** → GND |
+| **PA1** | CN10 – D3\* | EXTI1 | Nút **DELETE** → GND |
+
+---
+
+### 9. Tổng hợp pinout ESP32-S3 N16R8 CAM
+
+| GPIO | Chức năng | Kết nối |
+|------|----------|---------|
+| **GPIO1** | UART1 TX | → STM32 PA10 (USART1 RX) |
+| **GPIO2** | UART1 RX | ← STM32 PA9 (USART1 TX) |
+| GPIO4 | Camera SIOD | Tích hợp sẵn trên board |
+| GPIO5 | Camera SIOC | Tích hợp sẵn trên board |
+| GPIO6 | Camera VSYNC | Tích hợp sẵn trên board |
+| GPIO7 | Camera HREF | Tích hợp sẵn trên board |
+| GPIO8–13 | Camera D2–D7 | Tích hợp sẵn trên board |
+| GPIO15 | Camera XCLK | Tích hợp sẵn trên board |
+| GPIO16–18 | Camera D7–D5 | Tích hợp sẵn trên board |
+| **5V** | Nguồn | LM2596 OUT+ |
+| **GND** | Đất | GND chung |
 
 ---
 
 ## Cấu hình giao tiếp
 
-### USART1 — ESP32-S3 ↔ STM32
+### USART1 — ESP32-S3 ↔ STM32 (115200 baud)
+
 | Thông số | Giá trị |
 |---------|--------|
 | Baud rate | 115200 |
-| Data bits | 8 |
-| Stop bits | 1 |
-| Parity | None |
-| Chân TX | PA9 |
-| Chân RX | PA10 |
+| Data / Stop / Parity | 8N1 |
+| STM32 TX | PA9 |
+| STM32 RX | PA10 |
+| ESP32-S3 TX | GPIO1 |
+| ESP32-S3 RX | GPIO2 |
 
-### USART3 — DFPlayer Mini ↔ STM32
+### USART3 — DFPlayer Mini ↔ STM32 (9600 baud)
+
 | Thông số | Giá trị |
 |---------|--------|
 | Baud rate | 9600 |
-| Data bits | 8 |
-| Stop bits | 1 |
-| Parity | None |
-| Chân TX | PC10 |
-| Chân RX | PC11 |
+| Data / Stop / Parity | 8N1 |
+| STM32 TX | PC10 (qua 1kΩ → DFPlayer RX) |
+| STM32 RX | PC11 ← DFPlayer TX |
 
-### I2C1 — OLED ↔ STM32
+### I2C1 — OLED SSD1306 ↔ STM32
+
 | Thông số | Giá trị |
 |---------|--------|
-| Chế độ | Fast Mode |
-| Timing | 0x0010020A |
-| Chân SCL | PB8 |
-| Chân SDA | PB9 |
+| Chế độ | Fast Mode (400 kHz) |
+| SCL | PB8 |
+| SDA | PB9 |
+| Địa chỉ OLED | 0x3C |
 
 ---
 
 ## Hướng dẫn sử dụng
 
-### Thêm khuôn mặt mới (ENROLL)
-1. Đứng trước Camera OV3660, khoảng cách **30–60 cm**, ánh sáng đủ sáng
+### Nhận diện tự động (IDLE)
+
+ESP32-S3 liên tục quét khuôn mặt:
+- **Khớp** → Relay mở 3 giây, OLED hiện `"Welcome #ID"`, loa phát *"Xin chào, cửa đã mở"*
+- **Không khớp** → OLED hiện `"Access Denied"`, loa phát cảnh báo
+- **Không có mặt đăng ký** → hệ thống không phát cảnh báo, chờ im lặng
+
+### Đăng ký khuôn mặt mới (ENROLL)
+
+1. Đứng trước camera, khoảng cách **30–60 cm**, ánh sáng đủ sáng
 2. Nhấn nút **ENROLL** (PA0)
-3. OLED hiển thị `"Enrolling..."`, loa phát _"Mời bạn nhìn vào camera"_
-4. ESP32-S3 bắt đầu thu thập 5 tư thế khuôn mặt — OLED và loa **hướng dẫn từng bước**:
+3. OLED hiện `"Enrolling..."`, loa phát *"Mời bạn nhìn vào camera"*
+4. ESP32-S3 hướng dẫn 5 tư thế — **giữ mỗi tư thế ~2.5 giây**:
 
-| Bước | OLED hiển thị | Loa phát | Hành động |
-|------|--------------|----------|-----------|
-| 1/5 | `Step 1/5` + `Look STRAIGHT` | Track 6 | Nhìn thẳng vào camera |
-| 2/5 | `Step 2/5` + `Turn LEFT` | Track 7 | Quay đầu sang **trái** ~30° |
-| 3/5 | `Step 3/5` + `Turn RIGHT` | Track 8 | Quay đầu sang **phải** ~30° |
-| 4/5 | `Step 4/5` + `Tilt UP` | Track 9 | Ngước đầu **lên** ~20° |
-| 5/5 | `Step 5/5` + `Tilt DOWN` | Track 10 | Cúi đầu **xuống** ~20° |
+| Bước | OLED | Loa | Hành động |
+|------|------|-----|-----------|
+| 1/5 | `Step 1/5 STRAIGHT` | Track 6 | Nhìn thẳng — **ảnh được chụp tại bước này** |
+| 2/5 | `Step 2/5 LEFT` | Track 7 | Quay đầu sang trái ~30°, giữ 2.5s |
+| 3/5 | `Step 3/5 RIGHT` | Track 8 | Quay đầu sang phải ~30°, giữ 2.5s |
+| 4/5 | `Step 4/5 UP` | Track 9 | Ngước đầu lên ~20°, giữ 2.5s |
+| 5/5 | `Step 5/5 DOWN` | Track 10 | Cúi đầu xuống ~20°, giữ 2.5s |
 
-5. Sau mỗi bước, giữ nguyên tư thế đến khi OLED chuyển sang bước tiếp theo
-6. Hoàn tất: OLED hiển thị `"Enrolled #X"`, loa phát _"Đã thêm khuôn mặt thành công"_
+5. Hoàn tất: OLED hiện `"Enrolled #X"`, loa phát *"Đã thêm khuôn mặt thành công"*
+
+> **Lưu ý:** Nếu không phát hiện khuôn mặt trong 10 giây, OLED nhắc lại bước hiện tại. Sau 15 giây không có phản hồi từ ESP32, STM32 tự động hủy đăng ký.
 
 ### Xóa toàn bộ khuôn mặt (DELETE)
-1. Nhấn và giữ nút **DELETE** (PA1) trong **3 giây**
-2. OLED hiển thị `"Hold to confirm..."` → `"Deleting..."`
-3. ESP32-S3 xóa toàn bộ database khuôn mặt
-4. DFPlayer phát _"Đã xóa toàn bộ dữ liệu"_
+
+1. Nhấn và **giữ** nút DELETE (PA1) trong **3 giây**
+2. OLED hiện đếm ngược `"Hold 1s... 2s... 3s"`
+3. Xác nhận: OLED hiện `"Deleting..."`, ESP32-S3 xóa toàn bộ NVS flash
+4. Loa phát *"Đã xóa toàn bộ dữ liệu khuôn mặt"*
+5. Thả sớm trước 3s → hủy, không xóa
 
 ### Mở cửa từ bên trong (EXIT)
-1. Nhấn nút **EXIT** (PC13)
-2. STM32 kích Relay ngay lập tức (không qua ESP32)
-3. SM1373 mở chốt trong **3 giây**
 
-### Nhận diện tự động
-- ESP32-S3 liên tục quét khuôn mặt
-- Nhận diện **thành công**: Relay mở 3 giây, OLED hiển thị `"Welcome, [Tên]!"`, DFPlayer phát tiếng chào
-- Nhận diện **thất bại**: OLED hiển thị `"Access Denied"`, DFPlayer phát cảnh báo
+1. Nhấn nút **EXIT** (PC13 — Blue Button Nucleo)
+2. STM32 kích relay **ngay lập tức**, không qua ESP32
+3. SM1373 mở chốt trong **3 giây**, OLED hiện `"Exit Unlocked"`
 
 ---
 
 ## Giao thức UART
 
-### ESP32-S3 → STM32 (Kết quả nhận diện)
+### ESP32-S3 → STM32
 
-| Lệnh | Ý nghĩa |
-|------|---------|
-| `OPEN:<ID>\n` | Nhận diện thành công, ID người dùng |
-| `DENIED\n` | Nhận diện thất bại |
-| `ENROLLED:<ID>\n` | Đã lưu khuôn mặt mới thành công |
-| `DELETED\n` | Đã xóa toàn bộ dữ liệu |
-| `READY\n` | ESP32 khởi động xong |
-| `ENROLL_FRONT\n` | Hướng dẫn bước 1: nhìn thẳng |
-| `ENROLL_LEFT\n` | Hướng dẫn bước 2: quay trái |
-| `ENROLL_RIGHT\n` | Hướng dẫn bước 3: quay phải |
-| `ENROLL_UP\n` | Hướng dẫn bước 4: ngước lên |
-| `ENROLL_DOWN\n` | Hướng dẫn bước 5: cúi xuống |
+| Lệnh | Khi nào | Ý nghĩa |
+|------|---------|---------|
+| `READY\n` | Khởi động xong | ESP32 sẵn sàng |
+| `OPEN:<ID>\n` | Nhận diện khớp | Mở cửa, ID = số khuôn mặt |
+| `DENIED\n` | Không nhận diện được | Từ chối |
+| `ENROLLED:<ID>\n` | Đăng ký xong | Khuôn mặt mới, ID mới |
+| `DELETED\n` | Xóa xong | Toàn bộ DB đã xóa |
+| `ENROLL_FRONT\n` | Bước 1/5 | Hướng dẫn nhìn thẳng |
+| `ENROLL_LEFT\n` | Bước 2/5 | Hướng dẫn quay trái |
+| `ENROLL_RIGHT\n` | Bước 3/5 | Hướng dẫn quay phải |
+| `ENROLL_UP\n` | Bước 4/5 | Hướng dẫn ngẩng lên |
+| `ENROLL_DOWN\n` | Bước 5/5 | Hướng dẫn cúi xuống |
 
-### STM32 → ESP32-S3 (Lệnh điều khiển)
+### STM32 → ESP32-S3
 
-| Lệnh | Ý nghĩa |
-|------|---------|
-| `ENROLL\n` | Bắt đầu chế độ học khuôn mặt mới |
-| `DEL_ALL\n` | Xóa toàn bộ dữ liệu khuôn mặt |
+| Lệnh | Khi nào | Ý nghĩa |
+|------|---------|---------|
+| `ENROLL\n` | Nhấn BTN_ENROLL | Bắt đầu đăng ký khuôn mặt |
+| `DEL_ALL\n` | Giữ BTN_DELETE 3s | Xóa toàn bộ database |
+| `CANCEL\n` | Timeout 15s lúc đăng ký | Hủy đăng ký |
 
-### STM32 → DFPlayer Mini (UART3, 9600 baud)
-DFPlayer được điều khiển qua giao thức binary 10 byte:
+### STM32 → DFPlayer Mini (USART3, 9600 baud)
+
+Giao thức binary 10 byte:
 
 ```
 0x7E  0xFF  0x06  CMD  0x00  ParamH  ParamL  CkH  CkL  0xEF
@@ -252,102 +433,44 @@ Checksum = `-(0xFF + 0x06 + CMD + 0x00 + ParamH + ParamL)`
 
 ## Chuẩn bị file âm thanh (DFPlayer)
 
-### Nội dung các file cần thu âm / tổng hợp giọng nói
+### Nội dung 10 file MP3
 
-| Track | Tên file | Khi nào phát | Nội dung giọng nói tiếng Việt |
-|-------|----------|-------------|-------------------------------|
+| Track | File | Khi nào phát | Nội dung tiếng Việt |
+|-------|------|-------------|---------------------|
 | 1 | `0001.mp3` | Mở cửa thành công | *"Xin chào, cửa đã mở"* |
 | 2 | `0002.mp3` | Nhận diện thất bại | *"Không nhận diện được, vui lòng thử lại"* |
-| 3 | `0003.mp3` | Bắt đầu enroll | *"Mời bạn nhìn vào camera"* |
-| 4 | `0004.mp3` | Enroll thành công | *"Đã thêm khuôn mặt thành công"* |
-| 5 | `0005.mp3` | Xóa dữ liệu xong | *"Đã xóa toàn bộ dữ liệu khuôn mặt"* |
-| 6 | `0006.mp3` | Enroll bước 1 | *"Mời nhìn thẳng vào camera"* |
-| 7 | `0007.mp3` | Enroll bước 2 | *"Vui lòng quay đầu sang trái"* |
-| 8 | `0008.mp3` | Enroll bước 3 | *"Vui lòng quay đầu sang phải"* |
-| 9 | `0009.mp3` | Enroll bước 4 | *"Vui lòng ngước đầu lên một chút"* |
-| 10 | `0010.mp3` | Enroll bước 5 | *"Vui lòng cúi đầu xuống một chút"* |
+| 3 | `0003.mp3` | Bắt đầu đăng ký | *"Mời bạn nhìn vào camera"* |
+| 4 | `0004.mp3` | Đăng ký thành công | *"Đã thêm khuôn mặt thành công"* |
+| 5 | `0005.mp3` | Xóa xong | *"Đã xóa toàn bộ dữ liệu khuôn mặt"* |
+| 6 | `0006.mp3` | Bước 1/5 FRONT | *"Mời nhìn thẳng vào camera"* |
+| 7 | `0007.mp3` | Bước 2/5 LEFT | *"Vui lòng quay đầu sang trái"* |
+| 8 | `0008.mp3` | Bước 3/5 RIGHT | *"Vui lòng quay đầu sang phải"* |
+| 9 | `0009.mp3` | Bước 4/5 UP | *"Vui lòng ngước đầu lên một chút"* |
+| 10 | `0010.mp3` | Bước 5/5 DOWN | *"Vui lòng cúi đầu xuống một chút"* |
 
-### Cách tạo file MP3 (chọn 1 trong 3 cách)
+### Cách tạo file MP3
 
-**Cách 1 — VBee Studio (giọng Việt đẹp nhất):**
-- Truy cập [vbee.vn](https://vbee.vn) → Studio → nhập text → chọn giọng → tải MP3
+**VBee Studio** (giọng Việt tự nhiên nhất): [vbee.vn](https://vbee.vn) → Studio → nhập text → chọn giọng → tải MP3
 
-**Cách 2 — FreeText2Speech:**
-- Truy cập [freetts.com](https://freetts.com) → chọn ngôn ngữ **Vietnamese** → nhập text → Export MP3
+**FreeText2Speech**: [freetts.com](https://freetts.com) → chọn Vietnamese → Export MP3
 
-**Cách 3 — Google Translate (nhanh nhất):**
-- Mở Google Translate → nhập text tiếng Việt → nhấn nút loa → record âm thanh ra MP3
-
-### Cách đặt file lên thẻ nhớ MicroSD
+### Cấu trúc thẻ MicroSD (FAT32)
 
 ```
-Yêu cầu thẻ nhớ:
-- Format: FAT32
-- Dung lượng: 1 GB – 16 GB
-- Cấu trúc thư mục:
-
-  [Thư mục gốc thẻ nhớ]
-  ├── 0001.mp3   → "Xin chào, cửa đã mở"
-  ├── 0002.mp3   → "Không nhận diện được, vui lòng thử lại"
-  ├── 0003.mp3   → "Mời bạn nhìn vào camera"
-  ├── 0004.mp3   → "Đã thêm khuôn mặt thành công"
-  ├── 0005.mp3   → "Đã xóa toàn bộ dữ liệu khuôn mặt"
-  ├── 0006.mp3   → "Mời nhìn thẳng vào camera"
-  ├── 0007.mp3   → "Vui lòng quay đầu sang trái"
-  ├── 0008.mp3   → "Vui lòng quay đầu sang phải"
-  ├── 0009.mp3   → "Vui lòng ngước đầu lên một chút"
-  └── 0010.mp3   → "Vui lòng cúi đầu xuống một chút"
+[Thư mục gốc thẻ nhớ — không tạo thư mục con]
+├── 0001.mp3
+├── 0002.mp3
+├── 0003.mp3
+├── 0004.mp3
+├── 0005.mp3
+├── 0006.mp3
+├── 0007.mp3
+├── 0008.mp3
+├── 0009.mp3
+└── 0010.mp3
 ```
 
-> **Quan trọng:**
-> - File phải đặt ở **thư mục gốc** (root), không được tạo thư mục con
-> - Tên file phải đúng định dạng `0001.mp3` đến `0005.mp3` (4 chữ số, không đổi tên)
-> - Copy file vào thẻ nhớ theo **đúng thứ tự từ 0001 → 0005** để DFPlayer đọc đúng track number
-> - Sau khi copy xong, **eject thẻ nhớ đúng cách** trước khi rút ra
-
----
-
-## Lưu ý phần cứng
-
-### Relay PTF08A (Đế cắm relay Finder)
-
-Dự án sử dụng **Module Relay 5V** lắp trên **đế cắm PTF08A** (socket 8 chân kiểu Finder). Đây là loại đế relay công nghiệp, cho phép tháo lắp relay dễ dàng mà không cần hàn.
-
-**Sơ đồ đấu dây relay PTF08A với Khóa SM1373:**
-
-```
-STM32 PB0 ──► IN (Module Relay)
-5V          ──► VCC (Module Relay)
-GND         ──► GND (Module Relay)
-
-Relay COM   ──► 12V (từ Adapter)
-Relay NO    ──► SM1373 dây ĐỎ (+)
-GND         ──► SM1373 dây ĐEN (–)
-
-Diode 1N4007: Cathode ──► SM1373 (+), Anode ──► SM1373 (–)
-              (mắc song song, chống dòng cảm ứng ngược)
-```
-
-> **Thông số SM1373:**
-> - Loại: Electric Strike, **Fail-Secure** (mất điện = khóa, có điện = mở)
-> - Điện áp: 12V DC, dòng ~0.5A
-> - Module relay **active-HIGH**: PB0 = HIGH → relay đóng → SM1373 có điện → cửa mở
-> - PTF08A hỗ trợ tối đa 10A/250VAC — dư sức cho SM1373 12V/0.5A
-> - **Bắt buộc** lắp Diode 1N4007 song song với cuộn dây SM1373 để bảo vệ relay khỏi xung điện ngược khi ngắt nguồn
-
-### Nguồn điện
-
-> **Không** lấy nguồn 3,3V từ Nucleo để nuôi ESP32-S3. ESP32-S3 tiêu tối đa 500 mA khi chạy AI — sẽ gây sụt áp và reset hệ thống. Phải dùng LM2596 riêng từ Adapter 12V.
-
-### Nút nhấn
-
-Tất cả 3 nút kết nối theo sơ đồ **active-LOW**:
-
-```
-GPIO (PULLUP) ──[BTN]──► GND
-```
-
-Code đã cấu hình lại các chân PA0, PA1, PC13 thành **FALLING edge + PULLUP** tại runtime trong `App_Init()`.
+> Copy file theo **đúng thứ tự 0001 → 0010**, eject thẻ đúng cách trước khi rút.
 
 ---
 
@@ -355,19 +478,22 @@ Code đã cấu hình lại các chân PA0, PA1, PC13 thành **FALLING edge + PU
 
 | Công cụ | Mục đích |
 |---------|---------|
-| **STM32CubeIDE** | IDE lập trình và nạp code cho STM32F303RE |
-| **STM32CubeMX 6.17.0** | Cấu hình Pinout, Clock, Peripheral |
-| **STM32 HAL Library (FW_F3 V1.11.6)** | Thư viện phần cứng trừu tượng cho STM32F3 |
-| **Arduino IDE / PlatformIO** | Lập trình ESP32-S3 với thư viện ESP-WHO |
-| **ESP-WHO Framework** | Thư viện AI nhận diện khuôn mặt của Espressif |
-| **ST-Link V2-1 (tích hợp trên Nucleo)** | Nạp code và debug không cần mạch nạp rời |
+| **STM32CubeIDE** | IDE lập trình + nạp code STM32F303RE |
+| **STM32CubeMX 6.17** | Cấu hình Pinout, Clock, Peripheral |
+| **STM32 HAL FW_F3 V1.11.6** | Thư viện HAL cho STM32F3 |
+| **Arduino IDE** | Lập trình ESP32-S3 |
+| **ESP32 Arduino core ≥ 2.0.6** | Board package + thư viện AI nhận diện mặt |
+| **ST-Link V2-1 (tích hợp Nucleo)** | Nạp + debug STM32 |
 
-### Cấu hình ESP32-S3 trong Arduino IDE / PlatformIO
+### Cài đặt board ESP32-S3 trong Arduino IDE
+
 ```
-Board:      ESP32S3 Dev Module
-PSRAM:      OPI PSRAM
-Flash Size: 16MB (128Mb)
-Flash Mode: QIO 80MHz
+Board:            ESP32S3 Dev Module
+PSRAM:            OPI PSRAM
+Flash Size:       16MB (128Mb)
+Flash Mode:       QIO 80MHz
+Partition Scheme: Huge APP (3MB No OTA / 1MB SPIFFS)
+USB CDC On Boot:  Enabled
 ```
 
 ---
@@ -376,23 +502,25 @@ Flash Mode: QIO 80MHz
 
 ```
 STM-FaceGuard/
-├── Core/
-│   ├── Src/
-│   │   ├── main.c              # State machine chính + UART/EXTI callbacks
-│   │   ├── ssd1306.c           # OLED driver (SSD1306) + font 5×7 + màn hình UI
-│   │   ├── dfplayer.c          # DFPlayer Mini UART protocol driver
-│   │   ├── stm32f3xx_it.c      # EXTI0/1/15-10 + USART1 IRQ handlers
-│   │   ├── stm32f3xx_hal_msp.c # HAL MSP init (tự động tạo bởi CubeMX)
-│   │   └── system_stm32f3xx.c  # System clock config
-│   └── Inc/
-│       ├── main.h              # Pin definitions (tự động tạo bởi CubeMX)
-│       ├── ssd1306.h           # OLED driver header
-│       └── dfplayer.h          # DFPlayer driver header
-├── Drivers/
-│   ├── CMSIS/                  # CMSIS Core headers
-│   └── STM32F3xx_HAL_Driver/   # HAL Library STM32F3
-├── STM-FaceGuard.ioc           # File cấu hình STM32CubeMX
-├── STM32F303RETX_FLASH.ld      # Linker script
+├── STM32/                          # Firmware STM32F303RE (STM32CubeIDE)
+│   ├── Core/
+│   │   ├── Src/
+│   │   │   ├── main.c              # State machine + UART/EXTI callbacks
+│   │   │   ├── ssd1306.c           # OLED driver (SSD1306) + font 5×7
+│   │   │   ├── dfplayer.c          # DFPlayer Mini UART protocol
+│   │   │   └── stm32f3xx_it.c      # IRQ handlers (EXTI, USART)
+│   │   └── Inc/
+│   │       ├── main.h              # Pin definitions
+│   │       ├── ssd1306.h
+│   │       └── dfplayer.h          # Track number defines
+│   ├── Drivers/                    # HAL + CMSIS
+│   ├── STM-FaceGuard.ioc           # CubeMX config
+│   └── STM32F303RETX_FLASH.ld      # Linker script
+│
+├── ESP32-S3/                       # Firmware ESP32-S3 (Arduino IDE)
+│   └── STM-FaceGuard/
+│       └── STM-FaceGuard.ino       # Face recognition + UART STM32
+│
 └── README.md
 ```
 
@@ -402,14 +530,16 @@ STM-FaceGuard/
 
 | Thông số | Giá trị |
 |---------|--------|
-| Vi điều khiển chính | STM32F303RET6 (LQFP64) |
-| Tốc độ xử lý | 72 MHz (PLL từ HSE 8 MHz) |
-| Bộ nhớ Flash STM32 | 512 KB |
-| RAM STM32 | 64 KB |
-| Vi điều khiển AI | ESP32-S3 Dual-core 240 MHz |
-| Flash ESP32 | 16 MB |
-| PSRAM ESP32 | 8 MB (OPI) |
-| Số khuôn mặt tối ưu | 50 – 100 |
-| Tốc độ nhận diện | < 1 giây |
-| Điện áp hệ thống | 3,3 V (logic) / 12 V (khóa) |
+| Vi điều khiển chính | STM32F303RET6, Cortex-M4, 72 MHz |
+| Flash / RAM STM32 | 512 KB / 64 KB |
+| Vi điều khiển AI | ESP32-S3 Dual-core, 240 MHz |
+| Flash / PSRAM ESP32 | 16 MB / 8 MB OPI |
+| Camera | OV3660, 3 MP, tích hợp board |
+| Khuôn mặt tối đa | **7 khuôn mặt** (giới hạn thư viện) |
+| Thời gian nhận diện | < 1 giây |
+| Thời gian mở cửa | 3 giây |
+| Thời gian giữ mỗi tư thế đăng ký | 2.5 giây |
+| Timeout đăng ký | 15 giây (STM32) / 10 giây/bước (ESP32) |
+| Relay | LY2N 12VDC, tiếp điểm 10 A |
+| Điện áp khóa SM1373 | 12 V DC |
 | Nguồn cấp | Adapter 12 V – 2 A |

@@ -37,8 +37,8 @@
 #include "face_recognition_tool.hpp"
 #include "face_recognition_112_v1_s8.hpp"
 
-// ── Camera pins — Freenove ESP32-S3 WROOM (OV2640) ───────────────────────────
-// Thay đổi nếu dùng module camera khác
+// ── Camera pins — ESP32-S3 N16R8 CAM (OV3660 3MP) ───────────────────────────
+// Tích hợp sẵn trên board, không cần nối thêm dây camera
 #define PWDN_GPIO_NUM   -1
 #define RESET_GPIO_NUM  -1
 #define XCLK_GPIO_NUM   15
