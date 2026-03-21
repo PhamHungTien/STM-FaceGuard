@@ -108,6 +108,9 @@ static uint8_t       enrolled_faces  = 0;
 static uint8_t       delete_hold_active = 0;
 static uint32_t      delete_hold_start  = 0;
 static uint8_t       delete_last_second = 0xFF;
+/* --- Relay safety state --- */
+static uint8_t       relay_open_active  = 0;
+static uint32_t      relay_open_tick    = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -225,12 +228,15 @@ static void Relay_Open(void)
     /* Relay module is active-HIGH: set PB0 HIGH to energise coil → open lock */
     HAL_GPIO_WritePin(RELAY_GPIO_Port, RELAY_Pin, GPIO_PIN_SET);
     HAL_GPIO_WritePin(LD2_GPIO_Port,   LD2_Pin,   GPIO_PIN_SET);
+    relay_open_active = 1;
+    relay_open_tick   = HAL_GetTick();
 }
 
 static void Relay_Close(void)
 {
     HAL_GPIO_WritePin(RELAY_GPIO_Port, RELAY_Pin, GPIO_PIN_RESET);
     HAL_GPIO_WritePin(LD2_GPIO_Port,   LD2_Pin,   GPIO_PIN_RESET);
+    relay_open_active = 0;
 }
 
 static void Enter_Unlocked(uint8_t face_id, uint8_t from_exit_btn)
@@ -455,7 +461,7 @@ static void Parse_ESP32_Msg(const char *msg)
         btn_delete_flag = 0;
         btn_exit_flag   = 0;
         delete_hold_active = 0;
-        if (sys_state != SYS_UNLOCKING) {
+        if (sys_state == SYS_CONNECTING || sys_state == SYS_OFFLINE) {
             sys_state = SYS_IDLE;
             Show_Ready();
         }
@@ -593,6 +599,16 @@ static void App_Loop(void)
     uint32_t now = HAL_GetTick();
     char uart1_msg[UART1_BUF_SIZE];
 
+    /* Relay failsafe: ensure door lock is re-energized after RELAY_OPEN_MS,
+     * even if state changes unexpectedly while the relay is open. */
+    if (relay_open_active && ((now - relay_open_tick) >= RELAY_OPEN_MS)) {
+        Relay_Close();
+        if (sys_state == SYS_UNLOCKING) {
+            Restore_LinkAwareIdle();
+        }
+        now = HAL_GetTick();
+    }
+
     Button_PollPress(&btn_enroll_armed, &btn_enroll_flag, &btn_enroll_tick,
                      BTN_ENROLL_GPIO_Port, BTN_ENROLL_Pin, now);
     Button_PollPress(&btn_delete_armed, &btn_delete_flag, &btn_delete_tick,
@@ -614,6 +630,8 @@ static void App_Loop(void)
         if (sys_state == SYS_UNLOCKING) {
             /* Already open – just reset timer */
             state_tick = HAL_GetTick();
+            relay_open_tick = state_tick;
+            relay_open_active = 1;
         } else {
             Enter_Unlocked(0, 1 /* from_exit_btn */);
         }
@@ -706,8 +724,7 @@ static void App_Loop(void)
             break;
 
         case SYS_UNLOCKING:
-            if ((now - state_tick) >= RELAY_OPEN_MS) {
-                Relay_Close();
+            if (!relay_open_active) {
                 Restore_LinkAwareIdle();
             }
             break;

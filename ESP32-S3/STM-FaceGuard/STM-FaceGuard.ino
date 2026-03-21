@@ -637,15 +637,32 @@ static void send_status()
     }
 
     lastStatusTxMs = now;
+
+    if (appState == STATE_ENROLLING) {
+        Serial1.printf("%s\n", ENROLL_STEPS[enrollStep]);
+        return;
+    }
+
     Serial1.println("READY");
     Serial1.printf("FACES:%d\n", recognizer.get_enrolled_id_num());
 
     if (lockoutUntilMs > now) {
         Serial1.println("LOCKOUT");
-    } else if (appState == STATE_ENROLLING) {
-        Serial1.printf("%s\n", ENROLL_STEPS[enrollStep]);
     }
 
+}
+
+static void abort_enroll(bool rollback_partial)
+{
+    if (rollback_partial && appState == STATE_ENROLLING && enrolledId >= 0) {
+        int removed = recognizer.delete_id(enrolledId, true);
+        Serial.printf("[ENROLL] Rollback partial ID=%d (remaining=%d)\n", enrolledId, removed);
+    }
+
+    appState    = STATE_IDLE;
+    enrollStep  = 0;
+    stepStartMs = millis();
+    enrolledId  = -1;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -665,21 +682,23 @@ static void process_cmd(const String &cmd)
             appState    = STATE_ENROLLING;
             enrollStep  = 0;
             stepStartMs = millis();
+            enrolledId  = -1;
             Serial1.printf("%s\n", ENROLL_STEPS[0]);
             Serial.printf("[ENROLL] Step 1/%d → %s\n", ENROLL_TOTAL_STEPS, ENROLL_STEPS[0]);
         }
     }
     else if (cmd == "DEL_ALL") {
-        recognizer.clear_id();
+        recognizer.clear_id(true);
         appState     = STATE_IDLE;
+        enrollStep   = 0;
+        enrolledId   = -1;
         failureCount = 0;      // clear failure counter after admin delete
         lockoutUntilMs = 0;    // also clear any active lockout
         Serial1.println("DELETED");
         Serial.println("[SYS] Face DB cleared");
     }
     else if (cmd == "CANCEL") {
-        appState   = STATE_IDLE;
-        enrolledId = -1;   /* reset in case CANCEL arrives mid-enroll */
+        abort_enroll(true);
         Serial.println("[ENROLL] Cancelled by STM32");
     }
     else if (cmd == "STATUS") {
@@ -727,9 +746,21 @@ static void process_frame()
         return;
     }
 
+    auto bestFaceIt = faces.begin();
+    int bestArea = -1;
+    for (auto it = faces.begin(); it != faces.end(); ++it) {
+        int w = (int)it->box[2] - (int)it->box[0] + 1;
+        int h = (int)it->box[3] - (int)it->box[1] + 1;
+        int area = w * h;
+        if (area > bestArea) {
+            bestArea = area;
+            bestFaceIt = it;
+        }
+    }
+
     face_light_touch();
 
-    dl::detect::result_t &face = faces.front();
+    dl::detect::result_t &face = *bestFaceIt;
 
     // Bọc frame buffer thành Tensor (không copy, trỏ thẳng vào fb->buf)
     Tensor<uint8_t> img;
@@ -766,9 +797,10 @@ static void process_frame()
             bool is_last = (enrollStep == ENROLL_TOTAL_STEPS - 1);
 
             if (is_last) {
+                int persisted = recognizer.write_ids_to_flash();
                 Serial1.printf("ENROLLED:%d\n", enrolledId);
-                Serial.printf("[ENROLL] Done! ID=%d  total=%d faces\n",
-                              enrolledId, recognizer.get_enrolled_id_num());
+                Serial.printf("[ENROLL] Done! ID=%d  total=%d faces  flash_sync=%d\n",
+                              enrolledId, recognizer.get_enrolled_id_num(), persisted);
                 appState   = STATE_IDLE;
                 enrolledId = -1;
             }
