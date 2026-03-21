@@ -199,31 +199,49 @@ void SysTick_Handler(void)
 /* please refer to the startup file (startup_stm32f3xx.s).                    */
 /******************************************************************************/
 
-/* USER CODE BEGIN 1 */
-
 /**
- * @brief EXTI0 – BTN_ENROLL (PA0)
- */
+  * @brief This function handles EXTI line0 interrupt.
+  */
 void EXTI0_IRQHandler(void)
 {
-    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_0);
+  /* USER CODE BEGIN EXTI0_IRQn 0 */
+
+  /* USER CODE END EXTI0_IRQn 0 */
+  HAL_GPIO_EXTI_IRQHandler(BTN_ENROLL_Pin);
+  /* USER CODE BEGIN EXTI0_IRQn 1 */
+
+  /* USER CODE END EXTI0_IRQn 1 */
 }
 
 /**
- * @brief EXTI1 – BTN_DELETE (PA1)
- */
+  * @brief This function handles EXTI line1 interrupt.
+  */
 void EXTI1_IRQHandler(void)
 {
-    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_1);
+  /* USER CODE BEGIN EXTI1_IRQn 0 */
+
+  /* USER CODE END EXTI1_IRQn 0 */
+  HAL_GPIO_EXTI_IRQHandler(BTN_DELETE_Pin);
+  /* USER CODE BEGIN EXTI1_IRQn 1 */
+
+  /* USER CODE END EXTI1_IRQn 1 */
 }
 
 /**
- * @brief EXTI15_10 – BTN_EXIT (PC13)
- */
+  * @brief This function handles EXTI line[15:10] interrupts.
+  */
 void EXTI15_10_IRQHandler(void)
 {
-    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_13);
+  /* USER CODE BEGIN EXTI15_10_IRQn 0 */
+
+  /* USER CODE END EXTI15_10_IRQn 0 */
+  HAL_GPIO_EXTI_IRQHandler(BTN_EXIT_Pin);
+  /* USER CODE BEGIN EXTI15_10_IRQn 1 */
+
+  /* USER CODE END EXTI15_10_IRQn 1 */
 }
+
+/* USER CODE BEGIN 1 */
 
 /**
  * @brief USART1 – ESP32-S3 communication

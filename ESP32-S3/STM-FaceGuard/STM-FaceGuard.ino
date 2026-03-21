@@ -84,6 +84,7 @@ enum AppState { STATE_IDLE, STATE_ENROLLING };
 static AppState appState    = STATE_IDLE;
 static int      enrollStep  = 0;     // bước hiện tại 0..4
 static uint32_t stepStartMs = 0;     // millis() lúc bắt đầu bước
+static int      enrolledId  = -1;    // ID thực tế từ enroll_id() bước FRONT
 
 // ── Face AI objects ───────────────────────────────────────────────────────────
 // Detector params: score_threshold, nms_threshold, top_k, min_face_size
@@ -217,6 +218,7 @@ static void process_frame()
                 esp_camera_fb_return(fb);
                 return;
             }
+            enrolledId = result;  // lưu ID thực để báo STM32 sau khi hoàn tất
             Serial.printf("[ENROLL] Captured FRONT, ID=%d\n", result);
             // Sang bước 1 (LEFT)
             enrollStep++;
@@ -234,11 +236,11 @@ static void process_frame()
             bool is_last = (enrollStep == ENROLL_TOTAL_STEPS - 1);
 
             if (is_last) {
-                int new_id = recognizer.get_enrolled_id_num() - 1;
-                Serial1.printf("ENROLLED:%d\n", new_id);
+                Serial1.printf("ENROLLED:%d\n", enrolledId);
                 Serial.printf("[ENROLL] Done! ID=%d  total=%d faces\n",
-                              new_id, recognizer.get_enrolled_id_num());
-                appState = STATE_IDLE;
+                              enrolledId, recognizer.get_enrolled_id_num());
+                appState   = STATE_IDLE;
+                enrolledId = -1;
             }
             else {
                 enrollStep++;

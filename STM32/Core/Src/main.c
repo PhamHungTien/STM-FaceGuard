@@ -267,26 +267,14 @@ static void Parse_ESP32_Msg(const char *msg)
  * ----------------------------------------------------------------------- */
 static void App_Init(void)
 {
-    /* --- Reconfigure buttons: active-LOW (connect to GND), falling edge --- */
-    GPIO_InitTypeDef GPIO_InitStruct = {0};
-
-    GPIO_InitStruct.Mode  = GPIO_MODE_IT_FALLING;
-    GPIO_InitStruct.Pull  = GPIO_PULLUP;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-
-    GPIO_InitStruct.Pin = BTN_ENROLL_Pin | BTN_DELETE_Pin;
-    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-    GPIO_InitStruct.Pin = BTN_EXIT_Pin;
-    HAL_GPIO_Init(BTN_EXIT_GPIO_Port, &GPIO_InitStruct);
-
-    /* --- Enable EXTI NVIC --- */
-    HAL_NVIC_SetPriority(EXTI0_IRQn,     1, 0); /* ENROLL */
-    HAL_NVIC_EnableIRQ(EXTI0_IRQn);
-    HAL_NVIC_SetPriority(EXTI1_IRQn,     1, 0); /* DELETE */
-    HAL_NVIC_EnableIRQ(EXTI1_IRQn);
-    HAL_NVIC_SetPriority(EXTI15_10_IRQn, 2, 0); /* EXIT (PC13) */
-    HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
+    /* Buttons configured correctly in CubeMX (Falling edge + Pull-up).
+     * Clear any spurious EXTI flags that may have been set at boot. */
+    __HAL_GPIO_EXTI_CLEAR_IT(BTN_ENROLL_Pin);
+    __HAL_GPIO_EXTI_CLEAR_IT(BTN_DELETE_Pin);
+    __HAL_GPIO_EXTI_CLEAR_IT(BTN_EXIT_Pin);
+    btn_enroll_flag = 0;
+    btn_delete_flag = 0;
+    btn_exit_flag   = 0;
 
     /* --- Enable USART1 NVIC (ESP32 receive) --- */
     HAL_NVIC_SetPriority(USART1_IRQn, 0, 0);
@@ -370,6 +358,12 @@ static void App_Loop(void)
                     confirmed = 1;
                     break;
                 }
+
+                /* Process incoming UART bytes while waiting (non-blocking) */
+                if (uart1_line_ready) {
+                    uart1_line_ready = 0;
+                    /* Ignore ESP32 messages during delete hold */
+                }
             }
 
             if (confirmed) {
@@ -417,7 +411,8 @@ static void App_Loop(void)
         case SYS_ENROLLING:
             if ((now - state_tick) >= ENROLL_TIMEOUT_MS) {
                 /* ESP32 did not respond – cancel enrolment */
-                sys_state = SYS_IDLE;
+                sys_state       = SYS_IDLE;
+                btn_enroll_flag = 0; /* Discard any button press queued during enrol */
                 HAL_UART_Transmit(&huart1, (uint8_t *)"CANCEL\n", 7, 100);
                 SSD1306_ShowReady();
             }
@@ -554,7 +549,7 @@ static void MX_I2C1_Init(void)
 
   /* USER CODE END I2C1_Init 1 */
   hi2c1.Instance = I2C1;
-  hi2c1.Init.Timing = 0x10420F13; /* Standard Mode 100kHz @ HSI 8MHz – safer for breadboard */
+  hi2c1.Init.Timing = 0x0010020A;
   hi2c1.Init.OwnAddress1 = 0;
   hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
   hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
@@ -717,14 +712,14 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin : BTN_EXIT_Pin */
   GPIO_InitStruct.Pin = BTN_EXIT_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(BTN_EXIT_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : BTN_ENROLL_Pin BTN_DELETE_Pin */
   GPIO_InitStruct.Pin = BTN_ENROLL_Pin|BTN_DELETE_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pin : LD2_Pin */
@@ -740,6 +735,16 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(RELAY_GPIO_Port, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+
+  HAL_NVIC_SetPriority(EXTI1_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI1_IRQn);
+
+  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 

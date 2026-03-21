@@ -107,7 +107,14 @@ static const uint8_t font5x7[][5] = {
 static void OLED_Cmd(uint8_t cmd)
 {
     uint8_t buf[2] = {0x00, cmd};
-    HAL_I2C_Master_Transmit(&hi2c1, SSD1306_I2C_ADDR, buf, 2, 10);
+    if (HAL_I2C_Master_Transmit(&hi2c1, SSD1306_I2C_ADDR, buf, 2, 10) != HAL_OK) {
+        /* I2C bus stuck – recover by reinitialising the peripheral */
+        HAL_I2C_DeInit(&hi2c1);
+        HAL_Delay(2);
+        HAL_I2C_Init(&hi2c1);
+        /* Retry once */
+        HAL_I2C_Master_Transmit(&hi2c1, SSD1306_I2C_ADDR, buf, 2, 10);
+    }
 }
 
 static void OLED_Data(const uint8_t *data, uint16_t len)
