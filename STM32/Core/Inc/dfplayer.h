@@ -24,6 +24,7 @@ extern UART_HandleTypeDef huart3;
 
 void DFPlayer_Init(void);
 void DFPlayer_Play(uint8_t track);
+void DFPlayer_Stop(void);             /* Stop current playback */
 void DFPlayer_SetVolume(uint8_t vol); /* 0 – 30 */
 
 #endif /* __DFPLAYER_H */

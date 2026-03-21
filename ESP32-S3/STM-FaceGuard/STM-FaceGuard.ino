@@ -132,10 +132,16 @@ static bool camera_init()
     sensor_t *s = esp_camera_sensor_get();
     if (s) {
         s->set_vflip(s, 0);
-        s->set_hmirror(s, 1);      // gương ngang — nhìn tự nhiên như selfie
-        s->set_awb_gain(s, 1);
-        s->set_exposure_ctrl(s, 1);
-        s->set_aec2(s, 1);
+        s->set_hmirror(s, 1);       // gương ngang — nhìn tự nhiên như selfie
+        s->set_whitebal(s, 1);      // auto white balance
+        s->set_awb_gain(s, 1);      // auto WB gain
+        s->set_exposure_ctrl(s, 1); // auto exposure
+        s->set_aec2(s, 1);          // AEC algorithm 2 (better in low light)
+        s->set_gain_ctrl(s, 1);     // auto gain
+        s->set_brightness(s, 1);    // slightly brighter for indoor use (+1)
+        s->set_contrast(s, 1);      // slightly higher contrast (+1)
+        s->set_saturation(s, 0);    // neutral saturation
+        s->set_sharpness(s, 1);     // mild sharpening for face detail
     }
     return true;
 }
@@ -168,7 +174,8 @@ static void process_cmd(const String &cmd)
         Serial.println("[SYS] Face DB cleared");
     }
     else if (cmd == "CANCEL") {
-        appState = STATE_IDLE;
+        appState   = STATE_IDLE;
+        enrolledId = -1;   /* reset in case CANCEL arrives mid-enroll */
         Serial.println("[ENROLL] Cancelled by STM32");
     }
 }

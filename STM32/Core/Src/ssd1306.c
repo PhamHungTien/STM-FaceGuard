@@ -242,6 +242,11 @@ void SSD1306_ShowBoot(void)
     draw_status("", "   Booting...", "", "   Please wait");
 }
 
+void SSD1306_ShowConnecting(void)
+{
+    draw_status("", "  Connecting...", "", "   Please wait");
+}
+
 void SSD1306_ShowReady(void)
 {
     draw_status("", "   ** READY **", "", "  Scan your face");

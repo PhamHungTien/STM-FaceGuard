@@ -231,7 +231,10 @@ static void Parse_ESP32_Msg(const char *msg)
         DFPlayer_Play(DFP_TRACK_DELETED);
 
     } else if (strcmp(msg, "READY") == 0) {
-        sys_state = SYS_IDLE;
+        sys_state       = SYS_IDLE;
+        btn_enroll_flag = 0; /* Discard any buttons pressed during boot */
+        btn_delete_flag = 0;
+        btn_exit_flag   = 0;
         SSD1306_ShowReady();
 
     /* --- Enrollment step guidance (5 poses, sent sequentially by ESP32) --- */
@@ -290,8 +293,8 @@ static void App_Init(void)
     /* --- Start UART1 interrupt-driven receive --- */
     HAL_UART_Receive_IT(&huart1, &uart1_rx_byte, 1);
 
-    /* --- Show ready screen --- */
-    SSD1306_ShowReady();
+    /* --- Show connecting screen (waits for READY from ESP32) --- */
+    SSD1306_ShowConnecting();
 }
 
 /* -----------------------------------------------------------------------
@@ -576,7 +579,11 @@ static void MX_I2C1_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN I2C1_Init 2 */
-
+  /* Override CubeMX default (0x0010020A): use 100 kHz Standard Mode at HSI 8 MHz.
+   * PRESC=1  SCLDEL=4  SDADEL=2  SCLH=15  SCLL=19 → 0x10420F13
+   * Provides comfortable margins for breadboard capacitive loads. */
+  hi2c1.Init.Timing = 0x10420F13;
+  HAL_I2C_Init(&hi2c1);
   /* USER CODE END I2C1_Init 2 */
 
 }

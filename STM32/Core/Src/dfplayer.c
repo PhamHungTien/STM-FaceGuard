@@ -41,7 +41,12 @@ void DFPlayer_Init(void)
 
 void DFPlayer_Play(uint8_t track)
 {
-    dfp_send(0x03, 0x00, track); /* Play specific track number */
+    dfp_send(0x03, 0x00, track); /* Play specific track number (auto-stops current) */
+}
+
+void DFPlayer_Stop(void)
+{
+    dfp_send(0x16, 0x00, 0x00); /* Stop playback */
 }
 
 void DFPlayer_SetVolume(uint8_t vol)
