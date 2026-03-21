@@ -7,92 +7,169 @@
 \section{Kiến trúc phần mềm tổng quan}
 \label{sec:sw_architecture}
 
-% TODO: sơ đồ luồng xử lý tổng quan
+Phần mềm của hệ thống được chia thành hai firmware độc lập, mỗi firmware chạy trên một vi điều khiển riêng và giao tiếp với nhau qua giao thức UART đã mô tả trong \cref{tab:uart_protocol}.
+
+\begin{itemize}
+  \item \textbf{STM32 Firmware}: Viết bằng C thuần túy, sử dụng thư viện HAL của STMicroelectronics, không có RTOS. Kiến trúc vòng lặp siêu vòng (\textit{superloop}) kết hợp với ISR xử lý sự kiện.
+  \item \textbf{ESP32-S3 Firmware}: Xây dựng trên ESP-IDF (Espressif IoT Development Framework), sử dụng FreeRTOS với nhiều task song song xử lý camera, nhận diện khuôn mặt và giao tiếp UART.
+\end{itemize}
 
 \section{Firmware STM32F303RE}
 \label{sec:stm32_fw}
 
 \subsection{Cấu trúc chương trình}
 
-Firmware STM32 được phát triển trên nền STM32CubeIDE sử dụng thư viện HAL. Vòng lặp chính (\texttt{main loop}) thực hiện liên tục các nhiệm vụ:
+Chương trình STM32 được tổ chức theo mô hình sự kiện (\textit{event-driven}). Các ngắt EXTI từ nút nhấn và ngắt DMA từ UART đặt cờ sự kiện (event flags); vòng lặp chính \texttt{while(1)} kiểm tra và xử lý tuần tự từng cờ. Cách tiếp cận này tránh dùng \texttt{HAL\_Delay()} trong ISR --- vốn là nguồn gốc của lỗi treo hệ thống khi ngắt lồng nhau.
 
-\begin{enumerate}[label=\arabic*.]
-  \item Nhận và phân tích lệnh từ ESP32-S3 qua UART1.
-  \item Xử lý ngắt ngoài từ các nút nhấn (EXTI).
-  \item Điều khiển relay, LED, OLED và DFPlayer theo trạng thái hiện tại.
-\end{enumerate}
+\subsection{Máy trạng thái hệ thống}
 
-\subsection{Máy trạng thái (State Machine)}
+Hành vi của STM32 được mô hình hóa bằng máy trạng thái hữu hạn (FSM) gồm 5 trạng thái (\cref{tab:fsm_states}).
 
-% TODO: vẽ state machine diagram và mô tả
+\begin{table}[H]
+  \centering
+  \caption{Các trạng thái của máy trạng thái hệ thống STM32}
+  \label{tab:fsm_states}
+  \begin{tabularx}{\textwidth}{l l X}
+    \toprule
+    \textbf{Trạng thái} & \textbf{Tên} & \textbf{Mô tả} \\
+    \midrule
+    \texttt{IDLE}       & Chờ         & Trạng thái mặc định. OLED hiển thị ``Nhìn vào camera''. ESP32 đang liên tục quét khuôn mặt. \\
+    \texttt{UNLOCKED}   & Mở khóa     & Relay kích hoạt, cửa mở. LED sáng, OLED hiển thị ``Xin chào!'', DFPlayer phát track~1. Sau thời gian giữ, tự chuyển về \texttt{IDLE}. \\
+    \texttt{DENIED}     & Từ chối     & OLED hiển thị ``Không nhận ra'', DFPlayer phát track~2. Sau \SI{2}{s} tự chuyển về \texttt{IDLE}. \\
+    \texttt{ENROLLING}  & Đăng ký     & STM32 gửi lệnh \texttt{ENROLL} cho ESP32, OLED hiển thị ``Đang đăng ký...'', DFPlayer nhắc ``Nhìn vào camera'' (track~3). Chờ phản hồi \texttt{ENROLLED} hoặc timeout. \\
+    \texttt{DELETING}   & Xóa dữ liệu & STM32 gửi lệnh \texttt{DEL\_ALL}, chờ phản hồi \texttt{DELETED}. DFPlayer phát track~5 khi hoàn tất. \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+Chuyển trạng thái xảy ra khi:
+\begin{itemize}
+  \item Nhận lệnh \texttt{OPEN:<id>} từ ESP32 $\Rightarrow$ \texttt{IDLE} $\to$ \texttt{UNLOCKED}
+  \item Nhận lệnh \texttt{DENIED} từ ESP32 $\Rightarrow$ \texttt{IDLE} $\to$ \texttt{DENIED}
+  \item Nhấn BTN\_ENROLL $\Rightarrow$ \texttt{IDLE} $\to$ \texttt{ENROLLING}
+  \item Nhận lệnh \texttt{ENROLLED} từ ESP32 $\Rightarrow$ \texttt{ENROLLING} $\to$ \texttt{IDLE}
+  \item Nhấn BTN\_DELETE $\Rightarrow$ \texttt{IDLE} $\to$ \texttt{DELETING}
+\end{itemize}
 
 \subsection{Xử lý ngắt nút nhấn}
 
-Các nút nhấn cấu hình active-low với điện trở pull-up nội. Khi nhấn, tín hiệu kích EXTI cạnh xuống (\textit{falling edge}). Firmware áp dụng kỹ thuật debounce bằng phần mềm.
+Các nút nhấn cấu hình \textit{active-low} với pull-up nội, ngắt EXTI kích ở cạnh xuống. Để loại bỏ nhiễu cơ học (\textit{contact bounce}), firmware sử dụng kỹ thuật kiểm tra lại trạng thái sau \SI{20}{ms} trong vòng lặp chính thay vì dùng \texttt{HAL\_Delay()} trong ISR.
 
-\begin{lstlisting}[style=c, caption={Hàm xử lý ngắt nút nhấn ENROLL}, label={lst:btn_enroll}]
+\begin{lstlisting}[style=clang, caption={ISR nút nhấn: đặt cờ sự kiện, xử lý thực hiện ở main loop}, label={lst:btn_isr}]
+/* Cờ sự kiện toàn cục */
+volatile uint8_t g_btn_enroll_flag = 0;
+volatile uint8_t g_btn_delete_flag = 0;
+
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
     if (GPIO_Pin == BTN_ENROLL_Pin)
+        g_btn_enroll_flag = 1;  /* Xử lý debounce ở main loop */
+    else if (GPIO_Pin == BTN_DELETE_Pin)
+        g_btn_delete_flag = 1;
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=clang, caption={Xử lý debounce và gửi lệnh ENROLL trong vòng lặp chính}, label={lst:btn_main}]
+/* Trong while(1) của main() */
+if (g_btn_enroll_flag)
+{
+    g_btn_enroll_flag = 0;
+    HAL_Delay(20);  /* Debounce delay -- an toàn trong main loop */
+    if (HAL_GPIO_ReadPin(BTN_ENROLL_GPIO_Port,
+                         BTN_ENROLL_Pin) == GPIO_PIN_RESET)
     {
-        // Debounce: kiểm tra trạng thái sau 20ms
-        HAL_Delay(20);
-        if (HAL_GPIO_ReadPin(BTN_ENROLL_GPIO_Port,
-                             BTN_ENROLL_Pin) == GPIO_PIN_RESET)
-        {
-            UART1_SendString("ENROLL\n");
-        }
+        System_SetState(STATE_ENROLLING);
+        UART1_SendString("ENROLL\n");
     }
 }
 \end{lstlisting}
 
 \subsection{Điều khiển relay mở khóa}
 
-\begin{lstlisting}[style=c, caption={Hàm mở khóa có thời gian giữ}, label={lst:unlock}]
-void Door_Unlock(uint32_t hold_ms)
+Solenoid được giữ ở trạng thái mở trong một khoảng thời gian cố định (mặc định \SI{3}{s}), sau đó tự động đóng lại. Thời gian giữ có thể cấu hình qua macro \texttt{DOOR\_HOLD\_MS}.
+
+\begin{lstlisting}[style=clang, caption={Hàm mở khóa có thời gian giữ cấu hình được}, label={lst:unlock}]
+#define DOOR_HOLD_MS  3000U  /* Thời gian giữ cửa mở (ms) */
+
+void Door_Unlock(void)
 {
     HAL_GPIO_WritePin(RELAY_GPIO_Port, RELAY_Pin, GPIO_PIN_SET);
-    HAL_Delay(hold_ms);
+    OLED_ShowMessage("Xin chao!");
+    DFPlayer_PlayTrack(1);
+    HAL_Delay(DOOR_HOLD_MS);
     HAL_GPIO_WritePin(RELAY_GPIO_Port, RELAY_Pin, GPIO_PIN_RESET);
+    System_SetState(STATE_IDLE);
 }
 \end{lstlisting}
 
 \section{Firmware ESP32-S3}
 \label{sec:esp32_fw}
 
-\subsection{Cấu trúc chương trình}
+\subsection{Cấu trúc task FreeRTOS}
 
-% TODO: mô tả cấu trúc ESP-IDF tasks
+Firmware ESP32-S3 được tổ chức theo mô hình đa task của FreeRTOS, với ba task chính hoạt động song song:
+
+\begin{itemize}
+  \item \textbf{\texttt{camera\_task}} (Core 0, Priority~5): Liên tục lấy frame từ OV2640, đưa vào hàng đợi ảnh.
+  \item \textbf{\texttt{fr\_task}} (Core 1, Priority~4): Lấy frame từ hàng đợi, chạy pipeline nhận diện khuôn mặt (detect $\to$ align $\to$ embed $\to$ match), gửi kết quả qua UART đến STM32.
+  \item \textbf{\texttt{uart\_rx\_task}} (Core 0, Priority~3): Nhận lệnh từ STM32, xử lý yêu cầu \texttt{ENROLL} và \texttt{DEL\_ALL}.
+\end{itemize}
 
 \subsection{Quy trình nhận diện khuôn mặt}
 
-% TODO: flowchart và giải thích
+Pipeline nhận diện khuôn mặt thực hiện tuần tự các bước sau mỗi frame:
 
-\subsection{Đăng ký và xóa khuôn mặt}
+\begin{enumerate}[label=\arabic*.]
+  \item \textbf{Face detection}: Sử dụng mô hình MTMN (Multi-Task Mobilenet Network) nhẹ để phát hiện và định vị khuôn mặt trong frame. Nếu không phát hiện khuôn mặt, bỏ qua frame và tiếp tục.
+  \item \textbf{Alignment}: Cắt và chuẩn hóa vùng khuôn mặt về kích thước $112 \times 112$ px, cân bằng sáng.
+  \item \textbf{Feature extraction}: Đưa ảnh chuẩn hóa qua MobileFaceNet để sinh embedding vector 512 chiều.
+  \item \textbf{Matching}: So sánh cosine similarity giữa embedding hiện tại và tất cả embedding đã lưu. Nếu similarity cao nhất $\geq \theta$ (ngưỡng mặc định 0{,}7), gửi \texttt{OPEN:<id>}; ngược lại gửi \texttt{DENIED}.
+\end{enumerate}
 
-% TODO
+\subsection{Đăng ký khuôn mặt}
 
-\section{Giao diện OLED SSD1306}
+Khi nhận lệnh \texttt{ENROLL} từ STM32, \texttt{uart\_rx\_task} đặt cờ enroll. \texttt{fr\_task} lấy 5 frame liên tiếp có khuôn mặt, tính embedding trung bình (tăng tính ổn định), lưu vào bộ nhớ flash SPIRAM (PSRAM 8~MB của ESP32-S3-N16R8) và gửi phản hồi \texttt{ENROLLED:<id>}.
+
+\section{Giao diện hiển thị OLED SSD1306}
 \label{sec:oled}
 
-% TODO: mô tả các màn hình hiển thị
-
-\section{Hệ thống âm thanh DFPlayer}
-\label{sec:audio}
+Màn hình OLED SSD1306 (128$\times$64~px) hiển thị trạng thái hệ thống theo thời gian thực. Thư viện điều khiển dùng giao tiếp I2C, cập nhật toàn màn hình bằng lệnh \texttt{HAL\_I2C\_Master\_Transmit()}. \cref{tab:oled_screens} mô tả nội dung hiển thị theo từng trạng thái.
 
 \begin{table}[H]
   \centering
-  \caption{Danh sách file âm thanh DFPlayer Mini}
-  \label{tab:audio_tracks}
-  \begin{tabular}{c l}
+  \caption{Nội dung hiển thị OLED theo trạng thái hệ thống}
+  \label{tab:oled_screens}
+  \begin{tabular}{l l l}
     \toprule
-    \textbf{Track} & \textbf{Nội dung} \\
+    \textbf{Trạng thái} & \textbf{Dòng 1 (to, đậm)} & \textbf{Dòng 2 (nhỏ)} \\
     \midrule
-    1 & Mở cửa \\
-    2 & Từ chối truy cập \\
-    3 & Nhìn vào camera \\
-    4 & Đăng ký thành công \\
-    5 & Xóa dữ liệu hoàn tất \\
+    IDLE       & STM-FaceGuard  & Nhin vao camera \\
+    UNLOCKED   & Xin chao!      & ID: \textit{<id>} \\
+    DENIED     & Tu choi        & Khong nhan ra \\
+    ENROLLING  & Dang dang ky   & Nhin thang camera \\
+    DELETING   & Dang xoa...    & Vui long cho \\
     \bottomrule
   \end{tabular}
+\end{table}
+
+\section{Hệ thống âm thanh DFPlayer Mini}
+\label{sec:audio}
+
+DFPlayer Mini là module phát âm thanh MP3 tích hợp DAC, giao tiếp qua UART 9600~baud. STM32 gửi lệnh phát track theo cú pháp gói lệnh DFPlayer (0x7E FF 06 \textit{cmd} ...). File âm thanh được lưu trên thẻ micro-SD theo tên quy ước \texttt{0001.mp3}, \texttt{0002.mp3}, v.v.
+
+\begin{table}[H]
+  \centering
+  \caption{Danh sách file âm thanh và điều kiện phát}
+  \label{tab:audio_tracks}
+  \begin{tabularx}{\textwidth}{c l X}
+    \toprule
+    \textbf{Track} & \textbf{Nội dung} & \textbf{Kích hoạt khi} \\
+    \midrule
+    1 & ``Mở cửa thành công''         & Nhận diện thành công, relay mở \\
+    2 & ``Không nhận ra, vui lòng thử lại'' & Nhận diện thất bại \\
+    3 & ``Vui lòng nhìn vào camera''  & Bắt đầu chế độ ENROLLING \\
+    4 & ``Đăng ký khuôn mặt thành công'' & Nhận phản hồi \texttt{ENROLLED} \\
+    5 & ``Đã xóa toàn bộ dữ liệu''   & Nhận phản hồi \texttt{DELETED} \\
+    \bottomrule
+  \end{tabularx}
 \end{table}

@@ -7,28 +7,40 @@
 \section{Kết luận}
 \label{sec:conclusion}
 
-Tiểu luận đã trình bày quá trình thiết kế và xây dựng hệ thống khóa cửa thông minh sử dụng nhận diện khuôn mặt trên nền tảng hai vi điều khiển STM32F303RE và ESP32-S3. Các kết quả đạt được bao gồm:
+Tiểu luận đã trình bày toàn bộ quá trình thiết kế và hiện thực hệ thống khóa cửa thông minh nhận diện khuôn mặt trên nền tảng Dual-MCU (STM32F303RE + ESP32-S3). Các đóng góp chính của nhóm bao gồm:
 
-\begin{itemize}
-  \item Hệ thống hoạt động ổn định, nhận diện và mở khóa chính xác trong điều kiện ánh sáng bình thường.
-  \item Kiến trúc Dual-MCU phân chia rõ ràng giữa xử lý AI và điều khiển ngoại vi, đảm bảo tính mô-đun và dễ bảo trì.
-  \item Giao thức UART đơn giản, tin cậy cho giao tiếp giữa hai MCU.
-  % TODO: bổ sung kết quả cụ thể từ Chương 5
-\end{itemize}
+\begin{enumerate}[label=\arabic*.]
+  \item \textbf{Kiến trúc Dual-MCU hợp lý}: Phân tách rõ ràng tầng xử lý AI (ESP32-S3) và tầng điều khiển ngoại vi (STM32F303RE) giúp mỗi vi điều khiển tập trung vào thế mạnh của mình, đồng thời tăng tính mô-đun và khả năng bảo trì của hệ thống.
+  \item \textbf{Giao thức UART nội bộ gọn nhẹ}: Thiết kế giao thức văn bản ASCII đơn giản giữa hai MCU cho phép debug dễ dàng và mở rộng lệnh trong tương lai mà không cần thay đổi cấu trúc phần cứng.
+  \item \textbf{Trải nghiệm người dùng đa kênh}: Tích hợp phản hồi qua OLED, âm thanh và LED tạo ra trải nghiệm rõ ràng, trực quan cho người dùng ở mọi điều kiện môi trường.
+  \item \textbf{Vận hành độc lập, không cần internet}: Toàn bộ thuật toán nhận diện và cơ sở dữ liệu khuôn mặt được lưu trữ và xử lý trực tiếp trên thiết bị, đảm bảo tính riêng tư và hoạt động liên tục kể cả khi mất kết nối mạng.
+\end{enumerate}
+
+Kết quả thực nghiệm cho thấy hệ thống hoạt động ổn định, đạt tỉ lệ nhận diện chính xác cao trong điều kiện ánh sáng bình thường và thời gian phản hồi chấp nhận được cho ứng dụng kiểm soát truy cập thực tế.
 
 \section{Hạn chế}
 \label{sec:limitations}
 
-% TODO: nêu các hạn chế của hệ thống hiện tại
+Bên cạnh những kết quả đạt được, hệ thống hiện tại còn một số hạn chế cần được cải thiện:
+
+\begin{enumerate}[label=\arabic*.]
+  \item \textbf{Hiệu năng nhận diện giảm trong điều kiện ánh sáng yếu}: Camera OV2640 không có khả năng tự động điều chỉnh ISO cao, dẫn đến ảnh nhiễu và tỉ lệ nhận diện giảm đáng kể khi độ chiếu sáng dưới 50~lux.
+  \item \textbf{Không có cơ chế chống giả mạo (anti-spoofing)}: Hệ thống hiện tại có thể bị đánh lừa bằng ảnh in hoặc video phát lại trên điện thoại, vì chưa triển khai kỹ thuật phát hiện ``liveness''.
+  \item \textbf{Giao tiếp UART không mã hóa}: Lệnh giữa STM32 và ESP32-S3 truyền dưới dạng văn bản thuần túy. Trong môi trường có nguy cơ tấn công vật lý, đây là điểm yếu bảo mật tiềm năng.
+  \item \textbf{Sử dụng \texttt{HAL\_Delay()} trong vòng lặp chính}: Mặc dù đã tách xử lý ra khỏi ISR, việc dùng delay blocking trong main loop vẫn có thể làm trễ phản hồi nút nhấn nếu nhiều sự kiện xảy ra đồng thời.
+  \item \textbf{Không có cơ chế khôi phục khi ESP32-S3 bị treo}: Nếu ESP32-S3 gặp lỗi và ngừng gửi tín hiệu \texttt{READY}, STM32 không có watchdog timeout để phát hiện và xử lý tình huống này.
+\end{enumerate}
 
 \section{Hướng phát triển}
 \label{sec:future_work}
 
-Trong tương lai, hệ thống có thể được mở rộng theo các hướng:
+Từ những hạn chế trên, nhóm đề xuất các hướng phát triển tiếp theo:
 
 \begin{enumerate}[label=\arabic*.]
-  \item \textbf{Kết nối IoT:} Tích hợp Wi-Fi (ESP32-S3 hỗ trợ sẵn) để ghi log truy cập lên cloud và cảnh báo từ xa.
-  \item \textbf{Anti-spoofing:} Bổ sung kỹ thuật phát hiện giả mạo (photo/video attack) để tăng tính bảo mật.
-  \item \textbf{Mã hóa giao tiếp:} Mã hóa giao thức UART giữa hai MCU để chống nghe lén.
-  \item \textbf{PCB riêng:} Thiết kế PCB tích hợp thay cho breadboard/Nucleo để tăng độ tin cậy và nhỏ gọn.
+  \item \textbf{Bổ sung đèn hồng ngoại và camera IR}: Giải quyết vấn đề ánh sáng yếu và đồng thời là cơ sở triển khai liveness detection dựa trên phản xạ hồng ngoại.
+  \item \textbf{Triển khai anti-spoofing}: Tích hợp mô hình phát hiện giả mạo nhỏ gọn (ví dụ: MiniVGG-based liveness detector) song song với pipeline FR hiện tại.
+  \item \textbf{Mã hóa giao tiếp nội bộ}: Áp dụng giao thức SLIP với CRC-16 hoặc HMAC đơn giản để xác thực tính toàn vẹn lệnh UART.
+  \item \textbf{Tích hợp kết nối IoT}: Khai thác Wi-Fi tích hợp sẵn trong ESP32-S3 để gửi log truy cập lên server MQTT, cho phép giám sát từ xa qua ứng dụng di động.
+  \item \textbf{Thiết kế PCB tích hợp}: Thay thế board Nucleo và breadboard bằng PCB thiết kế riêng để tăng độ tin cậy, giảm kích thước và phù hợp hơn cho sản phẩm thực tế.
+  \item \textbf{Nâng cấp firmware STM32 dùng RTOS}: Chuyển sang FreeRTOS trên STM32 để xử lý đa nhiệm thực sự, loại bỏ hoàn toàn blocking delay và tăng khả năng mở rộng.
 \end{enumerate}

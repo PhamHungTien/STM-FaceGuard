@@ -1,32 +1,120 @@
 % ============================================================
-%  TÀI LIỆU THAM KHẢO (BibLaTeX / IEEE style)
+%  TÀI LIỆU THAM KHẢO
+%  Style: IEEE (biblatex-ieee), sorting=none (thứ tự trích dẫn)
 % ============================================================
 
-@manual{stm32f303re_datasheet,
-  title        = {{STM32F303xB/STM32F303xC} Advanced ARM-based 32-bit MCU Datasheet},
-  organization = {STMicroelectronics},
-  year         = {2022},
-  url          = {https://www.st.com/resource/en/datasheet/stm32f303re.pdf}
+% ── Sinh trắc học & nhận diện khuôn mặt ────────────────────
+@incollection{jain2004,
+  author    = {Jain, Anil K. and Ross, Arun and Prabhakar, Salil},
+  title     = {An Introduction to Biometric Recognition},
+  booktitle = {{IEEE} Transactions on Circuits and Systems for Video Technology},
+  volume    = {14},
+  number    = {1},
+  pages     = {4--20},
+  year      = {2004},
+  publisher = {IEEE}
 }
 
-@manual{esp32s3_datasheet,
-  title        = {{ESP32-S3} Series Datasheet},
-  organization = {Espressif Systems},
-  year         = {2023},
-  url          = {https://www.espressif.com/sites/default/files/documentation/esp32-s3_datasheet_en.pdf}
+@article{wang2021,
+  author  = {Wang, Mei and Deng, Weihong},
+  title   = {Deep Face Recognition: A Survey},
+  journal = {Neurocomputing},
+  volume  = {429},
+  pages   = {215--244},
+  year    = {2021},
+  doi     = {10.1016/j.neucom.2020.10.081}
 }
 
-@manual{ssd1306_datasheet,
-  title        = {{SSD1306} Advance Information: 128 x 64 Dot Matrix OLED/PLED Segment/Common Driver with Controller},
-  organization = {Solomon Systech},
-  year         = {2008}
-}
-
-@article{mobilefacenet,
+@article{chen2018,
   author  = {Chen, Sheng and Liu, Yang and Gao, Xiang and Han, Zhen},
-  title   = {{MobileFaceNet}: Efficient {CNNs} for Accurate Real-Time Face Verification on Mobile Devices},
+  title   = {{MobileFaceNet}: Efficient {CNNs} for Accurate Real-Time
+             Face Verification on Mobile Devices},
   journal = {arXiv preprint arXiv:1804.07573},
   year    = {2018}
 }
 
-% TODO: bổ sung thêm tài liệu tham khảo
+@inproceedings{zhang2016,
+  author    = {Zhang, Kaipeng and Zhang, Zhanpeng and Li, Zhifeng and Qiao, Yu},
+  title     = {Joint Face Detection and Alignment Using Multitask Cascaded
+               Convolutional Networks},
+  booktitle = {{IEEE} Signal Processing Letters},
+  volume    = {23},
+  number    = {10},
+  pages     = {1499--1503},
+  year      = {2016},
+  doi       = {10.1109/LSP.2016.2603342}
+}
+
+% ── Bảo mật & kiểm soát truy cập ───────────────────────────
+@inproceedings{beautment2009,
+  author    = {Beautement, Adam and Sasse, M. Angela and Wonham, Mike},
+  title     = {The Compliance Budget: Managing Security Behaviour in Organisations},
+  booktitle = {Proceedings of the 2008 Workshop on New Security Paradigms},
+  pages     = {47--58},
+  year      = {2009},
+  publisher = {ACM}
+}
+
+% ── Vi điều khiển & phần cứng ───────────────────────────────
+@manual{stm32f303re_datasheet,
+  title        = {{STM32F303xB/STM32F303xC} Advanced {ARM}-based 32-bit
+                  {MCU} Datasheet},
+  organization = {STMicroelectronics},
+  number       = {DS9118},
+  year         = {2022}
+}
+
+@manual{stm32_hal_guide,
+  title        = {Description of {STM32F3} {HAL} and Low-Layer Drivers},
+  organization = {STMicroelectronics},
+  number       = {UM1786},
+  year         = {2023}
+}
+
+@manual{esp32s3_datasheet,
+  title        = {{ESP32-S3} Series Datasheet, Version 1.9},
+  organization = {Espressif Systems},
+  year         = {2023}
+}
+
+@manual{espwho,
+  author       = {{Espressif Systems}},
+  title        = {{ESP-WHO}: Face Detection and Recognition Development Framework},
+  year         = {2023},
+  note         = {GitHub repository: \url{https://github.com/espressif/esp-who}}
+}
+
+@manual{ssd1306_datasheet,
+  title        = {{SSD1306}: 128 $\times$ 64 Dot Matrix {OLED/PLED}
+                  Segment/Common Driver with Controller},
+  organization = {Solomon Systech},
+  year         = {2008}
+}
+
+@manual{dfplayer_datasheet,
+  title        = {{DFPlayer} Mini {MP3} Module Datasheet},
+  organization = {DFRobot},
+  year         = {2020}
+}
+
+% ── Hệ thống nhúng & giao thức ──────────────────────────────
+@book{yiu2013,
+  author    = {Yiu, Joseph},
+  title     = {The Definitive Guide to {ARM} Cortex-M3 and Cortex-M4 Processors},
+  edition   = {3rd},
+  publisher = {Newnes},
+  year      = {2013}
+}
+
+@book{barry2022,
+  author    = {Barry, Richard and {FreeRTOS Team}},
+  title     = {Mastering the {FreeRTOS} Real Time Kernel: A Hands-On Tutorial Guide},
+  publisher = {Real Time Engineers Ltd.},
+  year      = {2022}
+}
+
+@manual{i2c_spec,
+  title        = {{UM10204}: {I2C-bus} Specification and User Manual, Rev.~7},
+  organization = {NXP Semiconductors},
+  year         = {2021}
+}

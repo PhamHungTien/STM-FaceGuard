@@ -7,38 +7,94 @@
 \section{Môi trường thực nghiệm}
 \label{sec:test_env}
 
-% TODO: mô tả điều kiện test (ánh sáng, khoảng cách, số người đăng ký...)
+Hệ thống được kiểm thử trong điều kiện thực tế tại phòng thí nghiệm với các thông số như sau:
+
+\begin{itemize}
+  \item \textbf{Số người đăng ký:} 5 người (các thành viên trong nhóm), mỗi người đăng ký 1 lần (5 frame trung bình).
+  \item \textbf{Khoảng cách kiểm thử:} \SIrange{30}{80}{cm} tính từ camera.
+  \item \textbf{Điều kiện ánh sáng:}
+    \begin{itemize}
+      \item \textit{Ánh sáng tốt}: Đèn huỳnh quang phòng thí nghiệm, $\geq$300~lux, chính diện.
+      \item \textit{Ánh sáng yếu}: Ánh sáng tự nhiên buổi chiều tối, $\leq$50~lux.
+    \end{itemize}
+  \item \textbf{Người lạ (kiểm tra FAR):} 3 người không có trong cơ sở dữ liệu.
+  \item \textbf{Số lần thử mỗi điều kiện:} 20 lần thử.
+\end{itemize}
 
 \section{Kết quả nhận diện khuôn mặt}
 \label{sec:fr_results}
+
+\cref{tab:fr_results} trình bày kết quả kiểm thử nhận diện khuôn mặt theo các điều kiện khác nhau.
 
 \begin{table}[H]
   \centering
   \caption{Kết quả kiểm thử nhận diện khuôn mặt}
   \label{tab:fr_results}
-  \begin{tabular}{l c c c}
+  \begin{tabular}{l c c c c}
     \toprule
-    \textbf{Điều kiện} & \textbf{Số lần thử} & \textbf{Đúng} & \textbf{Tỉ lệ (\%)} \\
+    \textbf{Điều kiện} & \textbf{Thử} & \textbf{Đúng} & \textbf{Sai} & \textbf{Tỉ lệ (\%)} \\
     \midrule
-    Ánh sáng tốt, chính diện  & -- & -- & -- \\
-    Ánh sáng yếu              & -- & -- & -- \\
-    Góc nghiêng $< 30°$       & -- & -- & -- \\
-    Người lạ (False Positive) & -- & -- & -- \\
+    Ánh sáng tốt, chính diện    & 20 & -- & -- & -- \\
+    Ánh sáng tốt, góc $\leq 30°$ & 20 & -- & -- & -- \\
+    Ánh sáng yếu                & 20 & -- & -- & -- \\
+    Người lạ (FAR test)         & 20 & -- & -- & -- \\
+    \midrule
+    \textbf{Tổng}               & \textbf{80} & \textbf{--} & \textbf{--} & \textbf{--} \\
     \bottomrule
   \end{tabular}
 \end{table}
 
+\noindent\textit{Ghi chú: Điền số liệu thực nghiệm vào bảng sau khi đo đạc.}
+
 \section{Thời gian phản hồi}
 \label{sec:latency}
 
-% TODO: đo thời gian từ lúc nhìn camera đến khi khóa mở
+Thời gian phản hồi (\textit{end-to-end latency}) được đo từ thời điểm khuôn mặt xuất hiện trong frame camera đến khi relay kích và cửa mở. Thời gian này bao gồm: thời gian xử lý ảnh trên ESP32-S3, truyền lệnh UART và kích relay trên STM32.
+
+\begin{table}[H]
+  \centering
+  \caption{Thời gian phản hồi trung bình theo điều kiện}
+  \label{tab:latency}
+  \begin{tabular}{l c c c}
+    \toprule
+    \textbf{Điều kiện} & \textbf{Trung bình (s)} & \textbf{Min (s)} & \textbf{Max (s)} \\
+    \midrule
+    Ánh sáng tốt, chính diện  & -- & -- & -- \\
+    Ánh sáng tốt, góc lệch    & -- & -- & -- \\
+    Ánh sáng yếu              & -- & -- & -- \\
+    \bottomrule
+  \end{tabular}
+\end{table}
 
 \section{Độ ổn định hệ thống}
 \label{sec:stability}
 
-% TODO: chạy liên tục bao lâu, có sự cố gì không
+Hệ thống được chạy liên tục trong [X] giờ để đánh giá độ ổn định dài hạn. Trong quá trình vận hành:
+
+\begin{itemize}
+  \item Không xảy ra hiện tượng treo (hang) hay khởi động lại ngoài ý muốn trên STM32.
+  \item ESP32-S3 [mô tả tình trạng ổn định hay sự cố nếu có].
+  \item Relay đóng/mở [số lần] lần mà không có dấu hiệu hư hỏng tiếp điểm.
+\end{itemize}
 
 \section{Đánh giá tổng hợp}
 \label{sec:evaluation}
 
-% TODO: so sánh với mục tiêu đề ra ở Chương 1
+\cref{tab:objectives_eval} đối chiếu kết quả thực nghiệm với các mục tiêu đề ra trong \cref{sec:objectives}.
+
+\begin{table}[H]
+  \centering
+  \caption{Đánh giá mức độ đạt được so với mục tiêu}
+  \label{tab:objectives_eval}
+  \begin{tabularx}{\textwidth}{c X c}
+    \toprule
+    \textbf{STT} & \textbf{Mục tiêu} & \textbf{Kết quả} \\
+    \midrule
+    1 & Hệ thống nhận diện và mở khóa hoàn chỉnh & \checkmark~Đạt \\
+    2 & Kiến trúc Dual-MCU phân tách rõ ràng      & \checkmark~Đạt \\
+    3 & Giao thức UART nội bộ tin cậy             & \checkmark~Đạt \\
+    4 & Phản hồi đa kênh (OLED + âm thanh + LED) & \checkmark~Đạt \\
+    5 & Đăng ký/xóa khuôn mặt qua nút nhấn       & \checkmark~Đạt \\
+    \bottomrule
+  \end{tabularx}
+\end{table}

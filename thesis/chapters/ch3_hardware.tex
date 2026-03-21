@@ -4,43 +4,61 @@
 \chapter{Thiết kế phần cứng}
 \label{chap:hardware}
 
-\section{Tổng quan hệ thống}
+\section{Tổng quan kiến trúc hệ thống}
 \label{sec:hw_overview}
 
-% TODO: chèn sơ đồ khối tổng quan hệ thống
+Hệ thống STM-FaceGuard được xây dựng theo kiến trúc phân tầng với hai vi điều khiển đảm nhận vai trò độc lập. \cref{fig:block_diagram} mô tả sơ đồ khối tổng quan.
+
+% Uncomment khi có file ảnh:
 % \begin{figure}[H]
 %   \centering
-%   \includegraphics[width=0.85\textwidth]{block_diagram}
+%   \includegraphics[width=0.90\textwidth]{block_diagram}
 %   \caption{Sơ đồ khối tổng quan hệ thống STM-FaceGuard}
 %   \label{fig:block_diagram}
 % \end{figure}
 
+Luồng hoạt động cơ bản như sau:
+\begin{enumerate}[label=\arabic*.]
+  \item Camera OV2640 cung cấp liên tục luồng ảnh cho ESP32-S3.
+  \item ESP32-S3 xử lý ảnh, phát hiện và nhận diện khuôn mặt.
+  \item Kết quả nhận diện được gửi sang STM32F303RE qua UART.
+  \item STM32F303RE điều khiển relay mở khóa, cập nhật OLED và phát âm thanh phản hồi.
+  \item Người dùng tương tác qua 3 nút nhấn để đăng ký hoặc xóa khuôn mặt.
+\end{enumerate}
+
 \section{Danh sách linh kiện}
 \label{sec:components}
 
+\cref{tab:bom} liệt kê đầy đủ các linh kiện chính trong hệ thống.
+
 \begin{table}[H]
   \centering
-  \caption{Danh sách linh kiện chính}
+  \caption{Danh sách linh kiện chính (Bill of Materials)}
   \label{tab:bom}
-  \begin{tabularx}{\textwidth}{c >{\bfseries}l l X}
+  \begin{tabularx}{\textwidth}{c >{\bfseries}p{3.2cm} p{3.5cm} X}
     \toprule
-    \textbf{STT} & \textbf{Tên linh kiện} & \textbf{Model} & \textbf{Chức năng} \\
+    \textbf{STT} & \textbf{Tên linh kiện} & \textbf{Model / Thông số} & \textbf{Chức năng} \\
     \midrule
-    1  & Vi điều khiển chính  & STM32F303RE (Nucleo-64) & Điều khiển ngoại vi, relay, giao tiếp \\
-    2  & Module AI            & ESP32-S3-N16R8          & Nhận diện khuôn mặt, xử lý ảnh \\
-    3  & Màn hình             & OLED SSD1306 (128×64)   & Hiển thị trạng thái hệ thống \\
-    4  & Module âm thanh      & DFPlayer Mini           & Phát thông báo âm thanh \\
-    5  & Khóa điện từ         & Solenoid 12~V           & Đóng/mở khóa cửa \\
-    6  & Relay                & Relay 5~V               & Kích khóa solenoid từ GPIO \\
-    7  & Camera               & OV2640                  & Thu ảnh khuôn mặt \\
+    1 & Vi điều khiển chính  & STM32F303RE, Nucleo-64    & Điều khiển ngoại vi, giao tiếp, relay \\
+    2 & Module AI/Camera     & ESP32-S3-N16R8            & Nhận diện khuôn mặt, quản lý dữ liệu \\
+    3 & Camera               & OV2640, 2~MP              & Thu ảnh khuôn mặt real-time \\
+    4 & Màn hình OLED        & SSD1306, 128$\times$64~px & Hiển thị trạng thái, thông báo \\
+    5 & Module âm thanh      & DFPlayer Mini             & Phát file MP3 từ thẻ micro-SD \\
+    6 & Loa                  & 8~$\Omega$, 3~W           & Phát thông báo âm thanh \\
+    7 & Khóa solenoid        & 12~V DC                   & Đóng/mở khóa cửa \\
+    8 & Module relay         & 5~V, 1 kênh               & Đệm công suất cho solenoid \\
+    9 & Nút nhấn             & Tact switch (3 cái)       & Enroll, Delete, Exit \\
+    10 & Nguồn                & 12~V/2~A adapter          & Cấp điện toàn hệ thống \\
     \bottomrule
   \end{tabularx}
 \end{table}
 
-\section{Sơ đồ kết nối (Pinout)}
+\section{Sơ đồ kết nối chân}
 \label{sec:pinout}
 
-\subsection{STM32F303RE}
+\subsection{STM32F303RE (Nucleo-64)}
+
+Toàn bộ chân GPIO, UART và I2C của STM32F303RE được phân công theo \cref{tab:pinout_stm32}. Các nút nhấn được cấu hình \textit{active-low}: tín hiệu mức cao khi không nhấn (pull-up nội), mức thấp khi nhấn, ngắt kích hoạt ở cạnh xuống (falling edge).
 
 \begin{table}[H]
   \centering
@@ -48,21 +66,46 @@
   \label{tab:pinout_stm32}
   \begin{tabular}{l l l l}
     \toprule
-    \textbf{Chân} & \textbf{Tín hiệu} & \textbf{Chế độ} & \textbf{Kết nối} \\
+    \textbf{Chân MCU} & \textbf{Tín hiệu} & \textbf{Cấu hình} & \textbf{Kết nối đến} \\
     \midrule
     PA0  & BTN\_ENROLL & EXTI0, Pull-up, Falling  & Nút đăng ký khuôn mặt \\
     PA1  & BTN\_DELETE & EXTI1, Pull-up, Falling  & Nút xóa tất cả \\
-    PC13 & BTN\_EXIT   & EXTI13, Pull-up, Falling & Nút xanh Nucleo \\
-    PA5  & LD2         & GPIO Output              & LED xanh lá Nucleo \\
-    PB0  & RELAY       & GPIO Output              & Relay → Solenoid 12~V \\
-    PA9  & USART1\_TX  & AF7, 115200 baud         & → ESP32-S3 RX \\
-    PA10 & USART1\_RX  & AF7, 115200 baud         & ← ESP32-S3 TX \\
-    PA2  & USART2\_TX  & AF7, 38400 baud          & ST-Link Virtual COM \\
-    PA3  & USART2\_RX  & AF7, 38400 baud          & ST-Link Virtual COM \\
-    PC10 & USART3\_TX  & AF7, 9600 baud           & → DFPlayer Mini RX \\
-    PC11 & USART3\_RX  & AF7, 9600 baud           & ← DFPlayer Mini TX \\
-    PB8  & I2C1\_SCL   & AF4, Fast mode           & OLED SSD1306 SCL \\
-    PB9  & I2C1\_SDA   & AF4, Fast mode           & OLED SSD1306 SDA \\
+    PC13 & BTN\_EXIT   & EXTI13, Pull-up, Falling & Nút xanh Nucleo (User Button) \\
+    PA5  & LD2         & GPIO Output, Push-Pull   & LED xanh lá trên Nucleo \\
+    PB0  & RELAY       & GPIO Output, Push-Pull   & Relay $\to$ Solenoid 12~V \\
+    PA9  & USART1\_TX  & AF7, 115200~baud, 8N1    & $\to$ ESP32-S3 RXD \\
+    PA10 & USART1\_RX  & AF7, 115200~baud, 8N1    & $\leftarrow$ ESP32-S3 TXD \\
+    PA2  & USART2\_TX  & AF7, 38400~baud, 8N1     & ST-Link Virtual COM (debug) \\
+    PA3  & USART2\_RX  & AF7, 38400~baud, 8N1     & ST-Link Virtual COM (debug) \\
+    PC10 & USART3\_TX  & AF7, 9600~baud, 8N1      & $\to$ DFPlayer Mini RX \\
+    PC11 & USART3\_RX  & AF7, 9600~baud, 8N1      & $\leftarrow$ DFPlayer Mini TX \\
+    PB8  & I2C1\_SCL   & AF4, Fast-mode 400~kHz   & OLED SSD1306 SCL \\
+    PB9  & I2C1\_SDA   & AF4, Fast-mode 400~kHz   & OLED SSD1306 SDA \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{ESP32-S3-N16R8}
+
+ESP32-S3 chịu trách nhiệm giao tiếp với camera qua giao diện song song DVP và trao đổi lệnh với STM32 qua UART. \cref{tab:pinout_esp32} mô tả các chân chính.
+
+\begin{table}[H]
+  \centering
+  \caption{Bảng phân công chân ESP32-S3-N16R8 (các chân chính)}
+  \label{tab:pinout_esp32}
+  \begin{tabular}{l l l}
+    \toprule
+    \textbf{Chân ESP32-S3} & \textbf{Tín hiệu} & \textbf{Kết nối đến} \\
+    \midrule
+    GPIO17 & UART1\_TX & $\to$ STM32 USART1\_RX (PA10) \\
+    GPIO18 & UART1\_RX & $\leftarrow$ STM32 USART1\_TX (PA9) \\
+    GPIO4--GPIO11 & CAM\_DATA[7:0] & OV2640 Data Bus \\
+    GPIO15 & CAM\_PCLK  & OV2640 PCLK \\
+    GPIO16 & CAM\_VSYNC & OV2640 VSYNC \\
+    GPIO14 & CAM\_HREF  & OV2640 HREF \\
+    GPIO13 & CAM\_XCLK  & OV2640 XCLK (clock ra camera) \\
+    GPIO1  & CAM\_SDA   & OV2640 SCCB SDA \\
+    GPIO2  & CAM\_SCL   & OV2640 SCCB SCL \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -70,9 +113,24 @@
 \section{Thiết kế nguồn điện}
 \label{sec:power}
 
-% TODO: mô tả sơ đồ nguồn
+Hệ thống sử dụng một nguồn adapter 12~V/2~A duy nhất và phân phối điện nội bộ theo ba mức điện áp (\cref{fig:power_diagram}):
+
+\begin{itemize}
+  \item \textbf{12~V DC}: Cấp trực tiếp cho cuộn dây solenoid qua tiếp điểm NO của relay. Dòng định mức solenoid khoảng 0,5~A.
+  \item \textbf{5~V DC}: Tạo ra bằng module hạ áp DC-DC từ 12~V. Cấp cho cuộn relay (kích relay qua transistor BJT điều khiển bởi GPIO STM32), module DFPlayer Mini và board Nucleo (qua chân VIN).
+  \item \textbf{3{,}3~V DC}: LDO tích hợp trên Nucleo tạo ra từ 5~V, cấp cho STM32, OLED SSD1306. ESP32-S3 có LDO riêng trên module dev board.
+\end{itemize}
+
+% \begin{figure}[H]
+%   \centering
+%   \includegraphics[width=0.75\textwidth]{power_diagram}
+%   \caption{Sơ đồ phân phối nguồn điện hệ thống}
+%   \label{fig:power_diagram}
+% \end{figure}
+
+Diode bảo vệ ngược chiều được lắp song song với cuộn solenoid để hấp thụ xung điện áp ngược (flyback diode) khi relay ngắt, bảo vệ các linh kiện khác trên mạch.
 
 \section{Sơ đồ nguyên lý}
 \label{sec:schematic}
 
-% TODO: chèn schematic
+Sơ đồ nguyên lý đầy đủ của hệ thống được trình bày trong \cref{app:schematic}. Thiết kế được thực hiện trên phần mềm [tên phần mềm EDA], bao gồm tất cả kết nối giữa các khối chức năng, giá trị linh kiện thụ động và bố trí đường nguồn.

@@ -7,40 +7,52 @@
 \section{Đặt vấn đề}
 \label{sec:problem}
 
-Với sự phát triển mạnh mẽ của trí tuệ nhân tạo và hệ thống nhúng, việc tích hợp công nghệ nhận diện khuôn mặt vào các hệ thống kiểm soát truy cập ngày càng trở nên phổ biến và thiết thực. Các hệ thống khóa cửa truyền thống sử dụng chìa khóa hoặc mã PIN tiềm ẩn nhiều rủi ro bảo mật như mất khóa, lộ mã số, hay sao chép trái phép.
+Kiểm soát truy cập là một yêu cầu cơ bản trong bảo mật vật lý tại các công trình dân dụng, thương mại và công nghiệp. Các hệ thống khóa cửa truyền thống dựa trên chìa khóa cơ học hoặc mã PIN tồn tại nhiều điểm yếu cố hữu: chìa khóa có thể bị mất, sao chép trái phép hoặc đánh cắp; mã PIN có thể bị lộ qua quan sát hoặc kỹ thuật tấn công shoulder surfing \cite{beautment2009}.
 
-% TODO: bổ sung thống kê hoặc dẫn chứng thực tế
+Sự bùng nổ của trí tuệ nhân tạo (AI) và hệ thống nhúng hiệu năng cao đã tạo điều kiện để đưa công nghệ nhận diện khuôn mặt vào các thiết bị tiêu dùng với chi phí ngày càng thấp. Khác với chìa khóa hay mã số, đặc trưng sinh trắc học khuôn mặt gắn liền với cá nhân, khó giả mạo và không thể quên hay đánh mất \cite{jain2004}. Đây là cơ sở để nhóm xây dựng hệ thống khóa cửa thông minh nhận diện khuôn mặt chạy hoàn toàn trên phần cứng nhúng, không phụ thuộc vào kết nối internet hay dịch vụ đám mây bên ngoài.
 
 \section{Mục tiêu đề tài}
 \label{sec:objectives}
 
-Tiểu luận này hướng đến các mục tiêu sau:
+Tiểu luận này đặt ra các mục tiêu cụ thể sau:
 
 \begin{enumerate}[label=\arabic*.]
-  \item Thiết kế và xây dựng hệ thống khóa cửa thông minh sử dụng nhận diện khuôn mặt.
-  \item Phân chia chức năng hợp lý giữa vi điều khiển STM32F303RE (xử lý ngoại vi, điều khiển khóa) và ESP32-S3 (nhận diện khuôn mặt, giao tiếp không dây).
-  \item Đảm bảo hệ thống hoạt động ổn định, phản hồi nhanh và có khả năng mở rộng.
+  \item Thiết kế và xây dựng hoàn chỉnh hệ thống khóa cửa thông minh tích hợp nhận diện khuôn mặt theo thời gian thực trên phần cứng nhúng.
+  \item Đề xuất và hiện thực kiến trúc Dual-MCU phân tách tầng xử lý AI (ESP32-S3) khỏi tầng điều khiển ngoại vi (STM32F303RE), đảm bảo tính mô-đun và dễ bảo trì.
+  \item Xây dựng giao thức truyền thông nội bộ đơn giản, tin cậy giữa hai vi điều khiển qua UART.
+  \item Tích hợp phản hồi đa kênh (màn hình OLED, âm thanh, LED) để nâng cao trải nghiệm người dùng.
+  \item Hỗ trợ đăng ký và quản lý khuôn mặt trực tiếp trên thiết bị mà không cần máy tính hỗ trợ.
 \end{enumerate}
 
 \section{Phạm vi nghiên cứu}
 \label{sec:scope}
 
 \begin{itemize}
-  \item \textbf{Phần cứng:} STM32F303RE (Nucleo-64), ESP32-S3-N16R8, camera OV2640, màn hình OLED SSD1306, relay 5~V điều khiển solenoid 12~V, module âm thanh DFPlayer Mini.
-  \item \textbf{Phần mềm:} STM32CubeIDE (HAL), ESP-IDF, thuật toán nhận diện khuôn mặt trên ESP32-S3.
-  \item \textbf{Giao thức truyền thông:} UART giữa hai MCU, I2C cho OLED.
+  \item \textbf{Phần cứng:}
+    \begin{itemize}
+      \item Vi điều khiển: STM32F303RE (Nucleo-64), ESP32-S3-N16R8
+      \item Ngoại vi: Camera OV2640, màn hình OLED SSD1306 (128$\times$64 px), relay 5~V, solenoid 12~V, module DFPlayer Mini, loa 8~$\Omega$
+      \item Nút nhấn: 3 nút (Enroll, Delete, Exit)
+    \end{itemize}
+  \item \textbf{Phần mềm:}
+    \begin{itemize}
+      \item STM32: STM32CubeIDE, thư viện HAL, không dùng RTOS
+      \item ESP32-S3: ESP-IDF (FreeRTOS), thư viện ESP-WHO cho nhận diện khuôn mặt
+    \end{itemize}
+  \item \textbf{Giao thức:} UART (115200 baud), I2C Fast-mode (400~kHz)
+  \item \textbf{Ngoài phạm vi:} Kết nối internet, lưu trữ đám mây, ứng dụng di động
 \end{itemize}
 
 \section{Bố cục tiểu luận}
 \label{sec:structure}
 
-Tiểu luận được tổ chức thành \textbf{6 chương}:
+Tiểu luận được tổ chức thành \textbf{6 chương} với nội dung như sau:
 
-\begin{description}
-  \item[Chương 1] Giới thiệu tổng quan về đề tài, mục tiêu và phạm vi nghiên cứu.
-  \item[Chương 2] Cơ sở lý thuyết về nhận diện khuôn mặt và kiến trúc hệ thống nhúng.
-  \item[Chương 3] Thiết kế và triển khai phần cứng.
-  \item[Chương 4] Thiết kế và triển khai phần mềm.
-  \item[Chương 5] Kết quả thực nghiệm và đánh giá.
-  \item[Chương 6] Kết luận và hướng phát triển.
+\begin{description}[leftmargin=3.5cm, style=nextline]
+  \item[\textbf{Chương \ref{chap:intro}}] Giới thiệu bối cảnh, vấn đề cần giải quyết, mục tiêu và phạm vi của đề tài.
+  \item[\textbf{Chương \ref{chap:theory}}] Trình bày cơ sở lý thuyết về nhận diện khuôn mặt, kiến trúc hệ thống nhúng đa vi điều khiển và các chuẩn giao tiếp được sử dụng.
+  \item[\textbf{Chương \ref{chap:hardware}}] Mô tả chi tiết thiết kế phần cứng: sơ đồ khối, danh sách linh kiện, sơ đồ kết nối chân và thiết kế nguồn điện.
+  \item[\textbf{Chương \ref{chap:software}}] Trình bày thiết kế và hiện thực phần mềm firmware cho cả STM32 và ESP32-S3, bao gồm máy trạng thái, xử lý ngắt và điều khiển ngoại vi.
+  \item[\textbf{Chương \ref{chap:results}}] Trình bày kết quả thực nghiệm, đánh giá độ chính xác nhận diện, thời gian phản hồi và độ ổn định của hệ thống.
+  \item[\textbf{Chương \ref{chap:conclusion}}] Kết luận, nêu hạn chế hiện tại và đề xuất hướng phát triển trong tương lai.
 \end{description}

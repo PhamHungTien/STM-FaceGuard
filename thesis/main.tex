@@ -1,6 +1,7 @@
 % ============================================================
-%  TIỂU LUẬN: Khóa Cửa Thông Minh Nhận Diện Khuôn Mặt
-%  Compile: XeLaTeX (khuyến nghị) hoặc LuaLaTeX
+%  TIỂU LUẬN: Thiết Kế Khóa Cửa Thông Minh Nhận Diện Khuôn Mặt
+%  Engine: XeLaTeX  |  Bibliography: Biber
+%  Build:  make  (hoặc xelatex → biber → xelatex × 2)
 % ============================================================
 \documentclass[13pt, a4paper, twoside, openright]{report}
 
@@ -11,43 +12,64 @@
 \setotherlanguage{english}
 \setmainfont{Times New Roman}
 \setsansfont{Arial}
-\setmonofont[Scale=0.9]{Courier New}
+\setmonofont[Scale=0.88]{Courier New}
 
 % ── Page Layout ─────────────────────────────────────────────
 \usepackage[
   a4paper,
   top=2.5cm, bottom=2.5cm,
-  left=3.0cm, right=2.0cm,   % lề trái rộng cho đóng gáy
-  headheight=14pt
+  left=3.0cm, right=2.0cm,
+  headheight=15pt
 ]{geometry}
 
 % ── Line Spacing ────────────────────────────────────────────
 \usepackage{setspace}
-\onehalfspacing                % giãn dòng 1.5
+\onehalfspacing
 
 % ── Headers & Footers ───────────────────────────────────────
 \usepackage{fancyhdr}
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[LE]{\small\leftmark}
-\fancyhead[RO]{\small\rightmark}
-\fancyfoot[C]{\thepage}
+\fancyhead[LE]{\small\itshape\leftmark}
+\fancyhead[RO]{\small\itshape\rightmark}
+\fancyfoot[C]{\small\thepage}
 \renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0pt}
+% Định dạng mark gọn hơn cho header
+\renewcommand{\chaptermark}[1]{\markboth{Chương \thechapter.\ #1}{}}
+\renewcommand{\sectionmark}[1]{\markright{\thesection\ #1}}
+% Trang đầu chương (plain style): chỉ số trang, không header
+\fancypagestyle{plain}{%
+  \fancyhf{}
+  \fancyfoot[C]{\small\thepage}
+  \renewcommand{\headrulewidth}{0pt}
+}
 
 % ── Section Title Formatting ────────────────────────────────
 \usepackage{titlesec}
 \titleformat{\chapter}[block]
   {\normalfont\Large\bfseries\centering}
-  {CHƯƠNG \thechapter.}{0.5em}{\MakeUppercase}
-\titlespacing*{\chapter}{0pt}{0pt}{20pt}
+  {CHƯƠNG \thechapter.}{0.6em}{\MakeUppercase}
+\titlespacing*{\chapter}{0pt}{0pt}{24pt}
 
 \titleformat{\section}
   {\normalfont\large\bfseries}
   {\thesection}{1em}{}
+\titlespacing*{\section}{0pt}{12pt}{6pt}
 
 \titleformat{\subsection}
   {\normalfont\normalsize\bfseries}
   {\thesubsection}{1em}{}
+\titlespacing*{\subsection}{0pt}{10pt}{4pt}
+
+\titleformat{\subsubsection}
+  {\normalfont\normalsize\itshape\bfseries}
+  {\thesubsubsection}{1em}{}
+
+% ── Counter: đánh số hình, bảng, mã nguồn theo chương ──────
+\usepackage{chngcntr}
+\counterwithin{figure}{chapter}
+\counterwithin{table}{chapter}
 
 % ── Table of Contents Styling ────────────────────────────────
 \usepackage{tocloft}
@@ -55,114 +77,178 @@
 \renewcommand{\cftchappagefont}{\bfseries}
 \renewcommand{\cftchapleader}{\bfseries\cftdotfill{\cftdotsep}}
 \setlength{\cftbeforechapskip}{6pt}
+\setlength{\cftbeforesecskip}{2pt}
 
 % ── Graphics & Figures ──────────────────────────────────────
 \usepackage{graphicx}
 \graphicspath{{figures/}}
 \usepackage{float}
 \usepackage{caption}
+\usepackage{subcaption}
 \captionsetup{
   labelfont=bf,
   labelsep=period,
   font=small,
-  width=0.9\textwidth
+  width=0.92\textwidth
 }
 \captionsetup[figure]{name=Hình}
 \captionsetup[table]{name=Bảng}
+\usepackage{pdflscape}              % trang ngang cho bảng lớn
 
 % ── Tables ──────────────────────────────────────────────────
 \usepackage{booktabs}
 \usepackage{tabularx}
 \usepackage{multirow}
 \usepackage{longtable}
+\usepackage{array}
+\usepackage{colortbl}
+\usepackage{xcolor}
+\definecolor{tableheader}{RGB}{220,230,242}
+\definecolor{codeframe}{RGB}{200,200,200}
+\definecolor{codebg}{RGB}{248,248,248}
+\definecolor{kwcolor}{RGB}{0,0,200}
+\definecolor{cmtcolor}{RGB}{100,100,100}
+\definecolor{strcolor}{RGB}{180,60,0}
+\definecolor{numcolor}{RGB}{150,0,120}
 
 % ── Source Code Listing ─────────────────────────────────────
 \usepackage{listings}
-\usepackage{xcolor}
+\renewcommand{\lstlistingname}{Mã nguồn}
+\renewcommand{\lstlistlistingname}{Danh mục mã nguồn}
 \lstset{
-  basicstyle=\ttfamily\small,
-  keywordstyle=\color{blue}\bfseries,
-  commentstyle=\color{gray}\itshape,
-  stringstyle=\color{orange!80!black},
-  numbers=left,
+  basicstyle=\ttfamily\small\setstretch{1.0},
+  keywordstyle=\color{kwcolor}\bfseries,
+  commentstyle=\color{cmtcolor}\itshape,
+  stringstyle=\color{strcolor},
   numberstyle=\tiny\color{gray},
+  numbers=left,
   stepnumber=1,
-  numbersep=8pt,
+  numbersep=10pt,
+  backgroundcolor=\color{codebg},
   frame=single,
+  framerule=0.4pt,
+  rulecolor=\color{codeframe},
   breaklines=true,
+  breakatwhitespace=true,
   showstringspaces=false,
-  tabsize=2,
-  captionpos=b
+  tabsize=4,
+  captionpos=b,
+  xleftmargin=1.5em,
+  xrightmargin=0.5em,
+  aboveskip=8pt,
+  belowskip=8pt
 }
-\lstdefinestyle{c}{language=C}
+\lstdefinestyle{clang}{
+  language=C,
+  morekeywords={uint8_t,uint16_t,uint32_t,int8_t,int16_t,int32_t,
+                GPIO_PinState,HAL_StatusTypeDef,UART_HandleTypeDef}
+}
 \lstdefinestyle{python}{language=Python}
+% Đánh số mã nguồn theo chương
+\AtBeginDocument{\counterwithin{lstlisting}{chapter}}
+\captionsetup[lstlisting]{name=Mã nguồn, labelfont=bf, labelsep=period}
 
 % ── Math ────────────────────────────────────────────────────
 \usepackage{amsmath, amssymb, amsthm}
 
-% ── Hyperlinks ──────────────────────────────────────────────
+% ── SI Units ────────────────────────────────────────────────
+\usepackage{siunitx}
+\sisetup{
+  output-decimal-marker = {,},
+  group-separator       = {.}
+}
+
+% ── Diagrams ────────────────────────────────────────────────
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, calc, fit}
+
+% ── Hyperlinks (phải load sau cùng, trước cleveref) ─────────
+\usepackage{csquotes}               % bắt buộc với biblatex + polyglossia
 \usepackage[
-  colorlinks=true,
-  linkcolor=black,
-  citecolor=blue!70!black,
-  urlcolor=blue!70!black,
-  bookmarks=true,
-  bookmarksnumbered=true,
-  pdftitle={Khóa Cửa Thông Minh Nhận Diện Khuôn Mặt},
-  pdfauthor={Phạm Hùng Tiến}
+  colorlinks  = true,
+  linkcolor   = black,
+  citecolor   = blue!65!black,
+  urlcolor    = blue!65!black,
+  bookmarks   = true,
+  bookmarksnumbered = true,
+  pdftitle    = {Thiết Kế Khóa Cửa Thông Minh Nhận Diện Khuôn Mặt},
+  pdfauthor   = {Phạm Hùng Tiến, Trần Thái Nguyên, Hồ Sĩ Phú,
+                 Quách Gia Thịnh, Lê Quang Bảo Trung},
+  pdfsubject  = {Hệ thống nhúng, Nhận diện khuôn mặt},
+  pdfkeywords = {STM32, ESP32-S3, Face Recognition, Smart Lock, Embedded}
 ]{hyperref}
+
+% ── Smart cross-references ──────────────────────────────────
+\usepackage[vietnamese]{cleveref}
+\crefname{figure}{Hình}{Hình}
+\crefname{table}{Bảng}{Bảng}
+\crefname{listing}{Mã nguồn}{Mã nguồn}
+\crefname{chapter}{Chương}{Chương}
+\crefname{section}{Mục}{Mục}
+\crefname{equation}{Công thức}{Công thức}
 
 % ── Bibliography ────────────────────────────────────────────
 \usepackage[
-  backend=biber,
-  style=ieee,
-  sorting=none
+  backend  = biber,
+  style    = ieee,
+  sorting  = none,
+  maxnames = 5
 ]{biblatex}
 \addbibresource{references.bib}
 
 % ── Miscellaneous ───────────────────────────────────────────
 \usepackage{enumitem}
-\usepackage{array}
+\setlist[itemize]{topsep=4pt, itemsep=2pt, parsep=0pt}
+\setlist[enumerate]{topsep=4pt, itemsep=2pt, parsep=0pt}
 \usepackage{microtype}
-\usepackage{emptypage}          % trang trắng không có header/footer
+\usepackage{emptypage}              % trang trắng không có header/footer
 
 % ============================================================
-%  DOCUMENT BEGIN
+%  DOCUMENT
 % ============================================================
 \begin{document}
 
-\pagenumbering{gobble}          % trang bìa không đánh số
+\pagenumbering{gobble}
 
 % ── Trang bìa ───────────────────────────────────────────────
 \input{chapters/00_cover}
 
 \cleardoublepage
-\pagenumbering{roman}           % La-mã cho phần đầu
+\pagenumbering{roman}
 
-% ── Nhận xét / Xác nhận (nếu cần) ──────────────────────────
-% \input{chapters/00_acknowledgment}
+% ── Tóm tắt ─────────────────────────────────────────────────
+\input{chapters/00_abstract}
+\cleardoublepage
 
 % ── Mục lục ─────────────────────────────────────────────────
 \tableofcontents
 \cleardoublepage
 
-% ── Danh mục hình ───────────────────────────────────────────
-\listoffigures
+% ── Danh mục hình vẽ ────────────────────────────────────────
+\phantomsection
 \addcontentsline{toc}{chapter}{Danh mục hình vẽ}
+\listoffigures
 \cleardoublepage
 
-% ── Danh mục bảng ───────────────────────────────────────────
+% ── Danh mục bảng biểu ──────────────────────────────────────
+\phantomsection
+\addcontentsline{toc}{chapter}{Danh mục bảng biểu}
 \listoftables
-\addcontentsline{toc}{chapter}{Danh mục bảng}
+\cleardoublepage
+
+% ── Danh mục mã nguồn ───────────────────────────────────────
+\phantomsection
+\addcontentsline{toc}{chapter}{Danh mục mã nguồn}
+\lstlistoflistings
 \cleardoublepage
 
 % ── Danh mục từ viết tắt ────────────────────────────────────
 \input{chapters/00_abbreviations}
 \cleardoublepage
 
-\pagenumbering{arabic}          % Số Ả-rập cho nội dung chính
+\pagenumbering{arabic}
 
-% ── Các chương ──────────────────────────────────────────────
+% ── Các chương nội dung ─────────────────────────────────────
 \input{chapters/ch1_intro}
 \input{chapters/ch2_theory}
 \input{chapters/ch3_hardware}
@@ -172,6 +258,7 @@
 
 % ── Tài liệu tham khảo ──────────────────────────────────────
 \cleardoublepage
+\phantomsection
 \addcontentsline{toc}{chapter}{Tài liệu tham khảo}
 \printbibliography[title={Tài liệu tham khảo}]
 

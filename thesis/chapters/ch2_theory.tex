@@ -9,49 +9,56 @@
 
 \subsection{Tổng quan}
 
-Nhận diện khuôn mặt (\textit{Face Recognition}) là bài toán xác định danh tính của một người dựa trên đặc trưng hình ảnh khuôn mặt. Quy trình gồm ba bước chính:
+Nhận diện khuôn mặt (\textit{Face Recognition --- FR}) là bài toán xác định hoặc xác nhận danh tính của một cá nhân dựa trên đặc trưng hình ảnh khuôn mặt. Hệ thống FR điển hình gồm ba giai đoạn nối tiếp \cite{wang2021}:
 
 \begin{enumerate}[label=\arabic*.]
-  \item \textbf{Phát hiện khuôn mặt} (\textit{Face Detection}): xác định vị trí khuôn mặt trong ảnh.
-  \item \textbf{Trích xuất đặc trưng} (\textit{Feature Extraction}): chuyển ảnh khuôn mặt thành vector đặc trưng (\textit{embedding}).
-  \item \textbf{So khớp} (\textit{Matching}): so sánh vector đặc trưng với cơ sở dữ liệu để xác định danh tính.
+  \item \textbf{Phát hiện khuôn mặt} (\textit{Face Detection}): Xác định vị trí và kích thước vùng khuôn mặt trong ảnh thô từ camera. Đây là bước tiền xử lý quan trọng nhất vì mọi giai đoạn tiếp theo đều phụ thuộc vào chất lượng phát hiện.
+  \item \textbf{Trích xuất đặc trưng} (\textit{Feature Extraction}): Cắt vùng khuôn mặt, chuẩn hóa kích thước và đưa qua mô hình CNN để sinh ra vector đặc trưng (\textit{face embedding}) $\mathbf{f} \in \mathbb{R}^d$ mang tính đặc trưng của từng cá nhân. Khoảng cách giữa hai embedding phản ánh mức độ tương đồng giữa hai khuôn mặt.
+  \item \textbf{So khớp và nhận dạng} (\textit{Matching}): So sánh embedding đầu vào với cơ sở dữ liệu bằng độ đo cosine similarity hoặc khoảng cách Euclidean. Nếu khoảng cách nhỏ hơn ngưỡng $\theta$, hệ thống chấp nhận danh tính; ngược lại từ chối.
 \end{enumerate}
 
-\subsection{Thuật toán sử dụng trên ESP32-S3}
+Độ chính xác của FR được đánh giá qua hai chỉ số chính: \textit{False Acceptance Rate} (FAR) --- tỉ lệ người lạ được chấp nhận nhầm; và \textit{False Rejection Rate} (FRR) --- tỉ lệ người được đăng ký bị từ chối nhầm.
 
-% TODO: mô tả model/thuật toán cụ thể (ví dụ: MobileFaceNet, MTCNN, v.v.)
+\subsection{Mô hình sử dụng trên ESP32-S3: MobileFaceNet}
+
+Do tài nguyên tính toán trên MCU bị giới hạn, hệ thống sử dụng \textbf{MobileFaceNet} \cite{chen2018} --- một kiến trúc mạng nơ-ron nhỏ gọn được thiết kế đặc biệt cho thiết bị di động và nhúng. MobileFaceNet sử dụng các khối \textit{depthwise separable convolution} để giảm số phép nhân ma trận xuống đáng kể so với CNN thông thường, trong khi vẫn đạt độ chính xác cao trên tập benchmark LFW (Labeled Faces in the Wild).
+
+Mô hình được chạy qua framework \textbf{ESP-WHO} của Espressif, đã được tối ưu hóa bằng phép lượng tử hóa số nguyên 8-bit (INT8 quantization) để phù hợp với kiến trúc vector AI tích hợp trong ESP32-S3.
 
 \section{Kiến trúc hệ thống nhúng đa vi điều khiển}
 \label{sec:dual_mcu}
 
-\subsection{Phân chia chức năng}
+\subsection{Động cơ thiết kế Dual-MCU}
 
-Hệ thống sử dụng kiến trúc đa vi điều khiển (Dual-MCU) với nguyên tắc phân chia theo năng lực xử lý:
+Phương án dùng một MCU duy nhất cho cả xử lý AI lẫn điều khiển ngoại vi dẫn đến hai vấn đề: (1) ESP32-S3 không có đủ ngoại vi phù hợp (ví dụ: thiếu analog comparator, timer PWM chuyên dụng cho âm thanh 9600 baud theo giao thức DFPlayer), và (2) tải xử lý nặng từ thuật toán FR có thể gây trễ cho các tác vụ điều khiển real-time.
+
+Kiến trúc Dual-MCU giải quyết điều này bằng cách phân tách nhiệm vụ theo nguyên tắc \textit{separation of concerns}:
 
 \begin{itemize}
-  \item \textbf{STM32F303RE} đóng vai trò \textit{controller}: quản lý ngoại vi (relay, LED, nút nhấn, OLED, âm thanh), nhận lệnh từ ESP32 qua UART.
-  \item \textbf{ESP32-S3-N16R8} đóng vai trò \textit{processor}: chạy mô hình AI nhận diện khuôn mặt, xử lý ảnh từ camera.
+  \item \textbf{ESP32-S3-N16R8} --- \textit{AI Processor}: Xử lý camera, chạy mô hình FR, quản lý cơ sở dữ liệu khuôn mặt trong bộ nhớ flash 16~MB. Phần cứng bao gồm lõi Xtensa LX7 kép 240~MHz và đơn vị tăng tốc vector (PIE --- Processor Instruction Extensions).
+  \item \textbf{STM32F303RE} --- \textit{Peripheral Controller}: Quản lý toàn bộ ngoại vi, xử lý ngắt nút nhấn, điều khiển relay/LED/OLED/âm thanh và thực thi máy trạng thái hệ thống. Lõi ARM Cortex-M4F 72~MHz với FPU, sử dụng thư viện HAL trong STM32CubeIDE.
 \end{itemize}
 
-\subsection{Giao thức UART giữa hai MCU}
+\subsection{Giao thức UART nội bộ}
 
-Hai vi điều khiển giao tiếp qua UART ở tốc độ 115200~baud với giao thức văn bản đơn giản, kết thúc bằng \verb|\n|.
+Hai vi điều khiển giao tiếp qua UART ở tốc độ \SI{115200}{baud} với giao thức văn bản ASCII đơn giản, mỗi lệnh kết thúc bằng ký tự xuống dòng \verb|\n| (0x0A). Thiết kế văn bản giúp dễ debug qua terminal và không cần thư viện phân tích giao thức phức tạp.
 
 \begin{table}[H]
   \centering
-  \caption{Giao thức truyền thông UART giữa ESP32-S3 và STM32}
+  \caption{Giao thức UART giữa ESP32-S3 và STM32F303RE}
   \label{tab:uart_protocol}
-  \begin{tabularx}{0.85\textwidth}{>{\ttfamily}l X}
+  \begin{tabularx}{0.9\textwidth}{>{\ttfamily}l c X}
     \toprule
-    \textbf{Lệnh} & \textbf{Ý nghĩa} \\
+    \textbf{Lệnh} & \textbf{Chiều} & \textbf{Ý nghĩa} \\
     \midrule
-    OPEN:\textit{<id>}\textbackslash n   & Nhận diện thành công, mở khóa cho người dùng \textit{id} \\
-    DENIED\textbackslash n               & Không nhận diện được, từ chối truy cập \\
-    ENROLLED:\textit{<id>}\textbackslash n & Đăng ký khuôn mặt thành công \\
-    DELETED\textbackslash n              & Xóa toàn bộ dữ liệu thành công \\
-    READY\textbackslash n                & ESP32-S3 khởi động xong, sẵn sàng \\
-    ENROLL\textbackslash n               & STM32 yêu cầu ESP32 vào chế độ đăng ký \\
-    DEL\_ALL\textbackslash n             & STM32 yêu cầu ESP32 xóa toàn bộ dữ liệu \\
+    OPEN:\textit{<id>}\verb|\n|     & ESP32 $\to$ STM32 & Nhận diện thành công, yêu cầu mở khóa cho người dùng \textit{id} \\
+    DENIED\verb|\n|                 & ESP32 $\to$ STM32 & Không nhận ra, từ chối truy cập \\
+    ENROLLED:\textit{<id>}\verb|\n| & ESP32 $\to$ STM32 & Đăng ký khuôn mặt thành công \\
+    DELETED\verb|\n|                & ESP32 $\to$ STM32 & Xóa toàn bộ dữ liệu thành công \\
+    READY\verb|\n|                  & ESP32 $\to$ STM32 & Khởi động xong, sẵn sàng hoạt động \\
+    \midrule
+    ENROLL\verb|\n|                 & STM32 $\to$ ESP32 & Yêu cầu vào chế độ đăng ký khuôn mặt \\
+    DEL\_ALL\verb|\n|               & STM32 $\to$ ESP32 & Yêu cầu xóa toàn bộ cơ sở dữ liệu \\
     \bottomrule
   \end{tabularx}
 \end{table}
@@ -59,9 +66,19 @@ Hai vi điều khiển giao tiếp qua UART ở tốc độ 115200~baud với gi
 \section{Các chuẩn giao tiếp sử dụng}
 \label{sec:protocols}
 
-\subsection{UART}
-% TODO
+\subsection{UART (Universal Asynchronous Receiver-Transmitter)}
 
-\subsection{I2C}
-% TODO
+UART là chuẩn giao tiếp nối tiếp không đồng bộ điểm-điểm (point-to-point). Mỗi khung dữ liệu (\textit{data frame}) gồm: 1 bit start (mức thấp), 8 bit dữ liệu (LSB trước), không có bit parity, và 1 bit stop (mức cao). Tốc độ baud xác định thời gian mỗi bit: ở \SI{115200}{baud}, mỗi bit kéo dài \SI{8.68}{\micro\second}.
 
+Hệ thống sử dụng ba kênh UART trên STM32:
+\begin{itemize}
+  \item \textbf{USART1} (\SI{115200}{baud}): Giao tiếp với ESP32-S3 --- kênh dữ liệu chính.
+  \item \textbf{USART2} (\SI{38400}{baud}): Giao tiếp với ST-Link Virtual COM --- dùng để debug.
+  \item \textbf{USART3} (\SI{9600}{baud}): Điều khiển module DFPlayer Mini --- phát âm thanh.
+\end{itemize}
+
+\subsection{I2C (Inter-Integrated Circuit)}
+
+I2C là chuẩn giao tiếp nối tiếp đồng bộ đa điểm (multi-master, multi-slave) chỉ cần 2 dây: SDA (dữ liệu) và SCL (xung nhịp). Mỗi thiết bị slave có địa chỉ 7-bit duy nhất; master khởi tạo giao dịch bằng điều kiện START và kết thúc bằng STOP. Mỗi byte được xác nhận bằng bit ACK/NACK từ phía nhận.
+
+Hệ thống sử dụng I2C1 ở chế độ Fast-mode (\SI{400}{kHz}) để giao tiếp với màn hình OLED SSD1306 (địa chỉ 0x3C). Chế độ Fast-mode giảm thời gian truyền mỗi lệnh hiển thị, đảm bảo OLED cập nhật đủ nhanh để người dùng không cảm nhận độ trễ.
