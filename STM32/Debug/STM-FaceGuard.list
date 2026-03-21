@@ -270,50 +270,49 @@ void DFPlayer_Init(void)
 {
  800034c:	b580      	push	{r7, lr}
  800034e:	af00      	add	r7, sp, #0
-    HAL_Delay(1500);             /* DFPlayer needs ~1s to enumerate SD card */
+    HAL_Delay(1500);             /* Wait for DFPlayer boot + SD enumeration       */
  8000350:	f240 50dc 	movw	r0, #1500	@ 0x5dc
  8000354:	f001 fa4a 	bl	80017ec <HAL_Delay>
-    dfp_send(0x06, 0x00, 25);   /* Set volume to 25/30 */
- 8000358:	2219      	movs	r2, #25
+    dfp_send(0x09, 0x00, 0x02); /* Select storage: SD card (before volume)        */
+ 8000358:	2202      	movs	r2, #2
  800035a:	2100      	movs	r1, #0
- 800035c:	2006      	movs	r0, #6
+ 800035c:	2009      	movs	r0, #9
  800035e:	f7ff ffbf 	bl	80002e0 <dfp_send>
+    HAL_Delay(500);              /* Wait for SD re-init (500ms sufficient for most cards) */
+ 8000362:	f44f 70fa 	mov.w	r0, #500	@ 0x1f4
+ 8000366:	f001 fa41 	bl	80017ec <HAL_Delay>
+    dfp_send(0x06, 0x00, 25);   /* Set volume to 25/30                            */
+ 800036a:	2219      	movs	r2, #25
+ 800036c:	2100      	movs	r1, #0
+ 800036e:	2006      	movs	r0, #6
+ 8000370:	f7ff ffb6 	bl	80002e0 <dfp_send>
     HAL_Delay(100);
- 8000362:	2064      	movs	r0, #100	@ 0x64
- 8000364:	f001 fa42 	bl	80017ec <HAL_Delay>
-    dfp_send(0x09, 0x00, 0x02); /* Select storage: SD card */
- 8000368:	2202      	movs	r2, #2
- 800036a:	2100      	movs	r1, #0
- 800036c:	2009      	movs	r0, #9
- 800036e:	f7ff ffb7 	bl	80002e0 <dfp_send>
-    HAL_Delay(100);
- 8000372:	2064      	movs	r0, #100	@ 0x64
- 8000374:	f001 fa3a 	bl	80017ec <HAL_Delay>
+ 8000374:	2064      	movs	r0, #100	@ 0x64
+ 8000376:	f001 fa39 	bl	80017ec <HAL_Delay>
 }
- 8000378:	bf00      	nop
- 800037a:	bd80      	pop	{r7, pc}
+ 800037a:	bf00      	nop
+ 800037c:	bd80      	pop	{r7, pc}
 
-0800037c <DFPlayer_Play>:
+0800037e <DFPlayer_Play>:
 
 void DFPlayer_Play(uint8_t track)
 {
- 800037c:	b580      	push	{r7, lr}
- 800037e:	b082      	sub	sp, #8
- 8000380:	af00      	add	r7, sp, #0
- 8000382:	4603      	mov	r3, r0
- 8000384:	71fb      	strb	r3, [r7, #7]
+ 800037e:	b580      	push	{r7, lr}
+ 8000380:	b082      	sub	sp, #8
+ 8000382:	af00      	add	r7, sp, #0
+ 8000384:	4603      	mov	r3, r0
+ 8000386:	71fb      	strb	r3, [r7, #7]
     dfp_send(0x03, 0x00, track); /* Play specific track number */
- 8000386:	79fb      	ldrb	r3, [r7, #7]
- 8000388:	461a      	mov	r2, r3
- 800038a:	2100      	movs	r1, #0
- 800038c:	2003      	movs	r0, #3
- 800038e:	f7ff ffa7 	bl	80002e0 <dfp_send>
+ 8000388:	79fb      	ldrb	r3, [r7, #7]
+ 800038a:	461a      	mov	r2, r3
+ 800038c:	2100      	movs	r1, #0
+ 800038e:	2003      	movs	r0, #3
+ 8000390:	f7ff ffa6 	bl	80002e0 <dfp_send>
 }
- 8000392:	bf00      	nop
- 8000394:	3708      	adds	r7, #8
- 8000396:	46bd      	mov	sp, r7
- 8000398:	bd80      	pop	{r7, pc}
-	...
+ 8000394:	bf00      	nop
+ 8000396:	3708      	adds	r7, #8
+ 8000398:	46bd      	mov	sp, r7
+ 800039a:	bd80      	pop	{r7, pc}
 
 0800039c <HAL_UART_RxCpltCallback>:
 /* -----------------------------------------------------------------------
@@ -583,7 +582,7 @@ static void Enter_Unlocked(uint8_t face_id, uint8_t from_exit_btn)
     }
     DFPlayer_Play(DFP_TRACK_OPEN_DOOR);
  8000538:	2001      	movs	r0, #1
- 800053a:	f7ff ff1f 	bl	800037c <DFPlayer_Play>
+ 800053a:	f7ff ff20 	bl	800037e <DFPlayer_Play>
 }
  800053e:	bf00      	nop
  8000540:	3708      	adds	r7, #8
@@ -612,7 +611,7 @@ static void Enter_Denied(void)
  8000564:	f000 fdca 	bl	80010fc <SSD1306_ShowDenied>
     DFPlayer_Play(DFP_TRACK_DENIED);
  8000568:	2002      	movs	r0, #2
- 800056a:	f7ff ff07 	bl	800037c <DFPlayer_Play>
+ 800056a:	f7ff ff08 	bl	800037e <DFPlayer_Play>
 }
  800056e:	bf00      	nop
  8000570:	bd80      	pop	{r7, pc}
@@ -704,7 +703,7 @@ static void Parse_ESP32_Msg(const char *msg)
  80005fe:	f000 fe2f 	bl	8001260 <SSD1306_ShowEnrolled>
         DFPlayer_Play(DFP_TRACK_ENROLLED);
  8000602:	2004      	movs	r0, #4
- 8000604:	f7ff feba 	bl	800037c <DFPlayer_Play>
+ 8000604:	f7ff febb 	bl	800037e <DFPlayer_Play>
 }
  8000608:	e084      	b.n	8000714 <Parse_ESP32_Msg+0x198>
     } else if (strcmp(msg, "DELETED") == 0) {
@@ -727,7 +726,7 @@ static void Parse_ESP32_Msg(const char *msg)
  8000628:	f000 fe98 	bl	800135c <SSD1306_ShowDeleted>
         DFPlayer_Play(DFP_TRACK_DELETED);
  800062c:	2005      	movs	r0, #5
- 800062e:	f7ff fea5 	bl	800037c <DFPlayer_Play>
+ 800062e:	f7ff fea6 	bl	800037e <DFPlayer_Play>
 }
  8000632:	e06f      	b.n	8000714 <Parse_ESP32_Msg+0x198>
     } else if (strcmp(msg, "READY") == 0) {
@@ -763,7 +762,7 @@ static void Parse_ESP32_Msg(const char *msg)
  800066a:	f000 fd67 	bl	800113c <SSD1306_ShowEnrollStep>
         DFPlayer_Play(DFP_TRACK_ENROLL_FRONT);
  800066e:	2006      	movs	r0, #6
- 8000670:	f7ff fe84 	bl	800037c <DFPlayer_Play>
+ 8000670:	f7ff fe85 	bl	800037e <DFPlayer_Play>
 }
  8000674:	e04e      	b.n	8000714 <Parse_ESP32_Msg+0x198>
     } else if (strcmp(msg, "ENROLL_LEFT") == 0) {
@@ -784,7 +783,7 @@ static void Parse_ESP32_Msg(const char *msg)
  8000692:	f000 fd53 	bl	800113c <SSD1306_ShowEnrollStep>
         DFPlayer_Play(DFP_TRACK_ENROLL_LEFT);
  8000696:	2007      	movs	r0, #7
- 8000698:	f7ff fe70 	bl	800037c <DFPlayer_Play>
+ 8000698:	f7ff fe71 	bl	800037e <DFPlayer_Play>
 }
  800069c:	e03a      	b.n	8000714 <Parse_ESP32_Msg+0x198>
     } else if (strcmp(msg, "ENROLL_RIGHT") == 0) {
@@ -805,7 +804,7 @@ static void Parse_ESP32_Msg(const char *msg)
  80006ba:	f000 fd3f 	bl	800113c <SSD1306_ShowEnrollStep>
         DFPlayer_Play(DFP_TRACK_ENROLL_RIGHT);
  80006be:	2008      	movs	r0, #8
- 80006c0:	f7ff fe5c 	bl	800037c <DFPlayer_Play>
+ 80006c0:	f7ff fe5d 	bl	800037e <DFPlayer_Play>
 }
  80006c4:	e026      	b.n	8000714 <Parse_ESP32_Msg+0x198>
     } else if (strcmp(msg, "ENROLL_UP") == 0) {
@@ -826,7 +825,7 @@ static void Parse_ESP32_Msg(const char *msg)
  80006e2:	f000 fd2b 	bl	800113c <SSD1306_ShowEnrollStep>
         DFPlayer_Play(DFP_TRACK_ENROLL_UP);
  80006e6:	2009      	movs	r0, #9
- 80006e8:	f7ff fe48 	bl	800037c <DFPlayer_Play>
+ 80006e8:	f7ff fe49 	bl	800037e <DFPlayer_Play>
 }
  80006ec:	e012      	b.n	8000714 <Parse_ESP32_Msg+0x198>
     } else if (strcmp(msg, "ENROLL_DOWN") == 0) {
@@ -847,7 +846,7 @@ static void Parse_ESP32_Msg(const char *msg)
  800070a:	f000 fd17 	bl	800113c <SSD1306_ShowEnrollStep>
         DFPlayer_Play(DFP_TRACK_ENROLL_DOWN);
  800070e:	200a      	movs	r0, #10
- 8000710:	f7ff fe34 	bl	800037c <DFPlayer_Play>
+ 8000710:	f7ff fe35 	bl	800037e <DFPlayer_Play>
 }
  8000714:	bf00      	nop
  8000716:	3710      	adds	r7, #16
@@ -1063,7 +1062,7 @@ static void App_Loop(void)
  8000868:	f000 fc58 	bl	800111c <SSD1306_ShowEnrolling>
             DFPlayer_Play(DFP_TRACK_LOOK_AT_CAM);
  800086c:	2003      	movs	r0, #3
- 800086e:	f7ff fd85 	bl	800037c <DFPlayer_Play>
+ 800086e:	f7ff fd86 	bl	800037e <DFPlayer_Play>
 
     /* ================================================================
      * DELETE button — hold for 3 s to confirm
@@ -1542,7 +1541,7 @@ static void MX_I2C1_Init(void)
  8000b20:	4b1b      	ldr	r3, [pc, #108]	@ (8000b90 <MX_I2C1_Init+0x74>)
  8000b22:	4a1c      	ldr	r2, [pc, #112]	@ (8000b94 <MX_I2C1_Init+0x78>)
  8000b24:	601a      	str	r2, [r3, #0]
-  hi2c1.Init.Timing = 0x0010020A;
+  hi2c1.Init.Timing = 0x00310309; /* Fast Mode 400kHz @ HSI 8MHz (AN4235 Table 10) */
  8000b26:	4b1a      	ldr	r3, [pc, #104]	@ (8000b90 <MX_I2C1_Init+0x74>)
  8000b28:	4a1b      	ldr	r2, [pc, #108]	@ (8000b98 <MX_I2C1_Init+0x7c>)
  8000b2a:	605a      	str	r2, [r3, #4]
@@ -1622,7 +1621,7 @@ static void MX_I2C1_Init(void)
  8000b8e:	bf00      	nop
  8000b90:	20000078 	.word	0x20000078
  8000b94:	40005400 	.word	0x40005400
- 8000b98:	0010020a 	.word	0x0010020a
+ 8000b98:	00310309 	.word	0x00310309
 
 08000b9c <MX_USART1_UART_Init>:
   * @brief USART1 Initialization Function
@@ -2168,8 +2167,8 @@ void SSD1306_Init(void)
  8000eac:	b580      	push	{r7, lr}
  8000eae:	b082      	sub	sp, #8
  8000eb0:	af00      	add	r7, sp, #0
-    HAL_Delay(100); /* Wait for OLED power-up */
- 8000eb2:	2064      	movs	r0, #100	@ 0x64
+    HAL_Delay(150); /* Wait for OLED power-up */
+ 8000eb2:	2096      	movs	r0, #150	@ 0x96
  8000eb4:	f000 fc9a 	bl	80017ec <HAL_Delay>
         0xA4,       /* Show RAM content                 */
         0xA6,       /* Normal (not inverted)            */

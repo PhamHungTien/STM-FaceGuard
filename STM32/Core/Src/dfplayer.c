@@ -32,10 +32,10 @@ static void dfp_send(uint8_t cmd, uint8_t paramH, uint8_t paramL)
 
 void DFPlayer_Init(void)
 {
-    HAL_Delay(1500);             /* DFPlayer needs ~1s to enumerate SD card */
-    dfp_send(0x06, 0x00, 25);   /* Set volume to 25/30 */
-    HAL_Delay(100);
-    dfp_send(0x09, 0x00, 0x02); /* Select storage: SD card */
+    HAL_Delay(1500);             /* Wait for DFPlayer boot + SD enumeration       */
+    dfp_send(0x09, 0x00, 0x02); /* Select storage: SD card (before volume)        */
+    HAL_Delay(500);              /* Wait for SD re-init (500ms sufficient for most cards) */
+    dfp_send(0x06, 0x00, 25);   /* Set volume to 25/30                            */
     HAL_Delay(100);
 }
 

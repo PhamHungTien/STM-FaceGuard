@@ -131,7 +131,7 @@ static void OLED_SetCursor(uint8_t col, uint8_t page)
 
 void SSD1306_Init(void)
 {
-    HAL_Delay(100); /* Wait for OLED power-up */
+    HAL_Delay(150); /* Wait for OLED power-up */
 
     static const uint8_t init_seq[] = {
         0xAE,       /* Display off                      */

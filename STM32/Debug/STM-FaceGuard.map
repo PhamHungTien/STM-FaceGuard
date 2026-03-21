@@ -2913,12 +2913,11 @@ LOAD /Applications/STMicroelectronics/STM32CubeIDE.app/Contents/Eclipse/plugins/
  .text.dfp_send
                 0x080002e0       0x6c ./Core/Src/dfplayer.o
  .text.DFPlayer_Init
-                0x0800034c       0x30 ./Core/Src/dfplayer.o
+                0x0800034c       0x32 ./Core/Src/dfplayer.o
                 0x0800034c                DFPlayer_Init
  .text.DFPlayer_Play
-                0x0800037c       0x1e ./Core/Src/dfplayer.o
-                0x0800037c                DFPlayer_Play
- *fill*         0x0800039a        0x2 
+                0x0800037e       0x1e ./Core/Src/dfplayer.o
+                0x0800037e                DFPlayer_Play
  .text.HAL_UART_RxCpltCallback
                 0x0800039c       0x8c ./Core/Src/main.o
                 0x0800039c                HAL_UART_RxCpltCallback
