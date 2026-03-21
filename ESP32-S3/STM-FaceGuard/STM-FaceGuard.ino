@@ -12,9 +12,10 @@
  *   - Upload Mode: UART0 / Hardware CDC
  *
  * Wiring (ESP32-S3 <-> STM32F303RE Nucleo):
- *   GPIO1  (ESP TX) --> PA10 (STM32 USART1_RX)
- *   GPIO2  (ESP RX) <-- PA9  (STM32 USART1_TX)
+ *   GPIO19 (ESP TX) --> PA10 (STM32 USART1_RX)
+ *   GPIO20 (ESP RX) <-- PA9  (STM32 USART1_TX)
  *   GND             --- GND
+ *   Note: Header pins "TX/RX" on this board are kept free for upload/Serial Monitor.
  *
  * ── Giao thức STM32 → ESP32 ──────────────────────────────────────────────────
  *   "ENROLL\n"   – bắt đầu đăng ký khuôn mặt mới
@@ -70,8 +71,8 @@
 
 // ── UART tới STM32 ────────────────────────────────────────────────────────────
 #define STM32_BAUD     115200
-#define STM32_TX_PIN       1    // GPIO1 → STM32 PA10 (USART1_RX)
-#define STM32_RX_PIN       2    // GPIO2 ← STM32 PA9  (USART1_TX)
+#define STM32_TX_PIN      19    // GPIO19 → STM32 PA10 (USART1_RX)
+#define STM32_RX_PIN      20    // GPIO20 ← STM32 PA9  (USART1_TX)
 
 // ── Wi-Fi preview (HTTP snapshot view) ───────────────────────────────────────
 #define PREVIEW_ENABLE                  1
@@ -85,10 +86,10 @@
 #define CAMERA_JPEG_QUALITY            12
 
 // ── Đèn trợ sáng khuôn mặt ───────────────────────────────────────────────────
-// Suy ra từ profile ESP32-S3-CAM của Prusa với pin camera trùng board hiện tại.
-// Nếu board thực tế không có flash LED trên GPIO47, đặt FACE_LIGHT_ENABLE = 0.
+// Pin flash LED được chỉnh theo pinout board do người dùng cung cấp.
+// Nếu board thực tế không có flash LED trên GPIO48, đặt FACE_LIGHT_ENABLE = 0.
 #define FACE_LIGHT_ENABLE              1
-#define FACE_LIGHT_GPIO               47
+#define FACE_LIGHT_GPIO               48
 #define FACE_LIGHT_ACTIVE_LEVEL     HIGH
 #define FACE_LIGHT_IDLE_LEVEL       LOW
 #define FACE_LIGHT_HOLD_MS          1200
@@ -576,9 +577,6 @@ static void send_status()
         Serial1.printf("%s\n", ENROLL_STEPS[enrollStep]);
     }
 
-    Serial.printf("[SYS] STATUS sync -> STM32  faces=%d  state=%s\n",
-                  recognizer.get_enrolled_id_num(),
-                  (appState == STATE_ENROLLING) ? "ENROLLING" : "IDLE");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

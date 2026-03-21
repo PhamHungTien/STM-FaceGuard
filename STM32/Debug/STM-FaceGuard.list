@@ -4684,7 +4684,7 @@ void *_sbrk(ptrdiff_t incr)
  8001e72:	e009      	b.n	8001e88 <_sbrk+0x54>
   }
 
-  prev_heap_end = __sbrk_heap_end;
+   prev_heap_end = __sbrk_heap_end;
  8001e74:	4b08      	ldr	r3, [pc, #32]	@ (8001e98 <_sbrk+0x64>)
  8001e76:	681b      	ldr	r3, [r3, #0]
  8001e78:	60fb      	str	r3, [r7, #12]
