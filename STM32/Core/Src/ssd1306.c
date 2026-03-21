@@ -140,7 +140,7 @@ void SSD1306_Init(void)
         0xD3, 0x00, /* Display offset: 0                */
         0x40,       /* Start line: 0                    */
         0x8D, 0x14, /* Charge pump: enabled             */
-        0x20, 0x00, /* Mem mode: horizontal             */
+        0x20, 0x02, /* Mem mode: page addressing         */
         0xA1,       /* Segment remap col127=SEG0        */
         0xC8,       /* COM scan: remapped               */
         0xDA, 0x12, /* COM pins: alternative            */
