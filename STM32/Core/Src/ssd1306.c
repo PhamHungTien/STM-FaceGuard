@@ -131,7 +131,18 @@ static void OLED_SetCursor(uint8_t col, uint8_t page)
 
 void SSD1306_Init(void)
 {
-    HAL_Delay(150); /* Wait for OLED power-up */
+    HAL_Delay(200); /* Wait for OLED power-up */
+
+    /* Diagnostic: if OLED does not ACK on I2C, blink LD2 (green LED, PA5)
+     * 10 times rapidly then return.  No blinking = I2C OK. */
+    if (HAL_I2C_IsDeviceReady(&hi2c1, SSD1306_I2C_ADDR, 3, 100) != HAL_OK) {
+        for (uint8_t i = 0; i < 20; i++) {
+            HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
+            HAL_Delay(100);
+        }
+        HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
+        return; /* I2C not working – skip init */
+    }
 
     static const uint8_t init_seq[] = {
         0xAE,       /* Display off                      */

@@ -1,9 +1,10 @@
 #ifndef __SSD1306_H
 #define __SSD1306_H
 
-#include "main.h"
+#include <stdint.h>
 #include <string.h>
 #include <stdio.h>
+#include "main.h"
 
 /* SSD1306 I2C address (7-bit 0x3C → 8-bit write 0x78) */
 #define SSD1306_I2C_ADDR    (0x3C << 1)
