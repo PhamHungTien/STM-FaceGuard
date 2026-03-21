@@ -65,6 +65,7 @@
 #define OPEN_COOLDOWN_MS          3000   // ms sau OPEN trước khi nhận diện lại
 #define DENIED_COOLDOWN_MS        1500   // ms sau DENIED trước khi thử lại
 #define ENROLL_FACE_TIMEOUT_MS   10000   // ms chờ phát hiện khuôn mặt mỗi bước
+#define ENROLL_STEP_DELAY_MS      2500   // ms tối thiểu giữ mỗi tư thế (bước 2–5)
 #define ENROLL_TOTAL_STEPS           5
 #define MAX_ENROLLED_FACES           7   // giới hạn thư viện ESP32 face recognition
 #define RX_BUF_MAX_LEN              32   // bảo vệ rxBuf khỏi overflow
@@ -148,10 +149,8 @@ static void process_cmd(const String &cmd)
     if (cmd == "ENROLL") {
         if (appState == STATE_IDLE) {
             if (recognizer.get_enrolled_id_num() >= MAX_ENROLLED_FACES) {
-                // DB đầy — báo lỗi bằng cách gửi ENROLLED với ID âm không thể xảy ra
-                // STM32 sẽ nhận ENROLLED và thoát khỏi trạng thái enrolling
-                Serial1.println("ENROLLED:99");
-                Serial.println("[ENROLL] DB full, rejected");
+                // DB đầy — không phản hồi, STM32 tự timeout sau 15s rồi gửi CANCEL
+                Serial.println("[ENROLL] DB full, ignored (STM32 will timeout)");
                 return;
             }
             appState    = STATE_ENROLLING;
@@ -211,33 +210,43 @@ static void process_frame()
     if (appState == STATE_ENROLLING)
     {
         if (enrollStep == 0) {
-            // Bước FRONT: capture thật, tạo entry trong DB
+            // Bước FRONT: capture thật ngay khi thấy mặt
             int result = recognizer.enroll_id(img, face.keypoint, "", false);
             if (result < 0) {
-                // enroll_id thất bại (không align được mặt), thử lại
+                // enroll_id thất bại (không align được mặt), thử lại frame sau
                 esp_camera_fb_return(fb);
                 return;
             }
-            Serial.printf("[ENROLL] Captured step 1, ID=%d\n", result);
-        }
-        // Bước 1-4: hướng dẫn tư thế, không capture thêm
-        // (giữ đơn giản và đảm bảo đúng với mọi phiên bản thư viện)
-
-        bool is_last = (enrollStep == ENROLL_TOTAL_STEPS - 1);
-
-        if (is_last) {
-            int new_id = recognizer.get_enrolled_id_num() - 1;
-            Serial1.printf("ENROLLED:%d\n", new_id);
-            Serial.printf("[ENROLL] Done! ID=%d  total=%d faces\n",
-                          new_id, recognizer.get_enrolled_id_num());
-            appState = STATE_IDLE;
-        }
-        else {
+            Serial.printf("[ENROLL] Captured FRONT, ID=%d\n", result);
+            // Sang bước 1 (LEFT)
             enrollStep++;
             stepStartMs = millis();
             Serial1.printf("%s\n", ENROLL_STEPS[enrollStep]);
-            Serial.printf("[ENROLL] Step %d/%d → %s\n",
-                          enrollStep + 1, ENROLL_TOTAL_STEPS, ENROLL_STEPS[enrollStep]);
+            Serial.printf("[ENROLL] Step 2/%d → %s\n", ENROLL_TOTAL_STEPS, ENROLL_STEPS[enrollStep]);
+        }
+        else {
+            // Bước 1–4: chờ đủ ENROLL_STEP_DELAY_MS để người dùng kịp xoay mặt
+            if ((millis() - stepStartMs) < ENROLL_STEP_DELAY_MS) {
+                esp_camera_fb_return(fb);
+                return;
+            }
+
+            bool is_last = (enrollStep == ENROLL_TOTAL_STEPS - 1);
+
+            if (is_last) {
+                int new_id = recognizer.get_enrolled_id_num() - 1;
+                Serial1.printf("ENROLLED:%d\n", new_id);
+                Serial.printf("[ENROLL] Done! ID=%d  total=%d faces\n",
+                              new_id, recognizer.get_enrolled_id_num());
+                appState = STATE_IDLE;
+            }
+            else {
+                enrollStep++;
+                stepStartMs = millis();
+                Serial1.printf("%s\n", ENROLL_STEPS[enrollStep]);
+                Serial.printf("[ENROLL] Step %d/%d → %s\n",
+                              enrollStep + 1, ENROLL_TOTAL_STEPS, ENROLL_STEPS[enrollStep]);
+            }
         }
     }
     // ── Chế độ NHẬN DIỆN (IDLE) ───────────────────────────────────────────────
@@ -251,11 +260,18 @@ static void process_frame()
 
         uint32_t now = millis();
 
+        // Kiểm tra cooldown TRƯỚC khi gọi recognize() (tránh tốn CPU)
+        bool openCooldown   = (now - lastOpenMs)   < OPEN_COOLDOWN_MS;
+        bool deniedCooldown = (now - lastDeniedMs) < DENIED_COOLDOWN_MS;
+        if (openCooldown && deniedCooldown) {
+            esp_camera_fb_return(fb);
+            return;
+        }
+
         face_info_t res = recognizer.recognize(img, face.keypoint);
 
         if (res.id >= 0) {
-            // Cooldown OPEN: tránh gửi nhiều lệnh mở cửa liên tiếp
-            if ((now - lastOpenMs) < OPEN_COOLDOWN_MS) {
+            if (openCooldown) {
                 esp_camera_fb_return(fb);
                 return;
             }
@@ -265,8 +281,7 @@ static void process_frame()
                           res.id, res.similarity);
         }
         else {
-            // Cooldown DENIED: tránh spam từ chối
-            if ((now - lastDeniedMs) < DENIED_COOLDOWN_MS) {
+            if (deniedCooldown) {
                 esp_camera_fb_return(fb);
                 return;
             }
