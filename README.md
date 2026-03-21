@@ -105,17 +105,18 @@ Dự án đồ án môn học xây dựng hệ thống khóa cửa thông minh s
 | 12 | **Relay LY2N 12VDC** | Cuộn hút 12 V, tiếp điểm 10 A | Đóng/ngắt 12 V cho SM1373 |
 | 13 | **Đế relay PTF08A** | 8 chân, socket kiểu Finder | Gắn relay LY2N dễ tháo lắp |
 | 14 | **Transistor BC547** | NPN, 100 mA, 45 V | Kích relay LY2N từ GPIO 3.3 V của STM32 |
-| 15 | **Module Buck LM2596** | 12 V → 5 V, 3 A | Hạ áp nuôi Nucleo + ESP32-S3 |
-| 16 | **Adapter 12 V – 2 A** | Nguồn xung ổn định | Cấp nguồn tổng |
+| 15 | **Nguồn 3.3 V** | Ổn định, ≥ 500 mA | Nuôi STM32 (Nucleo 3.3V pin) + OLED |
+| 16 | **Nguồn 5 V** | Ổn định, ≥ 1 A | Nuôi ESP32-S3 + DFPlayer Mini |
+| 17 | **Nguồn 12 V** | Ổn định, ≥ 1 A | Nuôi cuộn relay LY2N + khóa SM1373 |
 
 ### V. Phụ kiện
 
 | STT | Linh kiện | Vai trò |
 |-----|----------|---------|
-| 17 | **Điện trở 1 kΩ** | Hạn dòng Base của BC547 |
-| 18 | **Diode 1N4007** (×2) | Chống dòng ngược (1 cái cho relay, 1 cái cho SM1373) |
-| 19 | **Dây Jumper** | Kết nối tín hiệu giữa các module |
-| 20 | **Breadboard** | Mạch thử nghiệm |
+| 18 | **Điện trở 1 kΩ** | Hạn dòng Base của BC547 |
+| 19 | **Diode 1N4007** (×2) | Chống dòng ngược (1 cái cho relay, 1 cái cho SM1373) |
+| 20 | **Dây Jumper** | Kết nối tín hiệu giữa các module |
+| 21 | **Breadboard** | Mạch thử nghiệm |
 
 ---
 
@@ -127,21 +128,24 @@ Dự án đồ án môn học xây dựng hệ thống khóa cửa thông minh s
 
 ### 1. Sơ đồ nguồn điện tổng thể
 
-```
-Adapter 12V/2A
-      │
-      ├──► LM2596 IN+  ──►  LM2596 OUT+ (chỉnh 5V) ──► Nucleo VIN (CN6 pin 8)
-      │                                               ──► ESP32-S3 5V pin
-      │
-      ├──► LY2N Coil A1 (+) [qua mạch BC547, xem mục 5]
-      │
-      └──► LY2N COM (tiếp điểm chung)
+Hệ thống sử dụng **3 mức điện áp riêng biệt** từ nguồn cấp sẵn:
 
-LM2596 OUT–  ──► GND chung (nối tất cả GND lại)
-LM2596 IN–   ──► GND chung
+```
+Nguồn 3.3V ──► Nucleo 3.3V pin (CN6)
+           ──► OLED VCC
+
+Nguồn 5V   ──► ESP32-S3 5V pin
+           ──► DFPlayer Mini VCC
+
+Nguồn 12V  ──► LY2N Coil A1 (+) [qua mạch BC547, xem mục 5]
+           ──► LY2N COM (tiếp điểm chung cho SM1373)
+
+GND chung  ──  Nối tất cả GND của mọi module lại với nhau
+               (Nucleo GND, ESP32-S3 GND, OLED GND, DFPlayer GND,
+                BC547 Emitter, SM1373 GND, nguồn 3.3V/5V/12V GND)
 ```
 
-> **Quan trọng:** Không cấp nguồn ESP32-S3 từ chân 3.3V của Nucleo. ESP32-S3 tiêu tối đa 500 mA khi chạy AI, sẽ làm sụt áp Nucleo.
+> **Bắt buộc:** GND của tất cả 3 nguồn và tất cả module phải nối chung một điểm. Nếu GND không chung → UART mất tín hiệu, relay hoạt động sai.
 
 ---
 
@@ -150,16 +154,17 @@ LM2596 IN–   ──► GND chung
 Đây là kết nối quan trọng nhất — chú ý **TX nối RX, RX nối TX**.
 
 ```
-ESP32-S3          STM32F303RE (Nucleo CN10)
-─────────         ──────────────────────────
+ESP32-S3          STM32F303RE (Nucleo CN10)     Nguồn
+─────────         ──────────────────────────    ──────
+5V           ◄──  (không nối STM32)         ◄── Nguồn 5V
+GND          ───  GND                       ─── GND chung
 GPIO1  (TX)  ──►  PA10 / D2  (USART1 RX)
 GPIO2  (RX)  ◄──  PA9  / D8  (USART1 TX)
-GND          ───  GND
 ```
 
 > Camera OV3660 tích hợp sẵn trên board ESP32-S3, **không cần nối thêm dây nào** cho camera.
 
-**Lưu ý điện áp:** ESP32-S3 và STM32F303RE đều giao tiếp mức 3.3V — kết nối trực tiếp, không cần level shifter.
+**Lưu ý điện áp:** ESP32-S3 và STM32F303RE đều giao tiếp mức 3.3V — kết nối trực tiếp tín hiệu UART, không cần level shifter.
 
 ---
 
@@ -168,10 +173,10 @@ GND          ───  GND
 ![OLED SSD1306 Pinout](docs/oled-ssd1306_pinout.png)
 
 ```
-OLED SSD1306      STM32F303RE (Nucleo CN10)
-────────────      ──────────────────────────
-VCC          ──►  3.3V
-GND          ───  GND
+OLED SSD1306      STM32F303RE (Nucleo CN10)     Nguồn
+────────────      ──────────────────────────    ──────
+VCC          ◄──  (không nối STM32)         ◄── Nguồn 3.3V
+GND          ───  GND                       ─── GND chung
 SCL          ──►  PB8 / D15  (I2C1 SCL)
 SDA          ──►  PB9 / D14  (I2C1 SDA)
 ```
@@ -185,10 +190,10 @@ SDA          ──►  PB9 / D14  (I2C1 SDA)
 ![DFPlayer Mini Pinout](docs/dfplayer-mini_pinout.png)
 
 ```
-DFPlayer Mini     STM32F303RE (Nucleo CN7)
-─────────────     ──────────────────────────
-VCC          ──►  5V  (từ LM2596 hoặc Nucleo 5V pin)
-GND          ───  GND
+DFPlayer Mini     STM32F303RE (Nucleo CN7)     Nguồn
+─────────────     ──────────────────────────   ──────
+VCC          ◄──  (không nối STM32)        ◄── Nguồn 5V
+GND          ───  GND                      ─── GND chung
 RX           ◄──  [1 kΩ] ── PC10  (USART3 TX)  ← bắt buộc có điện trở 1kΩ
 TX           ──►  PC11  (USART3 RX)
 SPK+         ──►  Loa 3070 chân (+)
@@ -213,9 +218,9 @@ STM32 PB0 (3.3V)
       ├──► BC547 Base  (chân B)
              │
       BC547 Collector (chân C) ──► LY2N A2 (cuộn âm, chân 12 đế PTF08A)
-      BC547 Emitter   (chân E) ──► GND
+      BC547 Emitter   (chân E) ──► GND chung
 
-12V ──────────────────────────► LY2N A1 (cuộn dương, chân 11 đế PTF08A)
+Nguồn 12V ────────────────────► LY2N A1 (cuộn dương, chân 11 đế PTF08A)
 
 1N4007 (flyback): Anode → A2, Cathode → A1  [bảo vệ BC547 khỏi xung cảm ứng]
 ```
@@ -255,9 +260,9 @@ STM32 PB0 (3.3V)
 
 ```
 Kết nối SM1373:
-12V ──► LY2N COM (chân 12 PTF08A)
-        LY2N NO  (chân 11 PTF08A) ──► SM1373 dây ĐỎ  (+)
-GND ─────────────────────────────── SM1373 dây ĐEN (–)
+Nguồn 12V ──► LY2N COM (chân 12 PTF08A)
+               LY2N NO  (chân 11 PTF08A) ──► SM1373 dây ĐỎ  (+)
+GND chung ──────────────────────────────── SM1373 dây ĐEN (–)
 
 1N4007 (bảo vệ SM1373): Anode → dây ĐEN, Cathode → dây ĐỎ
 (mắc song song với SM1373, chống xung ngược khi ngắt điện)
