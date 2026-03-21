@@ -24,6 +24,7 @@ void SSD1306_FillPage(uint8_t page, uint8_t byte_val);
 /* High-level screen functions */
 void SSD1306_ShowBoot(void);
 void SSD1306_ShowConnecting(void);
+void SSD1306_ShowESP32Offline(void);
 void SSD1306_ShowReady(void);
 void SSD1306_ShowReadyFaces(uint8_t count);  /* Shows face count below READY */
 void SSD1306_ShowDbFull(void);               /* DB at capacity, cannot enroll */

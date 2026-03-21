@@ -247,6 +247,11 @@ void SSD1306_ShowConnecting(void)
     draw_status("", "  Connecting...", "", "   Please wait");
 }
 
+void SSD1306_ShowESP32Offline(void)
+{
+    draw_status("", "  ESP32 OFFLINE ", "", " Check CAM/UART ");
+}
+
 void SSD1306_ShowReady(void)
 {
     draw_status("", "   ** READY **", "", "  Scan your face");
