@@ -36,6 +36,7 @@
 #include "human_face_detect_msr01.hpp"
 #include "face_recognition_tool.hpp"
 #include "face_recognition_112_v1_s8.hpp"
+#include "esp_task_wdt.h"
 
 // ── Camera pins — ESP32-S3 N16R8 CAM (OV3660 3MP) ───────────────────────────
 // Tích hợp sẵn trên board, không cần nối thêm dây camera
@@ -156,8 +157,8 @@ static void process_cmd(const String &cmd)
     if (cmd == "ENROLL") {
         if (appState == STATE_IDLE) {
             if (recognizer.get_enrolled_id_num() >= MAX_ENROLLED_FACES) {
-                // DB đầy — không phản hồi, STM32 tự timeout sau 15s rồi gửi CANCEL
-                Serial.println("[ENROLL] DB full, ignored (STM32 will timeout)");
+                Serial1.println("DB_FULL");   // notify STM32 immediately
+                Serial.println("[ENROLL] DB full → DB_FULL sent");
                 return;
             }
             appState    = STATE_ENROLLING;
@@ -326,13 +327,20 @@ void setup()
     // Hiển thị số khuôn mặt đã đăng ký (nạp từ NVS flash)
     Serial.printf("[SYS] Enrolled faces: %d\n", recognizer.get_enrolled_id_num());
 
+    // Bật task watchdog — reset ESP32 nếu vòng loop() bị kẹt quá 30 giây
+    esp_task_wdt_init(30, true);   // 30 s timeout, panic + reset
+    esp_task_wdt_add(NULL);        // theo dõi task hiện tại (loopTask)
+
     delay(300);
     Serial1.println("READY");
-    Serial.println("[SYS] READY → STM32");
+    Serial1.printf("FACES:%d\n", recognizer.get_enrolled_id_num());  // sync face count
+    Serial.printf("[SYS] READY → STM32  enrolled=%d\n", recognizer.get_enrolled_id_num());
 }
 
 void loop()
 {
+    esp_task_wdt_reset();   // reset WDT mỗi vòng loop để chứng minh không bị kẹt
+
     // ── Đọc UART từ STM32 ────────────────────────────────────────────────────
     while (Serial1.available()) {
         char c = (char)Serial1.read();

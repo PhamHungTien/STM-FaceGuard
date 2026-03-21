@@ -252,6 +252,22 @@ void SSD1306_ShowReady(void)
     draw_status("", "   ** READY **", "", "  Scan your face");
 }
 
+void SSD1306_ShowReadyFaces(uint8_t count)
+{
+    char buf[22];
+    if (count == 0) {
+        draw_status("", "   ** READY **", "", " Press [ENROLL]!");
+    } else {
+        snprintf(buf, sizeof(buf), "  %d face(s) stored", count);
+        draw_status("", "   ** READY **", "", buf);
+    }
+}
+
+void SSD1306_ShowDbFull(void)
+{
+    draw_status("", "  DB is FULL!", "", "Delete to enroll");
+}
+
 void SSD1306_ShowScanning(void)
 {
     draw_status("", "  Scanning...", "", "  Hold still...");

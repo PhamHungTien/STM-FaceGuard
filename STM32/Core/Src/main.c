@@ -35,7 +35,8 @@ typedef enum {
     SYS_UNLOCKING,
     SYS_ENROLLING,
     SYS_DELETING,
-    SYS_DENIED
+    SYS_DENIED,
+    SYS_RESULT  /* Showing ENROLLED/DELETED/DB_FULL result; auto-returns after 3 s */
 } SystemState_t;
 /* USER CODE END PTD */
 
@@ -78,8 +79,11 @@ static uint16_t uart1_line_idx = 0;
 static volatile uint8_t uart1_line_ready = 0;
 
 /* --- System state machine --- */
-static SystemState_t sys_state  = SYS_IDLE;
-static uint32_t      state_tick = 0;
+static SystemState_t sys_state       = SYS_IDLE;
+static uint32_t      state_tick      = 0;
+
+/* --- Enrolled face count (updated from ESP32 FACES/ENROLLED/DELETED msgs) --- */
+static uint8_t       enrolled_faces  = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -97,6 +101,7 @@ static void Relay_Close(void);
 static void Enter_Unlocked(uint8_t face_id, uint8_t from_exit_btn);
 static void Enter_Denied(void);
 static void Parse_ESP32_Msg(const char *msg);
+static void Show_Ready(void);   /* Wrapper: shows ReadyFaces with enrolled_faces count */
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -189,6 +194,11 @@ static void Enter_Denied(void)
     DFPlayer_Play(DFP_TRACK_DENIED);
 }
 
+static void Show_Ready(void)
+{
+    SSD1306_ShowReadyFaces(enrolled_faces);
+}
+
 /* -----------------------------------------------------------------------
  * Parse a complete message line received from ESP32-S3.
  *
@@ -219,13 +229,15 @@ static void Parse_ESP32_Msg(const char *msg)
 
     } else if (strncmp(msg, "ENROLLED:", 9) == 0) {
         uint8_t id = (uint8_t)atoi(msg + 9);
-        sys_state  = SYS_IDLE;
+        if (enrolled_faces < 255) enrolled_faces++;
+        sys_state  = SYS_RESULT;
         state_tick = HAL_GetTick();
         SSD1306_ShowEnrolled(id);
         DFPlayer_Play(DFP_TRACK_ENROLLED);
 
     } else if (strcmp(msg, "DELETED") == 0) {
-        sys_state  = SYS_IDLE;
+        enrolled_faces = 0;
+        sys_state  = SYS_RESULT;
         state_tick = HAL_GetTick();
         SSD1306_ShowDeleted();
         DFPlayer_Play(DFP_TRACK_DELETED);
@@ -235,7 +247,19 @@ static void Parse_ESP32_Msg(const char *msg)
         btn_enroll_flag = 0; /* Discard any buttons pressed during boot */
         btn_delete_flag = 0;
         btn_exit_flag   = 0;
-        SSD1306_ShowReady();
+        Show_Ready();
+
+    } else if (strncmp(msg, "FACES:", 6) == 0) {
+        /* Face count update from ESP32 (sent right after READY) */
+        enrolled_faces = (uint8_t)atoi(msg + 6);
+        Show_Ready();
+
+    } else if (strcmp(msg, "DB_FULL") == 0) {
+        /* Enrollment rejected because face DB is at capacity */
+        sys_state  = SYS_RESULT;
+        state_tick = HAL_GetTick();
+        SSD1306_ShowDbFull();
+        DFPlayer_Play(DFP_TRACK_DENIED);
 
     /* --- Enrollment step guidance (5 poses, sent sequentially by ESP32) --- */
     } else if (strcmp(msg, "ENROLL_FRONT") == 0) {
@@ -377,7 +401,7 @@ static void App_Loop(void)
             } else {
                 /* Released early – cancel */
                 sys_state = SYS_IDLE;
-                SSD1306_ShowReady();
+                Show_Ready();
             }
         }
     }
@@ -400,14 +424,14 @@ static void App_Loop(void)
             if ((now - state_tick) >= RELAY_OPEN_MS) {
                 Relay_Close();
                 sys_state = SYS_IDLE;
-                SSD1306_ShowReady();
+                Show_Ready();
             }
             break;
 
         case SYS_DENIED:
             if ((now - state_tick) >= DENIED_DISPLAY_MS) {
                 sys_state = SYS_IDLE;
-                SSD1306_ShowReady();
+                Show_Ready();
             }
             break;
 
@@ -417,7 +441,7 @@ static void App_Loop(void)
                 sys_state       = SYS_IDLE;
                 btn_enroll_flag = 0; /* Discard any button press queued during enrol */
                 HAL_UART_Transmit(&huart1, (uint8_t *)"CANCEL\n", 7, 100);
-                SSD1306_ShowReady();
+                Show_Ready();
             }
             break;
 
@@ -426,7 +450,15 @@ static void App_Loop(void)
              * Guard timeout in case ESP32 does not respond (10 s). */
             if ((now - state_tick) >= 10000U) {
                 sys_state = SYS_IDLE;
-                SSD1306_ShowReady();
+                Show_Ready();
+            }
+            break;
+
+        case SYS_RESULT:
+            /* Auto-return to Ready after showing ENROLLED / DELETED / DB_FULL */
+            if ((now - state_tick) >= 3000U) {
+                sys_state = SYS_IDLE;
+                Show_Ready();
             }
             break;
 
