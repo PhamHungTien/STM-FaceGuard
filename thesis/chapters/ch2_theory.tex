@@ -1,0 +1,67 @@
+% ============================================================
+%  CHƯƠNG 2: CƠ SỞ LÝ THUYẾT
+% ============================================================
+\chapter{Cơ sở lý thuyết}
+\label{chap:theory}
+
+\section{Nhận diện khuôn mặt}
+\label{sec:face_recognition}
+
+\subsection{Tổng quan}
+
+Nhận diện khuôn mặt (\textit{Face Recognition}) là bài toán xác định danh tính của một người dựa trên đặc trưng hình ảnh khuôn mặt. Quy trình gồm ba bước chính:
+
+\begin{enumerate}[label=\arabic*.]
+  \item \textbf{Phát hiện khuôn mặt} (\textit{Face Detection}): xác định vị trí khuôn mặt trong ảnh.
+  \item \textbf{Trích xuất đặc trưng} (\textit{Feature Extraction}): chuyển ảnh khuôn mặt thành vector đặc trưng (\textit{embedding}).
+  \item \textbf{So khớp} (\textit{Matching}): so sánh vector đặc trưng với cơ sở dữ liệu để xác định danh tính.
+\end{enumerate}
+
+\subsection{Thuật toán sử dụng trên ESP32-S3}
+
+% TODO: mô tả model/thuật toán cụ thể (ví dụ: MobileFaceNet, MTCNN, v.v.)
+
+\section{Kiến trúc hệ thống nhúng đa vi điều khiển}
+\label{sec:dual_mcu}
+
+\subsection{Phân chia chức năng}
+
+Hệ thống sử dụng kiến trúc đa vi điều khiển (Dual-MCU) với nguyên tắc phân chia theo năng lực xử lý:
+
+\begin{itemize}
+  \item \textbf{STM32F303RE} đóng vai trò \textit{controller}: quản lý ngoại vi (relay, LED, nút nhấn, OLED, âm thanh), nhận lệnh từ ESP32 qua UART.
+  \item \textbf{ESP32-S3-N16R8} đóng vai trò \textit{processor}: chạy mô hình AI nhận diện khuôn mặt, xử lý ảnh từ camera.
+\end{itemize}
+
+\subsection{Giao thức UART giữa hai MCU}
+
+Hai vi điều khiển giao tiếp qua UART ở tốc độ 115200~baud với giao thức văn bản đơn giản, kết thúc bằng \verb|\n|.
+
+\begin{table}[H]
+  \centering
+  \caption{Giao thức truyền thông UART giữa ESP32-S3 và STM32}
+  \label{tab:uart_protocol}
+  \begin{tabularx}{0.85\textwidth}{>{\ttfamily}l X}
+    \toprule
+    \textbf{Lệnh} & \textbf{Ý nghĩa} \\
+    \midrule
+    OPEN:\textit{<id>}\textbackslash n   & Nhận diện thành công, mở khóa cho người dùng \textit{id} \\
+    DENIED\textbackslash n               & Không nhận diện được, từ chối truy cập \\
+    ENROLLED:\textit{<id>}\textbackslash n & Đăng ký khuôn mặt thành công \\
+    DELETED\textbackslash n              & Xóa toàn bộ dữ liệu thành công \\
+    READY\textbackslash n                & ESP32-S3 khởi động xong, sẵn sàng \\
+    ENROLL\textbackslash n               & STM32 yêu cầu ESP32 vào chế độ đăng ký \\
+    DEL\_ALL\textbackslash n             & STM32 yêu cầu ESP32 xóa toàn bộ dữ liệu \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\section{Các chuẩn giao tiếp sử dụng}
+\label{sec:protocols}
+
+\subsection{UART}
+% TODO
+
+\subsection{I2C}
+% TODO
+

@@ -1,0 +1,78 @@
+% ============================================================
+%  CHƯƠNG 3: THIẾT KẾ PHẦN CỨNG
+% ============================================================
+\chapter{Thiết kế phần cứng}
+\label{chap:hardware}
+
+\section{Tổng quan hệ thống}
+\label{sec:hw_overview}
+
+% TODO: chèn sơ đồ khối tổng quan hệ thống
+% \begin{figure}[H]
+%   \centering
+%   \includegraphics[width=0.85\textwidth]{block_diagram}
+%   \caption{Sơ đồ khối tổng quan hệ thống STM-FaceGuard}
+%   \label{fig:block_diagram}
+% \end{figure}
+
+\section{Danh sách linh kiện}
+\label{sec:components}
+
+\begin{table}[H]
+  \centering
+  \caption{Danh sách linh kiện chính}
+  \label{tab:bom}
+  \begin{tabularx}{\textwidth}{c >{\bfseries}l l X}
+    \toprule
+    \textbf{STT} & \textbf{Tên linh kiện} & \textbf{Model} & \textbf{Chức năng} \\
+    \midrule
+    1  & Vi điều khiển chính  & STM32F303RE (Nucleo-64) & Điều khiển ngoại vi, relay, giao tiếp \\
+    2  & Module AI            & ESP32-S3-N16R8          & Nhận diện khuôn mặt, xử lý ảnh \\
+    3  & Màn hình             & OLED SSD1306 (128×64)   & Hiển thị trạng thái hệ thống \\
+    4  & Module âm thanh      & DFPlayer Mini           & Phát thông báo âm thanh \\
+    5  & Khóa điện từ         & Solenoid 12~V           & Đóng/mở khóa cửa \\
+    6  & Relay                & Relay 5~V               & Kích khóa solenoid từ GPIO \\
+    7  & Camera               & OV2640                  & Thu ảnh khuôn mặt \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\section{Sơ đồ kết nối (Pinout)}
+\label{sec:pinout}
+
+\subsection{STM32F303RE}
+
+\begin{table}[H]
+  \centering
+  \caption{Bảng phân công chân STM32F303RE}
+  \label{tab:pinout_stm32}
+  \begin{tabular}{l l l l}
+    \toprule
+    \textbf{Chân} & \textbf{Tín hiệu} & \textbf{Chế độ} & \textbf{Kết nối} \\
+    \midrule
+    PA0  & BTN\_ENROLL & EXTI0, Pull-up, Falling  & Nút đăng ký khuôn mặt \\
+    PA1  & BTN\_DELETE & EXTI1, Pull-up, Falling  & Nút xóa tất cả \\
+    PC13 & BTN\_EXIT   & EXTI13, Pull-up, Falling & Nút xanh Nucleo \\
+    PA5  & LD2         & GPIO Output              & LED xanh lá Nucleo \\
+    PB0  & RELAY       & GPIO Output              & Relay → Solenoid 12~V \\
+    PA9  & USART1\_TX  & AF7, 115200 baud         & → ESP32-S3 RX \\
+    PA10 & USART1\_RX  & AF7, 115200 baud         & ← ESP32-S3 TX \\
+    PA2  & USART2\_TX  & AF7, 38400 baud          & ST-Link Virtual COM \\
+    PA3  & USART2\_RX  & AF7, 38400 baud          & ST-Link Virtual COM \\
+    PC10 & USART3\_TX  & AF7, 9600 baud           & → DFPlayer Mini RX \\
+    PC11 & USART3\_RX  & AF7, 9600 baud           & ← DFPlayer Mini TX \\
+    PB8  & I2C1\_SCL   & AF4, Fast mode           & OLED SSD1306 SCL \\
+    PB9  & I2C1\_SDA   & AF4, Fast mode           & OLED SSD1306 SDA \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Thiết kế nguồn điện}
+\label{sec:power}
+
+% TODO: mô tả sơ đồ nguồn
+
+\section{Sơ đồ nguyên lý}
+\label{sec:schematic}
+
+% TODO: chèn schematic

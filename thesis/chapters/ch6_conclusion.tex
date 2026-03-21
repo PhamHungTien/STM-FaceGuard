@@ -1,0 +1,34 @@
+% ============================================================
+%  CHƯƠNG 6: KẾT LUẬN VÀ HƯỚNG PHÁT TRIỂN
+% ============================================================
+\chapter{Kết luận và hướng phát triển}
+\label{chap:conclusion}
+
+\section{Kết luận}
+\label{sec:conclusion}
+
+Tiểu luận đã trình bày quá trình thiết kế và xây dựng hệ thống khóa cửa thông minh sử dụng nhận diện khuôn mặt trên nền tảng hai vi điều khiển STM32F303RE và ESP32-S3. Các kết quả đạt được bao gồm:
+
+\begin{itemize}
+  \item Hệ thống hoạt động ổn định, nhận diện và mở khóa chính xác trong điều kiện ánh sáng bình thường.
+  \item Kiến trúc Dual-MCU phân chia rõ ràng giữa xử lý AI và điều khiển ngoại vi, đảm bảo tính mô-đun và dễ bảo trì.
+  \item Giao thức UART đơn giản, tin cậy cho giao tiếp giữa hai MCU.
+  % TODO: bổ sung kết quả cụ thể từ Chương 5
+\end{itemize}
+
+\section{Hạn chế}
+\label{sec:limitations}
+
+% TODO: nêu các hạn chế của hệ thống hiện tại
+
+\section{Hướng phát triển}
+\label{sec:future_work}
+
+Trong tương lai, hệ thống có thể được mở rộng theo các hướng:
+
+\begin{enumerate}[label=\arabic*.]
+  \item \textbf{Kết nối IoT:} Tích hợp Wi-Fi (ESP32-S3 hỗ trợ sẵn) để ghi log truy cập lên cloud và cảnh báo từ xa.
+  \item \textbf{Anti-spoofing:} Bổ sung kỹ thuật phát hiện giả mạo (photo/video attack) để tăng tính bảo mật.
+  \item \textbf{Mã hóa giao tiếp:} Mã hóa giao thức UART giữa hai MCU để chống nghe lén.
+  \item \textbf{PCB riêng:} Thiết kế PCB tích hợp thay cho breadboard/Nucleo để tăng độ tin cậy và nhỏ gọn.
+\end{enumerate}

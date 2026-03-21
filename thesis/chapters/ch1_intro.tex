@@ -1,0 +1,46 @@
+% ============================================================
+%  CHƯƠNG 1: GIỚI THIỆU
+% ============================================================
+\chapter{Giới thiệu}
+\label{chap:intro}
+
+\section{Đặt vấn đề}
+\label{sec:problem}
+
+Với sự phát triển mạnh mẽ của trí tuệ nhân tạo và hệ thống nhúng, việc tích hợp công nghệ nhận diện khuôn mặt vào các hệ thống kiểm soát truy cập ngày càng trở nên phổ biến và thiết thực. Các hệ thống khóa cửa truyền thống sử dụng chìa khóa hoặc mã PIN tiềm ẩn nhiều rủi ro bảo mật như mất khóa, lộ mã số, hay sao chép trái phép.
+
+% TODO: bổ sung thống kê hoặc dẫn chứng thực tế
+
+\section{Mục tiêu đề tài}
+\label{sec:objectives}
+
+Tiểu luận này hướng đến các mục tiêu sau:
+
+\begin{enumerate}[label=\arabic*.]
+  \item Thiết kế và xây dựng hệ thống khóa cửa thông minh sử dụng nhận diện khuôn mặt.
+  \item Phân chia chức năng hợp lý giữa vi điều khiển STM32F303RE (xử lý ngoại vi, điều khiển khóa) và ESP32-S3 (nhận diện khuôn mặt, giao tiếp không dây).
+  \item Đảm bảo hệ thống hoạt động ổn định, phản hồi nhanh và có khả năng mở rộng.
+\end{enumerate}
+
+\section{Phạm vi nghiên cứu}
+\label{sec:scope}
+
+\begin{itemize}
+  \item \textbf{Phần cứng:} STM32F303RE (Nucleo-64), ESP32-S3-N16R8, camera OV2640, màn hình OLED SSD1306, relay 5~V điều khiển solenoid 12~V, module âm thanh DFPlayer Mini.
+  \item \textbf{Phần mềm:} STM32CubeIDE (HAL), ESP-IDF, thuật toán nhận diện khuôn mặt trên ESP32-S3.
+  \item \textbf{Giao thức truyền thông:} UART giữa hai MCU, I2C cho OLED.
+\end{itemize}
+
+\section{Bố cục tiểu luận}
+\label{sec:structure}
+
+Tiểu luận được tổ chức thành \textbf{6 chương}:
+
+\begin{description}
+  \item[Chương 1] Giới thiệu tổng quan về đề tài, mục tiêu và phạm vi nghiên cứu.
+  \item[Chương 2] Cơ sở lý thuyết về nhận diện khuôn mặt và kiến trúc hệ thống nhúng.
+  \item[Chương 3] Thiết kế và triển khai phần cứng.
+  \item[Chương 4] Thiết kế và triển khai phần mềm.
+  \item[Chương 5] Kết quả thực nghiệm và đánh giá.
+  \item[Chương 6] Kết luận và hướng phát triển.
+\end{description}

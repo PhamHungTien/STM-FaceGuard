@@ -1,0 +1,183 @@
+% ============================================================
+%  TIỂU LUẬN: Khóa Cửa Thông Minh Nhận Diện Khuôn Mặt
+%  Compile: XeLaTeX (khuyến nghị) hoặc LuaLaTeX
+% ============================================================
+\documentclass[13pt, a4paper, twoside, openright]{report}
+
+% ── Encoding & Font ─────────────────────────────────────────
+\usepackage{fontspec}
+\usepackage{polyglossia}
+\setmainlanguage{vietnamese}
+\setotherlanguage{english}
+\setmainfont{Times New Roman}
+\setsansfont{Arial}
+\setmonofont[Scale=0.9]{Courier New}
+
+% ── Page Layout ─────────────────────────────────────────────
+\usepackage[
+  a4paper,
+  top=2.5cm, bottom=2.5cm,
+  left=3.0cm, right=2.0cm,   % lề trái rộng cho đóng gáy
+  headheight=14pt
+]{geometry}
+
+% ── Line Spacing ────────────────────────────────────────────
+\usepackage{setspace}
+\onehalfspacing                % giãn dòng 1.5
+
+% ── Headers & Footers ───────────────────────────────────────
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[LE]{\small\leftmark}
+\fancyhead[RO]{\small\rightmark}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ── Section Title Formatting ────────────────────────────────
+\usepackage{titlesec}
+\titleformat{\chapter}[block]
+  {\normalfont\Large\bfseries\centering}
+  {CHƯƠNG \thechapter.}{0.5em}{\MakeUppercase}
+\titlespacing*{\chapter}{0pt}{0pt}{20pt}
+
+\titleformat{\section}
+  {\normalfont\large\bfseries}
+  {\thesection}{1em}{}
+
+\titleformat{\subsection}
+  {\normalfont\normalsize\bfseries}
+  {\thesubsection}{1em}{}
+
+% ── Table of Contents Styling ────────────────────────────────
+\usepackage{tocloft}
+\renewcommand{\cftchapfont}{\bfseries}
+\renewcommand{\cftchappagefont}{\bfseries}
+\renewcommand{\cftchapleader}{\bfseries\cftdotfill{\cftdotsep}}
+\setlength{\cftbeforechapskip}{6pt}
+
+% ── Graphics & Figures ──────────────────────────────────────
+\usepackage{graphicx}
+\graphicspath{{figures/}}
+\usepackage{float}
+\usepackage{caption}
+\captionsetup{
+  labelfont=bf,
+  labelsep=period,
+  font=small,
+  width=0.9\textwidth
+}
+\captionsetup[figure]{name=Hình}
+\captionsetup[table]{name=Bảng}
+
+% ── Tables ──────────────────────────────────────────────────
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{multirow}
+\usepackage{longtable}
+
+% ── Source Code Listing ─────────────────────────────────────
+\usepackage{listings}
+\usepackage{xcolor}
+\lstset{
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{blue}\bfseries,
+  commentstyle=\color{gray}\itshape,
+  stringstyle=\color{orange!80!black},
+  numbers=left,
+  numberstyle=\tiny\color{gray},
+  stepnumber=1,
+  numbersep=8pt,
+  frame=single,
+  breaklines=true,
+  showstringspaces=false,
+  tabsize=2,
+  captionpos=b
+}
+\lstdefinestyle{c}{language=C}
+\lstdefinestyle{python}{language=Python}
+
+% ── Math ────────────────────────────────────────────────────
+\usepackage{amsmath, amssymb, amsthm}
+
+% ── Hyperlinks ──────────────────────────────────────────────
+\usepackage[
+  colorlinks=true,
+  linkcolor=black,
+  citecolor=blue!70!black,
+  urlcolor=blue!70!black,
+  bookmarks=true,
+  bookmarksnumbered=true,
+  pdftitle={Khóa Cửa Thông Minh Nhận Diện Khuôn Mặt},
+  pdfauthor={Phạm Hùng Tiến}
+]{hyperref}
+
+% ── Bibliography ────────────────────────────────────────────
+\usepackage[
+  backend=biber,
+  style=ieee,
+  sorting=none
+]{biblatex}
+\addbibresource{references.bib}
+
+% ── Miscellaneous ───────────────────────────────────────────
+\usepackage{enumitem}
+\usepackage{array}
+\usepackage{microtype}
+\usepackage{emptypage}          % trang trắng không có header/footer
+
+% ============================================================
+%  DOCUMENT BEGIN
+% ============================================================
+\begin{document}
+
+\pagenumbering{gobble}          % trang bìa không đánh số
+
+% ── Trang bìa ───────────────────────────────────────────────
+\input{chapters/00_cover}
+
+\cleardoublepage
+\pagenumbering{roman}           % La-mã cho phần đầu
+
+% ── Nhận xét / Xác nhận (nếu cần) ──────────────────────────
+% \input{chapters/00_acknowledgment}
+
+% ── Mục lục ─────────────────────────────────────────────────
+\tableofcontents
+\cleardoublepage
+
+% ── Danh mục hình ───────────────────────────────────────────
+\listoffigures
+\addcontentsline{toc}{chapter}{Danh mục hình vẽ}
+\cleardoublepage
+
+% ── Danh mục bảng ───────────────────────────────────────────
+\listoftables
+\addcontentsline{toc}{chapter}{Danh mục bảng}
+\cleardoublepage
+
+% ── Danh mục từ viết tắt ────────────────────────────────────
+\input{chapters/00_abbreviations}
+\cleardoublepage
+
+\pagenumbering{arabic}          % Số Ả-rập cho nội dung chính
+
+% ── Các chương ──────────────────────────────────────────────
+\input{chapters/ch1_intro}
+\input{chapters/ch2_theory}
+\input{chapters/ch3_hardware}
+\input{chapters/ch4_software}
+\input{chapters/ch5_results}
+\input{chapters/ch6_conclusion}
+
+% ── Tài liệu tham khảo ──────────────────────────────────────
+\cleardoublepage
+\addcontentsline{toc}{chapter}{Tài liệu tham khảo}
+\printbibliography[title={Tài liệu tham khảo}]
+
+% ── Phụ lục ─────────────────────────────────────────────────
+\appendix
+\input{appendix/schematic}
+\input{appendix/code_snippets}
+
+\end{document}

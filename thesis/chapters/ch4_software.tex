@@ -1,0 +1,98 @@
+% ============================================================
+%  CHƯƠNG 4: THIẾT KẾ PHẦN MỀM
+% ============================================================
+\chapter{Thiết kế phần mềm}
+\label{chap:software}
+
+\section{Kiến trúc phần mềm tổng quan}
+\label{sec:sw_architecture}
+
+% TODO: sơ đồ luồng xử lý tổng quan
+
+\section{Firmware STM32F303RE}
+\label{sec:stm32_fw}
+
+\subsection{Cấu trúc chương trình}
+
+Firmware STM32 được phát triển trên nền STM32CubeIDE sử dụng thư viện HAL. Vòng lặp chính (\texttt{main loop}) thực hiện liên tục các nhiệm vụ:
+
+\begin{enumerate}[label=\arabic*.]
+  \item Nhận và phân tích lệnh từ ESP32-S3 qua UART1.
+  \item Xử lý ngắt ngoài từ các nút nhấn (EXTI).
+  \item Điều khiển relay, LED, OLED và DFPlayer theo trạng thái hiện tại.
+\end{enumerate}
+
+\subsection{Máy trạng thái (State Machine)}
+
+% TODO: vẽ state machine diagram và mô tả
+
+\subsection{Xử lý ngắt nút nhấn}
+
+Các nút nhấn cấu hình active-low với điện trở pull-up nội. Khi nhấn, tín hiệu kích EXTI cạnh xuống (\textit{falling edge}). Firmware áp dụng kỹ thuật debounce bằng phần mềm.
+
+\begin{lstlisting}[style=c, caption={Hàm xử lý ngắt nút nhấn ENROLL}, label={lst:btn_enroll}]
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+    if (GPIO_Pin == BTN_ENROLL_Pin)
+    {
+        // Debounce: kiểm tra trạng thái sau 20ms
+        HAL_Delay(20);
+        if (HAL_GPIO_ReadPin(BTN_ENROLL_GPIO_Port,
+                             BTN_ENROLL_Pin) == GPIO_PIN_RESET)
+        {
+            UART1_SendString("ENROLL\n");
+        }
+    }
+}
+\end{lstlisting}
+
+\subsection{Điều khiển relay mở khóa}
+
+\begin{lstlisting}[style=c, caption={Hàm mở khóa có thời gian giữ}, label={lst:unlock}]
+void Door_Unlock(uint32_t hold_ms)
+{
+    HAL_GPIO_WritePin(RELAY_GPIO_Port, RELAY_Pin, GPIO_PIN_SET);
+    HAL_Delay(hold_ms);
+    HAL_GPIO_WritePin(RELAY_GPIO_Port, RELAY_Pin, GPIO_PIN_RESET);
+}
+\end{lstlisting}
+
+\section{Firmware ESP32-S3}
+\label{sec:esp32_fw}
+
+\subsection{Cấu trúc chương trình}
+
+% TODO: mô tả cấu trúc ESP-IDF tasks
+
+\subsection{Quy trình nhận diện khuôn mặt}
+
+% TODO: flowchart và giải thích
+
+\subsection{Đăng ký và xóa khuôn mặt}
+
+% TODO
+
+\section{Giao diện OLED SSD1306}
+\label{sec:oled}
+
+% TODO: mô tả các màn hình hiển thị
+
+\section{Hệ thống âm thanh DFPlayer}
+\label{sec:audio}
+
+\begin{table}[H]
+  \centering
+  \caption{Danh sách file âm thanh DFPlayer Mini}
+  \label{tab:audio_tracks}
+  \begin{tabular}{c l}
+    \toprule
+    \textbf{Track} & \textbf{Nội dung} \\
+    \midrule
+    1 & Mở cửa \\
+    2 & Từ chối truy cập \\
+    3 & Nhìn vào camera \\
+    4 & Đăng ký thành công \\
+    5 & Xóa dữ liệu hoàn tất \\
+    \bottomrule
+  \end{tabular}
+\end{table}
