@@ -1,0 +1,179 @@
+% $ biblatex auxiliary file $
+% $ biblatex bbl format version 3.3 $
+% Do not modify the above lines!
+%
+% This is an auxiliary file used by the 'biblatex' package.
+% This file may safely be deleted. It will be recreated by
+% biber as required.
+%
+\begingroup
+\makeatletter
+\@ifundefined{ver@biblatex.sty}
+  {\@latex@error
+     {Missing 'biblatex' package}
+     {The bibliography requires the 'biblatex' package.}
+      \aftergroup\endinput}
+  {}
+\endgroup
+
+
+\refsection{0}
+  \datalist[entry]{none/global//global/global/global}
+    \entry{beautment2009}{inproceedings}{}{}
+      \name{author}{3}{}{%
+        {{hash=2296c7a953d12d8e571a355c804bb88a}{%
+           family={Beautement},
+           familyi={B\bibinitperiod},
+           given={Adam},
+           giveni={A\bibinitperiod}}}%
+        {{hash=b90b3429a641ca8627953015010966b8}{%
+           family={Sasse},
+           familyi={S\bibinitperiod},
+           given={M.\bibnamedelimi Angela},
+           giveni={M\bibinitperiod\bibinitdelim A\bibinitperiod}}}%
+        {{hash=e5bc3811843979fc5ad5ce883b3af0c4}{%
+           family={Wonham},
+           familyi={W\bibinitperiod},
+           given={Mike},
+           giveni={M\bibinitperiod}}}%
+      }
+      \list{publisher}{1}{%
+        {ACM}%
+      }
+      \strng{namehash}{f78fa9cbf658b99139f2e329dfd1d86a}
+      \strng{fullhash}{f78fa9cbf658b99139f2e329dfd1d86a}
+      \strng{fullhashraw}{f78fa9cbf658b99139f2e329dfd1d86a}
+      \strng{bibnamehash}{f78fa9cbf658b99139f2e329dfd1d86a}
+      \strng{authorbibnamehash}{f78fa9cbf658b99139f2e329dfd1d86a}
+      \strng{authornamehash}{f78fa9cbf658b99139f2e329dfd1d86a}
+      \strng{authorfullhash}{f78fa9cbf658b99139f2e329dfd1d86a}
+      \strng{authorfullhashraw}{f78fa9cbf658b99139f2e329dfd1d86a}
+      \field{sortinit}{1}
+      \field{sortinithash}{4f6aaa89bab872aa0999fec09ff8e98a}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{booktitle}{Proceedings of the 2008 Workshop on New Security Paradigms}
+      \field{title}{The Compliance Budget: Managing Security Behaviour in Organisations}
+      \field{year}{2009}
+      \field{pages}{47\bibrangedash 58}
+      \range{pages}{12}
+    \endentry
+    \entry{jain2004}{incollection}{}{}
+      \name{author}{3}{}{%
+        {{hash=cd01587a47d1084d2adebe55a57d1c5c}{%
+           family={Jain},
+           familyi={J\bibinitperiod},
+           given={Anil\bibnamedelima K.},
+           giveni={A\bibinitperiod\bibinitdelim K\bibinitperiod}}}%
+        {{hash=67b2bd3f432996932e2f4d365b3c1142}{%
+           family={Ross},
+           familyi={R\bibinitperiod},
+           given={Arun},
+           giveni={A\bibinitperiod}}}%
+        {{hash=cfacee6caa8cda710c98b012e588f6ff}{%
+           family={Prabhakar},
+           familyi={P\bibinitperiod},
+           given={Salil},
+           giveni={S\bibinitperiod}}}%
+      }
+      \list{publisher}{1}{%
+        {IEEE}%
+      }
+      \strng{namehash}{8bee00d230cf00214edf0f521b1d4ec8}
+      \strng{fullhash}{8bee00d230cf00214edf0f521b1d4ec8}
+      \strng{fullhashraw}{8bee00d230cf00214edf0f521b1d4ec8}
+      \strng{bibnamehash}{8bee00d230cf00214edf0f521b1d4ec8}
+      \strng{authorbibnamehash}{8bee00d230cf00214edf0f521b1d4ec8}
+      \strng{authornamehash}{8bee00d230cf00214edf0f521b1d4ec8}
+      \strng{authorfullhash}{8bee00d230cf00214edf0f521b1d4ec8}
+      \strng{authorfullhashraw}{8bee00d230cf00214edf0f521b1d4ec8}
+      \field{sortinit}{2}
+      \field{sortinithash}{8b555b3791beccb63322c22f3320aa9a}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{booktitle}{{IEEE} Transactions on Circuits and Systems for Video Technology}
+      \field{number}{1}
+      \field{title}{An Introduction to Biometric Recognition}
+      \field{volume}{14}
+      \field{year}{2004}
+      \field{pages}{4\bibrangedash 20}
+      \range{pages}{17}
+    \endentry
+    \entry{wang2021}{article}{}{}
+      \name{author}{2}{}{%
+        {{hash=80fe924785a5b3a12cc6765b234d56de}{%
+           family={Wang},
+           familyi={W\bibinitperiod},
+           given={Mei},
+           giveni={M\bibinitperiod}}}%
+        {{hash=2ec197665ddc4935e136274967ffa4ae}{%
+           family={Deng},
+           familyi={D\bibinitperiod},
+           given={Weihong},
+           giveni={W\bibinitperiod}}}%
+      }
+      \strng{namehash}{5dad0299034e5613863509a915c3f18e}
+      \strng{fullhash}{5dad0299034e5613863509a915c3f18e}
+      \strng{fullhashraw}{5dad0299034e5613863509a915c3f18e}
+      \strng{bibnamehash}{5dad0299034e5613863509a915c3f18e}
+      \strng{authorbibnamehash}{5dad0299034e5613863509a915c3f18e}
+      \strng{authornamehash}{5dad0299034e5613863509a915c3f18e}
+      \strng{authorfullhash}{5dad0299034e5613863509a915c3f18e}
+      \strng{authorfullhashraw}{5dad0299034e5613863509a915c3f18e}
+      \field{sortinit}{3}
+      \field{sortinithash}{ad6fe7482ffbd7b9f99c9e8b5dccd3d7}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Neurocomputing}
+      \field{title}{Deep Face Recognition: A Survey}
+      \field{volume}{429}
+      \field{year}{2021}
+      \field{pages}{215\bibrangedash 244}
+      \range{pages}{30}
+      \verb{doi}
+      \verb 10.1016/j.neucom.2020.10.081
+      \endverb
+    \endentry
+    \entry{chen2018}{article}{}{}
+      \name{author}{4}{}{%
+        {{hash=64288176f389838aa5917ebca5ce2455}{%
+           family={Chen},
+           familyi={C\bibinitperiod},
+           given={Sheng},
+           giveni={S\bibinitperiod}}}%
+        {{hash=621013bf54d3546375ad71f17f020b5b}{%
+           family={Liu},
+           familyi={L\bibinitperiod},
+           given={Yang},
+           giveni={Y\bibinitperiod}}}%
+        {{hash=bfc840f1acedd564fad08ab8540b8df7}{%
+           family={Gao},
+           familyi={G\bibinitperiod},
+           given={Xiang},
+           giveni={X\bibinitperiod}}}%
+        {{hash=1f64b6a433c4e65fe0f700ca385f0327}{%
+           family={Han},
+           familyi={H\bibinitperiod},
+           given={Zhen},
+           giveni={Z\bibinitperiod}}}%
+      }
+      \strng{namehash}{5ee02808e43c43cc94ed7cb06d9a9425}
+      \strng{fullhash}{5ee02808e43c43cc94ed7cb06d9a9425}
+      \strng{fullhashraw}{5ee02808e43c43cc94ed7cb06d9a9425}
+      \strng{bibnamehash}{5ee02808e43c43cc94ed7cb06d9a9425}
+      \strng{authorbibnamehash}{5ee02808e43c43cc94ed7cb06d9a9425}
+      \strng{authornamehash}{5ee02808e43c43cc94ed7cb06d9a9425}
+      \strng{authorfullhash}{5ee02808e43c43cc94ed7cb06d9a9425}
+      \strng{authorfullhashraw}{5ee02808e43c43cc94ed7cb06d9a9425}
+      \field{sortinit}{4}
+      \field{sortinithash}{9381316451d1b9788675a07e972a12a7}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{arXiv preprint arXiv:1804.07573}
+      \field{title}{{MobileFaceNet}: Efficient {CNNs} for Accurate Real-Time Face Verification on Mobile Devices}
+      \field{year}{2018}
+    \endentry
+  \enddatalist
+\endrefsection
+\endinput
+

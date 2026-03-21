@@ -1,5 +1,5 @@
 % ============================================================
-%  TIỂU LUẬN: Thiết Kế Khóa Cửa Thông Minh Nhận Diện Khuôn Mặt
+%  TIỂU LUẬN: Thiết Kế Khóa Thông Minh Nhận Diện Khuôn Mặt
 %  Engine: XeLaTeX  |  Bibliography: Biber
 %  Build:  make  (hoặc xelatex → biber → xelatex × 2)
 % ============================================================
@@ -138,15 +138,15 @@
   aboveskip=8pt,
   belowskip=8pt
 }
-\lstdefinestyle{clang}{
+\lstdefinestyle{cstyle}{
   language=C,
   morekeywords={uint8_t,uint16_t,uint32_t,int8_t,int16_t,int32_t,
-                GPIO_PinState,HAL_StatusTypeDef,UART_HandleTypeDef}
+                GPIO_PinState,HAL_StatusTypeDef,UART_HandleTypeDef,
+                volatile}
 }
-\lstdefinestyle{python}{language=Python}
-% Đánh số mã nguồn theo chương
+\lstdefinestyle{pystyle}{language=Python}
+% Đánh số mã nguồn theo chương (listings định nghĩa counter khi loaded)
 \AtBeginDocument{\counterwithin{lstlisting}{chapter}}
-\captionsetup[lstlisting]{name=Mã nguồn, labelfont=bf, labelsep=period}
 
 % ── Math ────────────────────────────────────────────────────
 \usepackage{amsmath, amssymb, amsthm}
@@ -161,6 +161,7 @@
 % ── Diagrams ────────────────────────────────────────────────
 \usepackage{tikz}
 \usetikzlibrary{shapes.geometric, arrows.meta, positioning, calc, fit}
+\usepackage{pgfgantt}
 
 % ── Hyperlinks (phải load sau cùng, trước cleveref) ─────────
 \usepackage{csquotes}               % bắt buộc với biblatex + polyglossia
@@ -170,16 +171,24 @@
   citecolor   = blue!65!black,
   urlcolor    = blue!65!black,
   bookmarks   = true,
-  bookmarksnumbered = true,
-  pdftitle    = {Thiết Kế Khóa Cửa Thông Minh Nhận Diện Khuôn Mặt},
-  pdfauthor   = {Phạm Hùng Tiến, Trần Thái Nguyên, Hồ Sĩ Phú,
-                 Quách Gia Thịnh, Lê Quang Bảo Trung},
-  pdfsubject  = {Hệ thống nhúng, Nhận diện khuôn mặt},
-  pdfkeywords = {STM32, ESP32-S3, Face Recognition, Smart Lock, Embedded}
+  bookmarksnumbered = true
 ]{hyperref}
+% Metadata UTF-8 khai báo riêng để tránh lỗi keyval parsing
+\hypersetup{
+  pdftitle    = {Thiet Ke Khoa Thong Minh Nhan Dien Khuon Mat},
+  pdfauthor   = {Pham Hung Tien, Tran Thai Nguyen, Ho Si Phu,
+                 Quach Gia Thinh, Le Quang Bao Trung},
+  pdfsubject  = {He thong nhung - Nhan dien khuon mat},
+  pdfkeywords = {STM32, ESP32-S3, Face Recognition, Smart Lock, Embedded}
+}
 
 % ── Smart cross-references ──────────────────────────────────
-\usepackage[vietnamese]{cleveref}
+% cleveref + polyglossia Vietnamese không tương thích natively;
+% fix: force cleveref dùng English hooks, sau đó override tên thủ công.
+\makeatletter
+\def\cref@language{english}
+\makeatother
+\usepackage{cleveref}
 \crefname{figure}{Hình}{Hình}
 \crefname{table}{Bảng}{Bảng}
 \crefname{listing}{Mã nguồn}{Mã nguồn}
@@ -266,5 +275,9 @@
 \appendix
 \input{appendix/schematic}
 \input{appendix/code_snippets}
+
+% ── Phân công công việc (cuối tài liệu) ─────────────────────
+\cleardoublepage
+\input{chapters/00_task_division}
 
 \end{document}

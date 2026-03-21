@@ -7,9 +7,9 @@
 \section{Đặt vấn đề}
 \label{sec:problem}
 
-Kiểm soát truy cập là một yêu cầu cơ bản trong bảo mật vật lý tại các công trình dân dụng, thương mại và công nghiệp. Các hệ thống khóa cửa truyền thống dựa trên chìa khóa cơ học hoặc mã PIN tồn tại nhiều điểm yếu cố hữu: chìa khóa có thể bị mất, sao chép trái phép hoặc đánh cắp; mã PIN có thể bị lộ qua quan sát hoặc kỹ thuật tấn công shoulder surfing \cite{beautment2009}.
+Kiểm soát truy cập là một yêu cầu cơ bản trong bảo mật vật lý tại các công trình dân dụng, thương mại và công nghiệp. Các hệ thống khóa truyền thống dựa trên chìa khóa cơ học hoặc mã PIN tồn tại nhiều điểm yếu cố hữu: chìa khóa có thể bị mất, sao chép trái phép hoặc đánh cắp; mã PIN có thể bị lộ qua quan sát hoặc kỹ thuật tấn công shoulder surfing \cite{beautment2009}.
 
-Sự bùng nổ của trí tuệ nhân tạo (AI) và hệ thống nhúng hiệu năng cao đã tạo điều kiện để đưa công nghệ nhận diện khuôn mặt vào các thiết bị tiêu dùng với chi phí ngày càng thấp. Khác với chìa khóa hay mã số, đặc trưng sinh trắc học khuôn mặt gắn liền với cá nhân, khó giả mạo và không thể quên hay đánh mất \cite{jain2004}. Đây là cơ sở để nhóm xây dựng hệ thống khóa cửa thông minh nhận diện khuôn mặt chạy hoàn toàn trên phần cứng nhúng, không phụ thuộc vào kết nối internet hay dịch vụ đám mây bên ngoài.
+Sự bùng nổ của trí tuệ nhân tạo (AI) và hệ thống nhúng hiệu năng cao đã tạo điều kiện để đưa công nghệ nhận diện khuôn mặt vào các thiết bị tiêu dùng với chi phí ngày càng thấp. Khác với chìa khóa hay mã số, đặc trưng sinh trắc học khuôn mặt gắn liền với cá nhân, khó giả mạo và không thể quên hay đánh mất \cite{jain2004}. Đây là cơ sở để nhóm xây dựng hệ thống khóa thông minh nhận diện khuôn mặt chạy hoàn toàn trên phần cứng nhúng, không phụ thuộc vào kết nối internet hay dịch vụ đám mây bên ngoài.
 
 \section{Mục tiêu đề tài}
 \label{sec:objectives}
@@ -17,7 +17,7 @@ Sự bùng nổ của trí tuệ nhân tạo (AI) và hệ thống nhúng hiệu
 Tiểu luận này đặt ra các mục tiêu cụ thể sau:
 
 \begin{enumerate}[label=\arabic*.]
-  \item Thiết kế và xây dựng hoàn chỉnh hệ thống khóa cửa thông minh tích hợp nhận diện khuôn mặt theo thời gian thực trên phần cứng nhúng.
+  \item Thiết kế và xây dựng hoàn chỉnh hệ thống khóa thông minh tích hợp nhận diện khuôn mặt theo thời gian thực trên phần cứng nhúng.
   \item Đề xuất và hiện thực kiến trúc Dual-MCU phân tách tầng xử lý AI (ESP32-S3) khỏi tầng điều khiển ngoại vi (STM32F303RE), đảm bảo tính mô-đun và dễ bảo trì.
   \item Xây dựng giao thức truyền thông nội bộ đơn giản, tin cậy giữa hai vi điều khiển qua UART.
   \item Tích hợp phản hồi đa kênh (màn hình OLED, âm thanh, LED) để nâng cao trải nghiệm người dùng.

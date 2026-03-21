@@ -7,7 +7,7 @@
 \section{Tổng quan kiến trúc hệ thống}
 \label{sec:hw_overview}
 
-Hệ thống STM-FaceGuard được xây dựng theo kiến trúc phân tầng với hai vi điều khiển đảm nhận vai trò độc lập. \cref{fig:block_diagram} mô tả sơ đồ khối tổng quan.
+Hệ thống STM-FaceGuard được xây dựng theo kiến trúc phân tầng với hai vi điều khiển đảm nhận vai trò độc lập, như mô tả trong sơ đồ khối tổng quan bên dưới.
 
 % Uncomment khi có file ảnh:
 % \begin{figure}[H]
@@ -45,7 +45,7 @@ Luồng hoạt động cơ bản như sau:
     4 & Màn hình OLED        & SSD1306, 128$\times$64~px & Hiển thị trạng thái, thông báo \\
     5 & Module âm thanh      & DFPlayer Mini             & Phát file MP3 từ thẻ micro-SD \\
     6 & Loa                  & 8~$\Omega$, 3~W           & Phát thông báo âm thanh \\
-    7 & Khóa solenoid        & 12~V DC                   & Đóng/mở khóa cửa \\
+    7 & Khóa solenoid        & 12~V DC                   & Đóng/mở khóa \\
     8 & Module relay         & 5~V, 1 kênh               & Đệm công suất cho solenoid \\
     9 & Nút nhấn             & Tact switch (3 cái)       & Enroll, Delete, Exit \\
     10 & Nguồn                & 12~V/2~A adapter          & Cấp điện toàn hệ thống \\
@@ -113,7 +113,7 @@ ESP32-S3 chịu trách nhiệm giao tiếp với camera qua giao diện song son
 \section{Thiết kế nguồn điện}
 \label{sec:power}
 
-Hệ thống sử dụng một nguồn adapter 12~V/2~A duy nhất và phân phối điện nội bộ theo ba mức điện áp (\cref{fig:power_diagram}):
+Hệ thống sử dụng một nguồn adapter 12~V/2~A duy nhất và phân phối điện nội bộ theo ba mức điện áp:
 
 \begin{itemize}
   \item \textbf{12~V DC}: Cấp trực tiếp cho cuộn dây solenoid qua tiếp điểm NO của relay. Dòng định mức solenoid khoảng 0,5~A.

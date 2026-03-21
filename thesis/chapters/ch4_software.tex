@@ -55,7 +55,7 @@ Chuyển trạng thái xảy ra khi:
 
 Các nút nhấn cấu hình \textit{active-low} với pull-up nội, ngắt EXTI kích ở cạnh xuống. Để loại bỏ nhiễu cơ học (\textit{contact bounce}), firmware sử dụng kỹ thuật kiểm tra lại trạng thái sau \SI{20}{ms} trong vòng lặp chính thay vì dùng \texttt{HAL\_Delay()} trong ISR.
 
-\begin{lstlisting}[style=clang, caption={ISR nút nhấn: đặt cờ sự kiện, xử lý thực hiện ở main loop}, label={lst:btn_isr}]
+\begin{lstlisting}[style=cstyle, caption={ISR nút nhấn: đặt cờ sự kiện, xử lý thực hiện ở main loop}, label={lst:btn_isr}]
 /* Cờ sự kiện toàn cục */
 volatile uint8_t g_btn_enroll_flag = 0;
 volatile uint8_t g_btn_delete_flag = 0;
@@ -69,7 +69,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 }
 \end{lstlisting}
 
-\begin{lstlisting}[style=clang, caption={Xử lý debounce và gửi lệnh ENROLL trong vòng lặp chính}, label={lst:btn_main}]
+\begin{lstlisting}[style=cstyle, caption={Xử lý debounce và gửi lệnh ENROLL trong vòng lặp chính}, label={lst:btn_main}]
 /* Trong while(1) của main() */
 if (g_btn_enroll_flag)
 {
@@ -88,7 +88,7 @@ if (g_btn_enroll_flag)
 
 Solenoid được giữ ở trạng thái mở trong một khoảng thời gian cố định (mặc định \SI{3}{s}), sau đó tự động đóng lại. Thời gian giữ có thể cấu hình qua macro \texttt{DOOR\_HOLD\_MS}.
 
-\begin{lstlisting}[style=clang, caption={Hàm mở khóa có thời gian giữ cấu hình được}, label={lst:unlock}]
+\begin{lstlisting}[style=cstyle, caption={Hàm mở khóa có thời gian giữ cấu hình được}, label={lst:unlock}]
 #define DOOR_HOLD_MS  3000U  /* Thời gian giữ cửa mở (ms) */
 
 void Door_Unlock(void)

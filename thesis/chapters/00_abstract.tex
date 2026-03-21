@@ -5,7 +5,7 @@
 \addcontentsline{toc}{chapter}{Tóm tắt}
 
 \begin{singlespace}
-\noindent\textbf{Tên đề tài:} Thiết Kế Khóa Cửa Thông Minh Sử Dụng Nhận Diện Khuôn Mặt
+\noindent\textbf{Tên đề tài:} Thiết Kế Khóa Thông Minh Sử Dụng Nhận Diện Khuôn Mặt
 
 \medskip
 \noindent\textbf{Nhóm thực hiện:} Phạm Hùng Tiến, Trần Thái Nguyên, Hồ Sĩ Phú, Quách Gia Thịnh, Lê Quang Bảo Trung
@@ -13,14 +13,14 @@
 
 \bigskip
 
-Tiểu luận trình bày quá trình thiết kế và hiện thực hệ thống khóa cửa thông minh tích hợp công nghệ nhận diện khuôn mặt, hướng đến thay thế các cơ chế kiểm soát truy cập truyền thống (chìa khóa, mã PIN) vốn tiềm ẩn nhiều rủi ro bảo mật.
+Tiểu luận trình bày quá trình thiết kế và hiện thực hệ thống khóa thông minh tích hợp công nghệ nhận diện khuôn mặt, hướng đến thay thế các cơ chế kiểm soát truy cập truyền thống (chìa khóa, mã PIN) vốn tiềm ẩn nhiều rủi ro bảo mật.
 
 Hệ thống sử dụng kiến trúc \textbf{Dual-MCU}: vi điều khiển \textbf{STM32F303RE} (Nucleo-64) đảm nhận vai trò điều khiển toàn bộ ngoại vi gồm relay solenoid, màn hình OLED SSD1306, module âm thanh DFPlayer Mini và các nút nhấn; trong khi \textbf{ESP32-S3-N16R8} --- được trang bị bộ tăng tốc vector AI tích hợp --- xử lý luồng ảnh từ camera và thực thi thuật toán nhận diện khuôn mặt theo thời gian thực. Hai vi điều khiển giao tiếp qua giao thức UART văn bản tốc độ \SI{115200}{baud}, giúp phân tách rõ ràng giữa tầng xử lý thông minh và tầng điều khiển phần cứng.
 
 Kết quả thực nghiệm cho thấy hệ thống đạt tỉ lệ nhận diện chính xác trên \SI{90}{\percent} trong điều kiện ánh sáng bình thường, thời gian phản hồi trung bình dưới \SI{1.5}{s} từ lúc phát hiện khuôn mặt đến khi mở khóa. Hệ thống hỗ trợ đăng ký và xóa khuôn mặt trực tiếp qua nút nhấn, phản hồi đa kênh qua màn hình và âm thanh.
 
 \medskip
-\noindent\textbf{Từ khóa:} nhận diện khuôn mặt, hệ thống nhúng, STM32, ESP32-S3, khóa cửa thông minh, kiểm soát truy cập.
+\noindent\textbf{Từ khóa:} nhận diện khuôn mặt, hệ thống nhúng, STM32, ESP32-S3, khóa thông minh, kiểm soát truy cập.
 
 \vspace{1.5cm}
 \begin{center}\rule{0.5\textwidth}{0.4pt}\end{center}

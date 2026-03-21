@@ -1,0 +1,178 @@
+% ============================================================
+%  PHÂN CÔNG CÔNG VIỆC & BIỂU ĐỒ GANTT
+% ============================================================
+\thispagestyle{plain}
+\begin{singlespace}
+
+\begin{center}
+  {\Large\bfseries PHÂN CÔNG CÔNG VIỆC}\\[0.4cm]
+  {\normalsize Môn học: Vi điều khiển (ETC10009) \quad|\quad
+               Giảng viên: PGS.TS Lê Đức Hùng}
+\end{center}
+
+\vspace{0.5cm}
+
+% ── Bảng phân công ──────────────────────────────────────────
+\begin{table}[H]
+\centering
+\caption*{\textbf{Bảng phân công nhiệm vụ các thành viên}}
+\setlength{\extrarowheight}{4pt}
+\begin{tabular}{c p{3.2cm} c p{7.0cm} c}
+  \toprule
+  \textbf{STT} & \textbf{Họ và tên} & \textbf{MSSV} & \textbf{Nhiệm vụ} & \textbf{Ký tên} \\
+  \midrule
+
+  1 &
+  \textbf{Phạm Hùng Tiến}\newline\textit{(Nhóm trưởng)} &
+  24207043 &
+  \vspace{-10pt}\begin{itemize}[leftmargin=1em, topsep=0pt, itemsep=1pt, parsep=0pt]
+    \item Thiết kế kiến trúc hệ thống tổng thể
+    \item Lập trình firmware STM32F303RE
+    \item Lập trình firmware ESP32-S3
+    \item Viết tiểu luận (tất cả các chương)
+    \item Tổng hợp, review và hoàn thiện tài liệu
+  \end{itemize}\vspace{-6pt} &
+  \\
+
+  \midrule
+
+  2 &
+  Trần Thái Nguyên &
+  24207029 &
+  \vspace{-10pt}\begin{itemize}[leftmargin=1em, topsep=0pt, itemsep=1pt, parsep=0pt]
+    \item Thiết kế sơ đồ kết nối phần cứng
+    \item Lắp ráp và kiểm tra mạch thực tế
+    \item Hỗ trợ viết Chương 3 (Phần cứng)
+  \end{itemize}\vspace{-6pt} &
+  \\
+
+  \midrule
+
+  3 &
+  Hồ Sĩ Phú &
+  24207101 &
+  \vspace{-10pt}\begin{itemize}[leftmargin=1em, topsep=0pt, itemsep=1pt, parsep=0pt]
+    \item Nghiên cứu thuật toán nhận diện khuôn mặt
+    \item Cài đặt và cấu hình ESP-IDF, ESP-WHO
+    \item Hỗ trợ viết Chương 2 (Cơ sở lý thuyết)
+  \end{itemize}\vspace{-6pt} &
+  \\
+
+  \midrule
+
+  4 &
+  Quách Gia Thịnh &
+  24207105 &
+  \vspace{-10pt}\begin{itemize}[leftmargin=1em, topsep=0pt, itemsep=1pt, parsep=0pt]
+    \item Thực nghiệm và thu thập số liệu kiểm thử
+    \item Đánh giá độ chính xác và thời gian phản hồi
+    \item Hỗ trợ viết Chương 5 (Kết quả)
+  \end{itemize}\vspace{-6pt} &
+  \\
+
+  \midrule
+
+  5 &
+  Lê Quang Bảo Trung &
+  24207111 &
+  \vspace{-10pt}\begin{itemize}[leftmargin=1em, topsep=0pt, itemsep=1pt, parsep=0pt]
+    \item Tổng hợp tài liệu tham khảo
+    \item Chuẩn bị slide thuyết trình
+    \item Hỗ trợ viết Chương 6 (Kết luận)
+  \end{itemize}\vspace{-6pt} &
+  \\
+
+  \bottomrule
+\end{tabular}
+\end{table}
+
+\vspace{0.8cm}
+\begin{flushright}
+  \textit{TP. Hồ Chí Minh, ngày \underline{\phantom{XX}} tháng \underline{\phantom{XX}} năm 2026}
+\end{flushright}
+
+\end{singlespace}
+
+% ── Biểu đồ Gantt (trang ngang) ─────────────────────────────
+\begin{landscape}
+\thispagestyle{plain}
+\begin{singlespace}
+
+\begin{center}
+  {\large\bfseries Biểu đồ Gantt --- Kế hoạch thực hiện dự án}\\[0.2cm]
+  {\normalsize\itshape Thời gian: 21/03/2026 -- 03/04/2026 \quad|\quad
+  Ngày thuyết trình: 03/04/2026}
+\end{center}
+
+\vspace{0.5cm}
+
+% slot 1--7  = Tuần 1: 21/03 -- 27/03/2026
+% slot 8--14 = Tuần 2: 28/03 -- 03/04/2026
+\begin{figure}[H]
+\centering
+\begin{ganttchart}[
+    hgrid,
+    vgrid = {*6{dotted}, dashed},
+    bar/.append style       = {fill=blue!35, rounded corners=2pt},
+    bar label font          = \small,
+    group/.append style     = {fill=blue!65, rounded corners=2pt},
+    group label font        = \small\bfseries,
+    milestone/.append style = {fill=red!70, shape=diamond, inner sep=3pt},
+    milestone label font    = \small\bfseries,
+    title/.append style     = {fill=gray!15},
+    title label font        = \small\bfseries,
+    x unit          = 1.65cm,
+    y unit title    = 0.70cm,
+    y unit chart    = 0.75cm,
+    bar height      = 0.55,
+    group height    = 0.4,
+    bar label node/.append style = {align=left, text width=5.5cm},
+    canvas/.append style    = {draw=gray!40}
+]{1}{14}
+
+  %% Tiêu đề tuần
+  \gantttitle{Tuần 1 \textnormal{(21/03 -- 27/03/2026)}}{7}
+  \gantttitle{Tuần 2 \textnormal{(28/03 -- 03/04/2026)}}{7} \\
+  %% Tiêu đề ngày (T2--CN × 2 tuần)
+  \gantttitle{T2}{1}\gantttitle{T3}{1}\gantttitle{T4}{1}\gantttitle{T5}{1}%
+  \gantttitle{T6}{1}\gantttitle{T7}{1}\gantttitle{CN}{1}%
+  \gantttitle{T2}{1}\gantttitle{T3}{1}\gantttitle{T4}{1}\gantttitle{T5}{1}%
+  \gantttitle{T6}{1}\gantttitle{T7}{1}\gantttitle{CN}{1} \\
+
+  %% ── Giai đoạn 1 ─────────────────────────────────────────
+  \ganttgroup{1. Nghiên cứu \& Lên kế hoạch}{1}{2} \\
+  \ganttbar{Đọc tài liệu, datasheet MCU}{1}{1} \\
+  \ganttbar{Xác định kiến trúc Dual-MCU}{2}{2} \\
+
+  %% ── Giai đoạn 2 ─────────────────────────────────────────
+  \ganttgroup{2. Thiết kế phần cứng}{2}{4} \\
+  \ganttbar{Vẽ sơ đồ kết nối (schematic)}{2}{3} \\
+  \ganttbar{Lắp ráp và kiểm tra mạch}{3}{4} \\
+
+  %% ── Giai đoạn 3 ─────────────────────────────────────────
+  \ganttgroup{3. Lập trình phần mềm}{3}{9} \\
+  \ganttbar{Firmware STM32 (HAL, FSM, UART, OLED)}{3}{6} \\
+  \ganttbar{Firmware ESP32-S3 (camera, FR pipeline)}{5}{8} \\
+  \ganttbar{Tích hợp Dual-MCU \& debug}{8}{9} \\
+
+  %% ── Giai đoạn 4 ─────────────────────────────────────────
+  \ganttgroup{4. Kiểm thử \& Thực nghiệm}{9}{11} \\
+  \ganttbar{Đo độ chính xác nhận diện}{9}{10} \\
+  \ganttbar{Kiểm thử thời gian phản hồi}{10}{11} \\
+
+  %% ── Giai đoạn 5 ─────────────────────────────────────────
+  \ganttgroup{5. Hoàn thiện tài liệu}{10}{14} \\
+  \ganttbar{Viết tiểu luận (các chương)}{10}{12} \\
+  \ganttbar{Hoàn thiện, chuẩn bị slide}{12}{13} \\
+  \ganttbar{Review \& nộp bài}{13}{14} \\
+
+  %% ── Milestone ────────────────────────────────────────────
+  \ganttmilestone[
+    milestone label node/.append style={right=8pt}
+  ]{Thuyết trình \textnormal{(03/04/2026)}}{14}
+
+\end{ganttchart}
+\end{figure}
+
+\end{singlespace}
+\end{landscape}
