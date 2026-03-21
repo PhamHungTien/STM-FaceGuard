@@ -17,6 +17,7 @@
  *   "ENROLL\n"   – bắt đầu đăng ký khuôn mặt mới
  *   "DEL_ALL\n"  – xoá toàn bộ khuôn mặt khỏi flash
  *   "CANCEL\n"   – huỷ đăng ký đang diễn ra
+ *   "STATUS\n"   – yêu cầu ESP32 gửi lại READY/FACES để đồng bộ trạng thái
  *
  * ── Giao thức ESP32 → STM32 ──────────────────────────────────────────────────
  *   "READY\n"          – khởi động xong
@@ -107,6 +108,7 @@ static FaceRecognition112V1S8 recognizer;   // tự nạp face DB từ NVS/flash
 // ── Misc ──────────────────────────────────────────────────────────────────────
 static uint32_t lastOpenMs      = 0;   // cooldown sau OPEN
 static uint32_t lastDeniedMs    = 0;   // cooldown sau DENIED
+static uint32_t lastStatusTxMs  = 0;   // chống spam READY/FACES khi host hỏi dồn
 static String   rxBuf;                 // bộ đệm dòng UART từ STM32
 
 // ── Voting state ──────────────────────────────────────────────────────────────
@@ -168,6 +170,29 @@ static bool camera_init()
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+static void send_status()
+{
+    uint32_t now = millis();
+    if ((now - lastStatusTxMs) < 100U) {
+        return;
+    }
+
+    lastStatusTxMs = now;
+    Serial1.println("READY");
+    Serial1.printf("FACES:%d\n", recognizer.get_enrolled_id_num());
+
+    if (lockoutUntilMs > now) {
+        Serial1.println("LOCKOUT");
+    } else if (appState == STATE_ENROLLING) {
+        Serial1.printf("%s\n", ENROLL_STEPS[enrollStep]);
+    }
+
+    Serial.printf("[SYS] STATUS sync -> STM32  faces=%d  state=%s\n",
+                  recognizer.get_enrolled_id_num(),
+                  (appState == STATE_ENROLLING) ? "ENROLLING" : "IDLE");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Xử lý lệnh nhận từ STM32
 // ─────────────────────────────────────────────────────────────────────────────
 static void process_cmd(const String &cmd)
@@ -200,6 +225,9 @@ static void process_cmd(const String &cmd)
         appState   = STATE_IDLE;
         enrolledId = -1;   /* reset in case CANCEL arrives mid-enroll */
         Serial.println("[ENROLL] Cancelled by STM32");
+    }
+    else if (cmd == "STATUS") {
+        send_status();
     }
 }
 
@@ -393,9 +421,7 @@ void setup()
     esp_task_wdt_add(NULL);        // theo dõi task hiện tại (loopTask)
 
     delay(300);
-    Serial1.println("READY");
-    Serial1.printf("FACES:%d\n", recognizer.get_enrolled_id_num());  // sync face count
-    Serial.printf("[SYS] READY → STM32  enrolled=%d\n", recognizer.get_enrolled_id_num());
+    send_status();
 }
 
 void loop()

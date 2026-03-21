@@ -54,6 +54,7 @@ typedef enum {
 #define RESULT_DISPLAY_MS     3000U  /* ENROLLED/DELETED/DB_FULL display time   */
 #define DEBOUNCE_MS            200U  /* Minimum ms between button events        */
 #define MAX_ENROLLED_FACES_STM32 7U  /* Must match MAX_ENROLLED_FACES on ESP32  */
+#define ESP32_SYNC_RETRY_MS   1000U  /* Periodic STATUS sync while link unknown  */
 
 #define UART1_BUF_SIZE          64U  /* ESP32 message receive buffer            */
 #define UART1_QUEUE_LEN          4U  /* Small queue for back-to-back UART lines */
@@ -93,6 +94,7 @@ static volatile uint32_t uart1_error_count = 0; /* Counts HW errors — for diag
 /* --- System state machine --- */
 static SystemState_t sys_state       = SYS_IDLE;
 static uint32_t      state_tick      = 0;
+static uint32_t      esp32_status_tick = 0;
 static uint8_t       esp32_ready     = 0;
 
 /* --- Enrolled face count (updated from ESP32 FACES/ENROLLED/DELETED msgs) --- */
@@ -121,6 +123,9 @@ static void Enter_Denied(void);
 static void Parse_ESP32_Msg(const char *msg);
 static void Show_Ready(void);   /* Wrapper: shows ReadyFaces with enrolled_faces count */
 static void Show_ESP32_LinkState(void);
+static void Mark_ESP32_Alive(void);
+static void Mark_ESP32_Offline(void);
+static void ESP32_RequestStatus(uint8_t force);
 static uint8_t UART1_DequeueLine(char *out);
 /* USER CODE END PFP */
 
@@ -246,11 +251,37 @@ static void Show_Ready(void)
 
 static void Show_ESP32_LinkState(void)
 {
-    if (esp32_ready) {
+    if (esp32_ready && sys_state != SYS_OFFLINE) {
         Show_Ready();
     } else {
         SSD1306_ShowESP32Offline();
     }
+}
+
+static void Mark_ESP32_Alive(void)
+{
+    esp32_ready = 1;
+    esp32_status_tick = HAL_GetTick();
+}
+
+static void Mark_ESP32_Offline(void)
+{
+    esp32_ready = 0;
+    delete_hold_active = 0;
+    sys_state = SYS_OFFLINE;
+    SSD1306_ShowESP32Offline();
+}
+
+static void ESP32_RequestStatus(uint8_t force)
+{
+    uint32_t now = HAL_GetTick();
+
+    if (!force && (now - esp32_status_tick) < ESP32_SYNC_RETRY_MS) {
+        return;
+    }
+
+    esp32_status_tick = now;
+    HAL_UART_Transmit(&huart1, (uint8_t *)"STATUS\n", 7, 100);
 }
 
 static uint8_t UART1_DequeueLine(char *out)
@@ -292,18 +323,18 @@ static uint8_t UART1_DequeueLine(char *out)
 static void Parse_ESP32_Msg(const char *msg)
 {
     if (strncmp(msg, "OPEN:", 5) == 0) {
-        esp32_ready = 1;
+        Mark_ESP32_Alive();
         uint8_t id = (uint8_t)atoi(msg + 5);
         Enter_Unlocked(id, 0);
 
     } else if (strcmp(msg, "DENIED") == 0) {
-        esp32_ready = 1;
+        Mark_ESP32_Alive();
         if (sys_state == SYS_IDLE) {
             Enter_Denied();
         }
 
     } else if (strncmp(msg, "ENROLLED:", 9) == 0) {
-        esp32_ready = 1;
+        Mark_ESP32_Alive();
         uint8_t id = (uint8_t)atoi(msg + 9);
         if (enrolled_faces < 255) enrolled_faces++;
         sys_state  = SYS_RESULT;
@@ -312,7 +343,7 @@ static void Parse_ESP32_Msg(const char *msg)
         DFPlayer_Play(DFP_TRACK_ENROLLED);
 
     } else if (strcmp(msg, "DELETED") == 0) {
-        esp32_ready = 1;
+        Mark_ESP32_Alive();
         enrolled_faces = 0;
         sys_state  = SYS_RESULT;
         state_tick = HAL_GetTick();
@@ -320,7 +351,7 @@ static void Parse_ESP32_Msg(const char *msg)
         DFPlayer_Play(DFP_TRACK_DELETED);
 
     } else if (strcmp(msg, "READY") == 0) {
-        esp32_ready      = 1;
+        Mark_ESP32_Alive();
         btn_enroll_flag = 0; /* Discard any buttons pressed during boot */
         btn_delete_flag = 0;
         btn_exit_flag   = 0;
@@ -331,11 +362,11 @@ static void Parse_ESP32_Msg(const char *msg)
         }
 
     } else if (strncmp(msg, "FACES:", 6) == 0) {
-        esp32_ready = 1;
+        Mark_ESP32_Alive();
         /* Face count update from ESP32 (sent right after READY) */
         enrolled_faces = (uint8_t)atoi(msg + 6);
         if (sys_state == SYS_CONNECTING || sys_state == SYS_OFFLINE) {
-            sys_state         = SYS_IDLE;
+            sys_state = SYS_IDLE;
             delete_hold_active = 0;
         }
         if (sys_state == SYS_IDLE) {
@@ -343,7 +374,7 @@ static void Parse_ESP32_Msg(const char *msg)
         }
 
     } else if (strcmp(msg, "DB_FULL") == 0) {
-        esp32_ready = 1;
+        Mark_ESP32_Alive();
         /* Enrollment rejected because face DB is at capacity */
         sys_state  = SYS_RESULT;
         state_tick = HAL_GetTick();
@@ -352,37 +383,42 @@ static void Parse_ESP32_Msg(const char *msg)
 
     /* --- Enrollment step guidance (5 poses, sent sequentially by ESP32) --- */
     } else if (strcmp(msg, "ENROLL_FRONT") == 0) {
-        esp32_ready = 1;
+        Mark_ESP32_Alive();
+        sys_state = SYS_ENROLLING;
         state_tick = HAL_GetTick(); /* Reset enrol timeout each step */
         SSD1306_ShowEnrollStep(1, 5);
         DFPlayer_Play(DFP_TRACK_ENROLL_FRONT);
 
     } else if (strcmp(msg, "ENROLL_LEFT") == 0) {
-        esp32_ready = 1;
+        Mark_ESP32_Alive();
+        sys_state = SYS_ENROLLING;
         state_tick = HAL_GetTick();
         SSD1306_ShowEnrollStep(2, 5);
         DFPlayer_Play(DFP_TRACK_ENROLL_LEFT);
 
     } else if (strcmp(msg, "ENROLL_RIGHT") == 0) {
-        esp32_ready = 1;
+        Mark_ESP32_Alive();
+        sys_state = SYS_ENROLLING;
         state_tick = HAL_GetTick();
         SSD1306_ShowEnrollStep(3, 5);
         DFPlayer_Play(DFP_TRACK_ENROLL_RIGHT);
 
     } else if (strcmp(msg, "ENROLL_UP") == 0) {
-        esp32_ready = 1;
+        Mark_ESP32_Alive();
+        sys_state = SYS_ENROLLING;
         state_tick = HAL_GetTick();
         SSD1306_ShowEnrollStep(4, 5);
         DFPlayer_Play(DFP_TRACK_ENROLL_UP);
 
     } else if (strcmp(msg, "ENROLL_DOWN") == 0) {
-        esp32_ready = 1;
+        Mark_ESP32_Alive();
+        sys_state = SYS_ENROLLING;
         state_tick = HAL_GetTick();
         SSD1306_ShowEnrollStep(5, 5);
         DFPlayer_Play(DFP_TRACK_ENROLL_DOWN);
 
     } else if (strcmp(msg, "LOCKOUT") == 0) {
-        esp32_ready = 1;
+        Mark_ESP32_Alive();
         /* Security lockout: too many failed attempts */
         sys_state  = SYS_LOCKED;
         state_tick = HAL_GetTick();
@@ -390,7 +426,7 @@ static void Parse_ESP32_Msg(const char *msg)
         DFPlayer_Play(DFP_TRACK_DENIED);
 
     } else if (strcmp(msg, "LOCKOUT_CLEAR") == 0) {
-        esp32_ready = 1;
+        Mark_ESP32_Alive();
         if (sys_state == SYS_LOCKED) {
             sys_state = SYS_IDLE;
             Show_Ready();
@@ -416,6 +452,7 @@ static void App_Init(void)
     uart1_line_idx  = 0;
     uart1_queue_head = 0;
     uart1_queue_tail = 0;
+    esp32_status_tick = 0;
 
     /* --- Enable USART1 NVIC (ESP32 receive) --- */
     HAL_NVIC_SetPriority(USART1_IRQn, 0, 0);
@@ -423,6 +460,7 @@ static void App_Init(void)
 
     /* --- Start UART1 interrupt-driven receive --- */
     HAL_UART_Receive_IT(&huart1, &uart1_rx_byte, 1);
+    ESP32_RequestStatus(1);
 
     /* --- Enter CONNECTING state before other slow inits so READY/FACES
      * received during startup are not discarded. --- */
@@ -474,6 +512,10 @@ static void App_Loop(void)
         now = HAL_GetTick(); /* Refresh time after potential state change */
     }
 
+    if (sys_state == SYS_CONNECTING || sys_state == SYS_OFFLINE) {
+        ESP32_RequestStatus(0);
+    }
+
     /* ================================================================
      * DELETE hold confirmation — non-blocking so the main loop stays alive
      * ================================================================ */
@@ -512,6 +554,7 @@ static void App_Loop(void)
             SSD1306_ShowEnrolling();
             DFPlayer_Play(DFP_TRACK_LOOK_AT_CAM);
         } else if (sys_state == SYS_CONNECTING || sys_state == SYS_OFFLINE || !esp32_ready) {
+            ESP32_RequestStatus(1);
             Show_ESP32_LinkState();
         }
     }
@@ -529,6 +572,7 @@ static void App_Loop(void)
             delete_last_second = 0xFF;
             SSD1306_ShowHoldDelete(0);
         } else if (sys_state == SYS_CONNECTING || sys_state == SYS_OFFLINE || !esp32_ready) {
+            ESP32_RequestStatus(1);
             Show_ESP32_LinkState();
         }
     }
@@ -541,8 +585,7 @@ static void App_Loop(void)
         case SYS_CONNECTING:
             /* If ESP32 never sends READY/FACES, show an explicit offline state. */
             if ((now - state_tick) >= CONNECT_TIMEOUT_MS) {
-                sys_state = SYS_OFFLINE;
-                SSD1306_ShowESP32Offline();
+                Mark_ESP32_Offline();
             }
             break;
 
@@ -563,11 +606,11 @@ static void App_Loop(void)
 
         case SYS_ENROLLING:
             if ((now - state_tick) >= ENROLL_TIMEOUT_MS) {
-                /* ESP32 did not respond – cancel enrolment */
-                sys_state       = SYS_IDLE;
+                /* ESP32 did not respond to ENROLL/step sync – mark link suspect. */
                 btn_enroll_flag = 0; /* Discard any button press queued during enrol */
                 HAL_UART_Transmit(&huart1, (uint8_t *)"CANCEL\n", 7, 100);
-                Show_Ready();
+                Mark_ESP32_Offline();
+                ESP32_RequestStatus(1);
             }
             break;
 
@@ -575,8 +618,8 @@ static void App_Loop(void)
             /* "DELETED" from ESP32 is handled in Parse_ESP32_Msg.
              * Guard timeout only after DEL_ALL was actually sent. */
             if (!delete_hold_active && (now - state_tick) >= 10000U) {
-                sys_state = SYS_IDLE;
-                Show_ESP32_LinkState();
+                Mark_ESP32_Offline();
+                ESP32_RequestStatus(1);
             }
             break;
 
