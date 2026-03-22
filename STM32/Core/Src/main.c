@@ -115,6 +115,9 @@ static uint8_t       delete_last_second = 0xFF;
 /* --- Relay safety state --- */
 static uint8_t       relay_open_active  = 0;
 static uint32_t      relay_open_tick    = 0;
+/* --- Lockout countdown --- */
+static uint32_t      lockout_duration_ms   = LOCKOUT_DISPLAY_MS;
+static uint32_t      lockout_last_second   = 0xFFFFFFFFU;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -218,9 +221,25 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
         if (btn_exit_armed &&
             Button_IsPressed(BTN_EXIT_GPIO_Port, BTN_EXIT_Pin) &&
             ((now - btn_exit_tick) >= DEBOUNCE_MS)) {
-            btn_exit_tick = now;
+            btn_exit_tick  = now;
             btn_exit_armed = 0;
-            btn_exit_flag = 1;
+            btn_exit_flag  = 1;
+        }
+    } else if (GPIO_Pin == BTN_ENROLL_Pin) {
+        if (btn_enroll_armed &&
+            Button_IsPressed(BTN_ENROLL_GPIO_Port, BTN_ENROLL_Pin) &&
+            ((now - btn_enroll_tick) >= DEBOUNCE_MS)) {
+            btn_enroll_tick  = now;
+            btn_enroll_armed = 0;
+            btn_enroll_flag  = 1;
+        }
+    } else if (GPIO_Pin == BTN_DELETE_Pin) {
+        if (btn_delete_armed &&
+            Button_IsPressed(BTN_DELETE_GPIO_Port, BTN_DELETE_Pin) &&
+            ((now - btn_delete_tick) >= DEBOUNCE_MS)) {
+            btn_delete_tick  = now;
+            btn_delete_armed = 0;
+            btn_delete_flag  = 1;
         }
     }
 }
@@ -417,8 +436,10 @@ static uint8_t UART1_DequeueLine(char *out)
 static void Parse_ESP32_Msg(const char *msg)
 {
     if (strncmp(msg, "OPEN:", 5) == 0) {
+        if (strlen(msg) <= 5) return;          /* malformed: no ID field */
         Mark_ESP32_Alive();
         uint8_t id = (uint8_t)atoi(msg + 5);
+        if (id >= MAX_ENROLLED_FACES_STM32) id = 0; /* clamp to valid range */
         Enter_Unlocked(id, 0);
 
     } else if (strcmp(msg, "DENIED") == 0) {
@@ -428,9 +449,10 @@ static void Parse_ESP32_Msg(const char *msg)
         }
 
     } else if (strncmp(msg, "ENROLLED:", 9) == 0) {
+        if (strlen(msg) <= 9) return;          /* malformed: no ID field */
         Mark_ESP32_Alive();
         uint8_t id = (uint8_t)atoi(msg + 9);
-        if (enrolled_faces < 255) enrolled_faces++;
+        if (enrolled_faces < MAX_ENROLLED_FACES_STM32) enrolled_faces++;
         sys_state  = SYS_RESULT;
         state_tick = HAL_GetTick();
         SSD1306_ShowEnrolled(id, enrolled_faces, MAX_ENROLLED_FACES_STM32);
@@ -473,7 +495,8 @@ static void Parse_ESP32_Msg(const char *msg)
     } else if (strncmp(msg, "FACES:", 6) == 0) {
         Mark_ESP32_Alive();
         /* Face count update from ESP32 (sent right after READY) */
-        enrolled_faces = (uint8_t)atoi(msg + 6);
+        uint8_t n = (uint8_t)atoi(msg + 6);
+        enrolled_faces = (n <= MAX_ENROLLED_FACES_STM32) ? n : MAX_ENROLLED_FACES_STM32;
         if (sys_state == SYS_CONNECTING || sys_state == SYS_OFFLINE) {
             sys_state = SYS_IDLE;
             delete_hold_active = 0;
@@ -531,9 +554,16 @@ static void Parse_ESP32_Msg(const char *msg)
         SSD1306_ShowEnrollStep(5, 5);
         DFPlayer_Play(DFP_TRACK_ENROLL_DOWN);
 
-    } else if (strcmp(msg, "LOCKOUT") == 0) {
+    } else if (strncmp(msg, "LOCKOUT:", 8) == 0 || strcmp(msg, "LOCKOUT") == 0) {
         Mark_ESP32_Alive();
-        /* Security lockout: too many failed attempts */
+        /* Security lockout: extract duration if present ("LOCKOUT:<ms>") */
+        if (msg[7] == ':') {
+            uint32_t dur = (uint32_t)strtoul(msg + 8, NULL, 10);
+            lockout_duration_ms = (dur > 0U) ? dur : LOCKOUT_DISPLAY_MS;
+        } else {
+            lockout_duration_ms = LOCKOUT_DISPLAY_MS;
+        }
+        lockout_last_second = 0xFFFFFFFFU; /* force immediate countdown update */
         sys_state  = SYS_LOCKED;
         state_tick = HAL_GetTick();
         SSD1306_ShowLockout();
@@ -666,7 +696,14 @@ static void App_Loop(void)
         uint32_t held_ms = now - delete_hold_start;
         uint8_t  sec     = (uint8_t)(held_ms / 1000U);
 
-        if (HAL_GPIO_ReadPin(BTN_DELETE_GPIO_Port, BTN_DELETE_Pin) != GPIO_PIN_RESET) {
+        /* Hard timeout: if button stuck >30 s, cancel to prevent lockout */
+        if (held_ms > 30000U) {
+            delete_hold_active = 0;
+            sys_state = SYS_IDLE;
+            Show_Ready();
+        }
+
+        else if (HAL_GPIO_ReadPin(BTN_DELETE_GPIO_Port, BTN_DELETE_Pin) != GPIO_PIN_RESET) {
             delete_hold_active = 0;
             sys_state = SYS_IDLE;
             Show_Ready();
@@ -678,9 +715,13 @@ static void App_Loop(void)
 
             if (held_ms >= DELETE_HOLD_MS) {
                 delete_hold_active = 0;
-                state_tick = now;
                 SSD1306_ShowDeleting();
-                HAL_UART_Transmit(&huart1, (uint8_t *)"DEL_ALL\n", 8, 100);
+                if (HAL_UART_Transmit(&huart1, (uint8_t *)"DEL_ALL\n", 8, 200) == HAL_OK) {
+                    state_tick = now;
+                } else {
+                    /* TX failed — treat as link loss and go offline */
+                    Mark_ESP32_Offline();
+                }
             }
         }
     }
@@ -696,7 +737,7 @@ static void App_Loop(void)
             state_tick = HAL_GetTick();
             HAL_UART_Transmit(&huart1, (uint8_t *)"ENROLL\n", 7, 100);
             SSD1306_ShowEnrolling();
-            DFPlayer_Play(DFP_TRACK_LOOK_AT_CAM);
+            /* Audio is driven by ESP32's ENROLL_FRONT response to avoid double-play */
         } else if (sys_state == SYS_CONNECTING || sys_state == SYS_OFFLINE || !esp32_ready) {
             ESP32_RequestStatus(1);
             Show_ESP32_LinkState();
@@ -761,15 +802,13 @@ static void App_Loop(void)
                 btn_enroll_flag = 0; /* Discard queued presses during enrol timeout */
                 HAL_UART_Transmit(&huart1, (uint8_t *)"CANCEL\n", 7, 100);
                 enroll_retry_count = 0;
-
-                if (esp32_ready) {
-                    /* Link still alive: return to READY instead of false OFFLINE. */
-                    Restore_LinkAwareIdle();
-                    ESP32_RequestStatus(1);
-                } else {
-                    Mark_ESP32_Offline();
-                    ESP32_RequestStatus(1);
-                }
+                /* Brief failure notification via RESULT state (non-blocking) */
+                sys_state  = SYS_RESULT;
+                state_tick = HAL_GetTick();
+                SSD1306_ShowDenied();
+                DFPlayer_Play(DFP_TRACK_DENIED);
+                ESP32_RequestStatus(1);
+                break;
             }
             break;
 
@@ -789,13 +828,23 @@ static void App_Loop(void)
             }
             break;
 
-        case SYS_LOCKED:
+        case SYS_LOCKED: {
+            uint32_t elapsed_ms = now - state_tick;
             /* STM32-side fallback: if ESP32 never sends LOCKOUT_CLEAR,
-             * unlock after 5 minutes to prevent permanent deadlock. */
-            if ((now - state_tick) >= LOCKOUT_DISPLAY_MS) {
+             * unlock after lockout_duration_ms to prevent permanent deadlock. */
+            if (elapsed_ms >= lockout_duration_ms) {
+                lockout_last_second = 0xFFFFFFFFU;
                 Restore_LinkAwareIdle();
+            } else {
+                /* Update countdown display once per second */
+                uint32_t remaining_s = (lockout_duration_ms - elapsed_ms + 999U) / 1000U;
+                if (remaining_s != lockout_last_second) {
+                    lockout_last_second = remaining_s;
+                    SSD1306_ShowLockedCountdown(remaining_s);
+                }
             }
             break;
+        }
 
         default:
             break;

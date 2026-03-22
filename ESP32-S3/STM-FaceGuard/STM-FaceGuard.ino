@@ -152,6 +152,8 @@ static AppState appState    = STATE_IDLE;
 static int      enrollStep  = 0;     // bước hiện tại 0..4
 static uint32_t stepStartMs = 0;     // millis() lúc bắt đầu bước
 static int      enrolledId  = -1;    // ID thực tế từ enroll_id() bước FRONT
+static int      step0FailCount   = 0;   // consecutive enroll_id() failures at step 0
+static int      step0StableCount = 0;   // consecutive frames with face detected (stability gate)
 
 // ── Face AI objects ───────────────────────────────────────────────────────────
 // Detector params: score_threshold, nms_threshold, top_k, min_face_size
@@ -735,10 +737,12 @@ static void abort_enroll(bool rollback_partial)
         Serial.printf("[ENROLL] Rollback partial ID=%d (remaining=%d)\n", enrolledId, removed);
     }
 
-    appState    = STATE_IDLE;
-    enrollStep  = 0;
-    stepStartMs = millis();
-    enrolledId  = -1;
+    appState          = STATE_IDLE;
+    enrollStep        = 0;
+    stepStartMs       = millis();
+    enrolledId        = -1;
+    step0FailCount    = 0;
+    step0StableCount  = 0;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -760,7 +764,10 @@ static void process_cmd(const String &cmd)
         appState    = STATE_ENROLLING;
         enrollStep  = 0;
         stepStartMs = millis();
-        enrolledId  = -1;
+        enrolledId   = -1;
+        matchCount   = 0;
+        noMatchCount = 0;
+        lastMatchId  = -1;
         Serial1.printf("%s\n", ENROLL_STEPS[0]);
         Serial.printf("[ENROLL] Step 1/%d → %s\n", ENROLL_TOTAL_STEPS, ENROLL_STEPS[0]);
     }
@@ -780,6 +787,10 @@ static void process_cmd(const String &cmd)
     }
     else if (cmd == "STATUS") {
         send_status();
+    }
+    else {
+        Serial.printf("[CMD] Unknown command: %s\n", cmd.c_str());
+        Serial1.printf("ERROR:UNKNOWN_CMD\n");
     }
 }
 
@@ -807,10 +818,12 @@ static void process_frame()
     // Phát hiện khuôn mặt trên buffer RGB888 đã decode từ JPEG
     std::list<dl::detect::result_t> faces =
         detector.infer(rgbFrameBuf, {(int)fb->height, (int)fb->width, 3});
+    esp_task_wdt_reset();   // detector.infer() can be slow — keep WDT happy
 
     if (faces.empty()) {
         // Không thấy khuôn mặt
-        noMatchCount = 0;
+        noMatchCount     = 0;
+        step0StableCount = 0;  // reset stability gate — face must reappear cleanly
         if (appState == STATE_ENROLLING) {
             if ((millis() - stepStartMs) >= ENROLL_FACE_TIMEOUT_MS) {
                 // Hết giờ chờ, nhắc lại bước hiện tại
@@ -849,16 +862,27 @@ static void process_frame()
     if (appState == STATE_ENROLLING)
     {
         if (enrollStep == 0) {
-            // Bước FRONT: capture thật ngay khi thấy mặt
-            int result = recognizer.enroll_id(img, face.keypoint, "", false);
-            if (result < 0) {
-                // enroll_id thất bại (không align được mặt), thử lại frame sau
+            // Stability gate: require 3 consecutive frames with face before capturing.
+            // Prevents capturing a blurry or partially-aligned face mid-motion.
+            step0StableCount++;
+            if (step0StableCount < 3) {
                 esp_camera_fb_return(fb);
                 return;
             }
-            enrolledId = result;  // lưu ID thực để báo STM32 sau khi hoàn tất
+
+            int result = recognizer.enroll_id(img, face.keypoint, "", false);
+            if (result < 0) {
+                // Alignment failed — reset stability and retry next detection
+                step0FailCount++;
+                step0StableCount = 0;
+                Serial.printf("[ENROLL] enroll_id failed (attempt %d)\n", step0FailCount);
+                esp_camera_fb_return(fb);
+                return;
+            }
+            step0FailCount   = 0;
+            step0StableCount = 0;
+            enrolledId = result;
             Serial.printf("[ENROLL] Captured FRONT, ID=%d\n", result);
-            // Sang bước 1 (LEFT)
             enrollStep++;
             stepStartMs = millis();
             Serial1.printf("%s\n", ENROLL_STEPS[enrollStep]);
@@ -875,11 +899,18 @@ static void process_frame()
 
             if (is_last) {
                 int persisted = recognizer.write_ids_to_flash();
-                Serial1.printf("ENROLLED:%d\n", enrolledId);
-                Serial.printf("[ENROLL] Done! ID=%d  total=%d faces  flash_sync=%d\n",
+                if (persisted < 0) {
+                    Serial.println("[ENROLL] WARNING: flash write failed — embedding in RAM only");
+                }
+                Serial.printf("[ENROLL] Done! ID=%d  total=%d  flash=%d\n",
                               enrolledId, recognizer.get_enrolled_id_num(), persisted);
-                appState   = STATE_IDLE;
-                enrolledId = -1;
+                Serial1.printf("ENROLLED:%d\n", enrolledId);
+                appState     = STATE_IDLE;
+                enrollStep   = 0;
+                enrolledId   = -1;
+                matchCount   = 0;
+                noMatchCount = 0;
+                lastMatchId  = -1;
             }
             else {
                 enrollStep++;
@@ -974,7 +1005,7 @@ static void process_frame()
             if (failureCount >= MAX_FAILURES) {
                 failureCount   = 0;
                 lockoutUntilMs = now + LOCKOUT_DURATION_MS;
-                Serial1.println("LOCKOUT");
+                Serial1.printf("LOCKOUT:%lu\n", LOCKOUT_DURATION_MS);
                 Serial.printf("[SECURITY] LOCKOUT for %lu ms\n", LOCKOUT_DURATION_MS);
 
                 // Gửi LOCKOUT_CLEAR sau khi hết thời gian (dùng một lần trigger)
@@ -1057,7 +1088,11 @@ void loop()
             rxBuf.trim();
             if (rxBuf.length() > 0) process_cmd(rxBuf);
             rxBuf = "";
-        } else if (c != '\r' && rxBuf.length() < RX_BUF_MAX_LEN) {
+        } else if (rxBuf.length() >= RX_BUF_MAX_LEN) {
+            /* Command too long — discard and log */
+            Serial.printf("[CMD] RxBuf overflow, discarding: %s\n", rxBuf.c_str());
+            rxBuf = "";
+        } else if (c != '\r') {
             rxBuf += c;
         }
     }
@@ -1081,6 +1116,19 @@ void loop()
         (millis() - lastBeaconTxMs) >= AUTO_STATUS_BEACON_MS) {
         lastBeaconTxMs = millis();
         send_status();
+    }
+
+    /* Periodic health telemetry every 60 s — helps diagnose field issues */
+    static uint32_t lastTelemetryMs = 0;
+    if ((millis() - lastTelemetryMs) >= 60000UL) {
+        lastTelemetryMs = millis();
+        Serial.printf("[HEALTH] heap_free=%u  psram_free=%u  uptime=%lus  "
+                      "faces=%d  failures=%d  wdt=ok\n",
+                      esp_get_free_heap_size(),
+                      heap_caps_get_free_size(MALLOC_CAP_SPIRAM),
+                      millis() / 1000UL,
+                      recognizer.get_enrolled_id_num(),
+                      failureCount);
     }
 
     // ── Xử lý một frame camera ───────────────────────────────────────────────

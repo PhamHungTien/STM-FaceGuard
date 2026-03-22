@@ -278,6 +278,19 @@ void SSD1306_ShowLockout(void)
     draw_status("", " !! LOCKED OUT !!", "", " Too many attempts");
 }
 
+void SSD1306_ShowLockedCountdown(uint32_t remaining_s)
+{
+    char buf[22];
+    if (remaining_s > 60U) {
+        snprintf(buf, sizeof(buf), " Wait %lum %lus   ",
+                 (unsigned long)(remaining_s / 60U),
+                 (unsigned long)(remaining_s % 60U));
+    } else {
+        snprintf(buf, sizeof(buf), "   Wait %lu s...  ", (unsigned long)remaining_s);
+    }
+    draw_status("", " !! LOCKED OUT !!", "", buf);
+}
+
 void SSD1306_ShowScanning(void)
 {
     draw_status("", "  Scanning...", "", "  Hold still...");
