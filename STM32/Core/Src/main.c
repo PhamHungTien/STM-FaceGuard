@@ -747,10 +747,12 @@ static void App_Loop(void)
 
         case SYS_ENROLLING:
             if ((now - state_tick) >= ENROLL_TIMEOUT_MS) {
-                /* Retry ENROLL first: UART command can be dropped occasionally. */
+                /* Retry: send CANCEL first so ESP32 resets its enrollment state,
+                 * then re-send ENROLL to restart from step 0. */
                 if (esp32_ready && (enroll_retry_count < ENROLL_RETRY_MAX)) {
                     enroll_retry_count++;
                     state_tick = now;
+                    HAL_UART_Transmit(&huart1, (uint8_t *)"CANCEL\n", 7, 100);
                     HAL_UART_Transmit(&huart1, (uint8_t *)"ENROLL\n", 7, 100);
                     SSD1306_ShowEnrolling();
                     break;

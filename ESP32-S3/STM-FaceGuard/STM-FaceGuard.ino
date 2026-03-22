@@ -749,19 +749,20 @@ static void process_cmd(const String &cmd)
     Serial.printf("[CMD] «%s»\n", cmd.c_str());
 
     if (cmd == "ENROLL") {
-        if (appState == STATE_IDLE) {
-            if (recognizer.get_enrolled_id_num() >= MAX_ENROLLED_FACES) {
-                Serial1.println("DB_FULL");   // notify STM32 immediately
-                Serial.println("[ENROLL] DB full → DB_FULL sent");
-                return;
-            }
-            appState    = STATE_ENROLLING;
-            enrollStep  = 0;
-            stepStartMs = millis();
-            enrolledId  = -1;
-            Serial1.printf("%s\n", ENROLL_STEPS[0]);
-            Serial.printf("[ENROLL] Step 1/%d → %s\n", ENROLL_TOTAL_STEPS, ENROLL_STEPS[0]);
+        if (recognizer.get_enrolled_id_num() >= MAX_ENROLLED_FACES) {
+            Serial1.println("DB_FULL");
+            Serial.println("[ENROLL] DB full → DB_FULL sent");
+            return;
         }
+        // Restart enrollment unconditionally — handles STM32 retry correctly.
+        // If we were mid-enroll, roll back the partial capture first.
+        abort_enroll(appState == STATE_ENROLLING);
+        appState    = STATE_ENROLLING;
+        enrollStep  = 0;
+        stepStartMs = millis();
+        enrolledId  = -1;
+        Serial1.printf("%s\n", ENROLL_STEPS[0]);
+        Serial.printf("[ENROLL] Step 1/%d → %s\n", ENROLL_TOTAL_STEPS, ENROLL_STEPS[0]);
     }
     else if (cmd == "DEL_ALL") {
         recognizer.clear_id(true);
