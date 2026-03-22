@@ -4,15 +4,43 @@
 \chapter{Mã nguồn tham khảo}
 \label{app:code}
 
-\section*{B.1 Hàm phân tích lệnh UART (STM32)}
+Mã nguồn đầy đủ của dự án STM-FaceGuard được phát hành công khai
+theo giấy phép \textbf{GNU Affero General Public License v3.0 (AGPL-3.0)}
+và có thể tham khảo tại kho lưu trữ của nhóm.
 
-% TODO: dán code đầy đủ vào đây
-\begin{lstlisting}[style=cstyle, caption={Hàm ParseUartCommand}]
-// TODO
+\section*{B.1 \quad Hàm phân tích lệnh UART --- STM32}
+
+\begin{lstlisting}[style=cstyle,
+  caption={Hàm \texttt{Parse\_ESP32\_Msg} --- phân tích giao thức ESP32 $\to$ STM32},
+  label={lst:parse_msg}]
+// Xem day du tai: STM32/Core/Src/main.c
+static void Parse_ESP32_Msg(const char *msg)
+{
+    if (strncmp(msg, "OPEN:", 5) == 0)
+        Enter_Unlocked((uint8_t)atoi(msg + 5), 0);
+    else if (strcmp(msg, "DENIED")   == 0)  Enter_Denied();
+    else if (strcmp(msg, "READY")    == 0)  Mark_ESP32_Alive();
+    else if (strncmp(msg, "FACES:", 6) == 0)
+        enrolled_faces = (uint8_t)atoi(msg + 6);
+    /* ... (xem them trong repository) */
+}
 \end{lstlisting}
 
-\section*{B.2 Task nhận diện khuôn mặt (ESP32-S3)}
+\section*{B.2 \quad Vòng lặp nhận diện khuôn mặt --- ESP32-S3}
 
-\begin{lstlisting}[style=cstyle, caption={Face recognition task}]
-// TODO
+\begin{lstlisting}[style=cstyle,
+  caption={Voting pipeline nhận diện khuôn mặt (ESP32-S3)},
+  label={lst:fr_loop}]
+// Xem day du tai: ESP32-S3/STM-FaceGuard/STM-FaceGuard.ino
+face_info_t res = recognizer.recognize(img, face.keypoint);
+if (res.id >= 0 && res.similarity >= RECOGNITION_THRESHOLD) {
+    if (res.id == lastMatchId) matchCount++;
+    else { matchCount = 1; lastMatchId = res.id; }
+    if (matchCount >= REQUIRED_MATCHES) {
+        Serial1.printf("OPEN:%d\n", res.id);
+    }
+} else {
+    if (++noMatchCount >= REQUIRED_NO_MATCHES)
+        Serial1.println("DENIED");
+}
 \end{lstlisting}

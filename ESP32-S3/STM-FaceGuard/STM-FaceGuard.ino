@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Phạm Hùng Tiến et al. -- STM-FaceGuard project
 /*
  * STM-FaceGuard — ESP32-S3 Face Recognition Node
  * ─────────────────────────────────────────────────────────────────────────────
