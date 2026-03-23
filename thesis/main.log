@@ -1,4 +1,4 @@
-This is XeTeX, Version 3.141592653-2.6-0.999997 (TeX Live 2025) (preloaded format=xelatex 2026.3.2)  23 MAR 2026 14:27
+This is XeTeX, Version 3.141592653-2.6-0.999997 (TeX Live 2025) (preloaded format=xelatex 2026.3.2)  23 MAR 2026 14:28
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -1642,4 +1642,143 @@ File: mt-msa.cfg 2006/02/04 v1.1 microtype config. file: AMS symbols (a) (RS)
 LaTeX Font Info:    Trying to load font information for U+msb on input line 44.
 
 
-(/usr/local/texlive/2025/texmf-dist/tex/latex/amsfonts/umsb.
+(/usr/local/texlive/2025/texmf-dist/tex/latex/amsfonts/umsb.fd
+File: umsb.fd 2013/01/14 v3.01 AMS symbols B
+)
+(/usr/local/texlive/2025/texmf-dist/tex/latex/microtype/mt-msb.cfg
+File: mt-msb.cfg 2005/06/01 v1.0 microtype config. file: AMS symbols (b) (RS)
+)
+(/usr/local/texlive/2025/texmf-dist/tex/latex/microtype/mt-cmr.cfg
+File: mt-cmr.cfg 2013/05/19 v2.2 microtype config. file: Computer Modern Roman 
+(RS)
+) [1
+
+])
+[2
+
+] (./chapters/00_abstract.tex [1
+
+] [2
+
+]) [3] [4
+
+] (./main.toc [5])
+\tf@toc=\write6
+\openout6 = `main.toc'.
+
+ [6]
+(./main.lof)
+\tf@lof=\write7
+\openout7 = `main.lof'.
+
+ [7
+
+] [8
+
+] (./main.lot)
+\tf@lot=\write8
+\openout8 = `main.lot'.
+
+ [9] [10
+
+] (./main.lol
+LaTeX Font Info:    Font shape `TU/CourierNew(0)/m/n' will be
+(Font)              scaled to size 8.80005pt on input line 4.
+Package microtype Info: Loading generic protrusion settings for font family
+(microtype)             `CourierNew' (encoding: TU).
+(microtype)             For optimal results, create family-specific settings.
+(microtype)             See the microtype manual for details.
+)
+\tf@lol=\write9
+\openout9 = `main.lol'.
+
+ [11
+
+] [12
+
+]
+(./chapters/00_abbreviations.tex) [13
+
+] [14
+
+] (./chapters/ch1_intro.tex
+Chương 1.
+[1
+
+]) (./chapters/ch2_theory.tex [2]
+Chương 2.
+[3
+
+]) (./chapters/ch3_hardware.tex [4]
+Chương 3.
+[5
+
+]) (./chapters/ch4_software.tex [6] [7] [8
+
+]
+Chương 4.
+[9] (/usr/local/texlive/2025/texmf-dist/tex/latex/listings/lstlang1.sty
+File: lstlang1.sty 2025/11/14 1.11b listings language file
+)
+(/usr/local/texlive/2025/texmf-dist/tex/latex/listings/lstmisc.sty
+File: lstmisc.sty 2025/11/14 1.11b (Carsten Heinz)
+)
+Package hyperref Info: bookmark level for unknown lstlisting defaults to 0 on i
+nput line 58.
+LaTeX Font Info:    Font shape `TU/CourierNew(0)/m/n' will be
+(Font)              scaled to size 7.92004pt on input line 58.
+LaTeX Font Info:    Font shape `TU/CourierNew(0)/m/it' will be
+(Font)              scaled to size 7.92004pt on input line 59.
+LaTeX Font Info:    Font shape `TU/CourierNew(0)/b/n' will be
+(Font)              scaled to size 7.92004pt on input line 60.
+ [10])
+(./chapters/ch5_results.tex [11] [12
+
+]
+Chương 5.
+[13]) (./chapters/ch6_conclusion.tex [14]
+Chương 6.
+[15
+
+]) [16] (./appendix/schematic.tex [17
+
+
+] [18
+
+]
+Phụ lục A.
+) (./appendix/code_snippets.tex [19] [20
+
+]
+Phụ lục B.
+) [21] [22
+
+] (./chapters/00_task_division.tex [23]
+Underfull \hbox (badness 4181) in paragraph at lines 154--154
+[][]|\TU/TimesNewRoman(0)/m/n/9 Firmware STM32 
+ []
+
+Missing character: There is no , ("2C) in font nullfont!
+[24
+
+] [25]) (./main.aux)
+ ***********
+LaTeX2e <2025-11-01>
+L3 programming layer <2026-01-19>
+ ***********
+Package rerunfilecheck Info: File `main.out' has not changed.
+(rerunfilecheck)             Checksum: 63BFE8739EAC6436945080B92374110E;10960.
+Package logreq Info: Writing requests to 'main.run.xml'.
+\openout1 = `main.run.xml'.
+
+ ) 
+Here is how much of TeX's memory you used:
+ 46163 strings out of 468223
+ 986749 string characters out of 5437995
+ 2037997 words of memory out of 5000000
+ 74112 multiletter control sequences out of 15000+600000
+ 635570 words of font info for 135 fonts, out of 8000000 for 9000
+ 1349 hyphenation exceptions out of 8191
+ 84i,13n,103p,1197b,5562s stack positions out of 10000i,1000n,20000p,200000b,200000s
+
+Output written on main.pdf (41 pages).

@@ -280,7 +280,7 @@ void SSD1306_ShowLockout(void)
 
 void SSD1306_ShowLockedCountdown(uint32_t remaining_s)
 {
-    char buf[22];
+    char buf[24];
     if (remaining_s > 60U) {
         snprintf(buf, sizeof(buf), " Wait %lum %lus   ",
                  (unsigned long)(remaining_s / 60U),
