@@ -19,7 +19,7 @@ Hệ thống STM-FaceGuard được xây dựng theo kiến trúc phân tầng v
 
 Luồng hoạt động cơ bản như sau:
 \begin{enumerate}[label=\arabic*.]
-  \item Camera OV2640 cung cấp liên tục luồng ảnh cho ESP32-S3.
+  \item Camera OV3660 cung cấp liên tục luồng ảnh cho ESP32-S3.
   \item ESP32-S3 xử lý ảnh, phát hiện và nhận diện khuôn mặt.
   \item Kết quả nhận diện được gửi sang STM32F303RE qua UART.
   \item STM32F303RE điều khiển relay mở khóa, cập nhật OLED và phát âm thanh phản hồi.
@@ -41,7 +41,7 @@ Luồng hoạt động cơ bản như sau:
     \midrule
     1 & Vi điều khiển chính  & STM32F303RE, Nucleo-64    & Điều khiển ngoại vi, giao tiếp, relay \\
     2 & Module AI/Camera     & ESP32-S3-N16R8            & Nhận diện khuôn mặt, quản lý dữ liệu \\
-    3 & Camera               & OV2640, 2~MP              & Thu ảnh khuôn mặt real-time \\
+    3 & Camera               & OV3660, 3~MP              & Thu ảnh khuôn mặt real-time \\
     4 & Màn hình OLED        & SSD1306, 128$\times$64~px & Hiển thị trạng thái, thông báo \\
     5 & Module âm thanh      & DFPlayer Mini             & Phát file MP3 từ thẻ micro-SD \\
     6 & Loa                  & 8~$\Omega$, 3~W           & Phát thông báo âm thanh \\
@@ -99,13 +99,13 @@ ESP32-S3 chịu trách nhiệm giao tiếp với camera qua giao diện song son
     \midrule
     GPIO17 & UART1\_TX & $\to$ STM32 USART1\_RX (PA10) \\
     GPIO18 & UART1\_RX & $\leftarrow$ STM32 USART1\_TX (PA9) \\
-    GPIO4--GPIO11 & CAM\_DATA[7:0] & OV2640 Data Bus \\
-    GPIO15 & CAM\_PCLK  & OV2640 PCLK \\
-    GPIO16 & CAM\_VSYNC & OV2640 VSYNC \\
-    GPIO14 & CAM\_HREF  & OV2640 HREF \\
-    GPIO13 & CAM\_XCLK  & OV2640 XCLK (clock ra camera) \\
-    GPIO1  & CAM\_SDA   & OV2640 SCCB SDA \\
-    GPIO2  & CAM\_SCL   & OV2640 SCCB SCL \\
+    GPIO4--GPIO11 & CAM\_DATA[7:0] & OV3660 Data Bus \\
+    GPIO15 & CAM\_PCLK  & OV3660 PCLK \\
+    GPIO16 & CAM\_VSYNC & OV3660 VSYNC \\
+    GPIO14 & CAM\_HREF  & OV3660 HREF \\
+    GPIO13 & CAM\_XCLK  & OV3660 XCLK (clock ra camera) \\
+    GPIO1  & CAM\_SDA   & OV3660 SCCB SDA \\
+    GPIO2  & CAM\_SCL   & OV3660 SCCB SCL \\
     \bottomrule
   \end{tabular}
 \end{table}

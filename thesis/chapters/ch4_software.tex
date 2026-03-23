@@ -110,7 +110,7 @@ void Door_Unlock(void)
 Firmware ESP32-S3 được tổ chức theo mô hình đa task của FreeRTOS, với ba task chính hoạt động song song:
 
 \begin{itemize}
-  \item \textbf{\texttt{camera\_task}} (Core 0, Priority~5): Liên tục lấy frame từ OV2640, đưa vào hàng đợi ảnh.
+  \item \textbf{\texttt{camera\_task}} (Core 0, Priority~5): Liên tục lấy frame từ OV3660, đưa vào hàng đợi ảnh.
   \item \textbf{\texttt{fr\_task}} (Core 1, Priority~4): Lấy frame từ hàng đợi, chạy pipeline nhận diện khuôn mặt (detect $\to$ align $\to$ embed $\to$ match), gửi kết quả qua UART đến STM32.
   \item \textbf{\texttt{uart\_rx\_task}} (Core 0, Priority~3): Nhận lệnh từ STM32, xử lý yêu cầu \texttt{ENROLL} và \texttt{DEL\_ALL}.
 \end{itemize}

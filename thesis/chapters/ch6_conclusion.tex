@@ -24,7 +24,7 @@ Kết quả thực nghiệm cho thấy hệ thống hoạt động ổn định,
 Bên cạnh những kết quả đạt được, hệ thống hiện tại còn một số hạn chế cần được cải thiện:
 
 \begin{enumerate}[label=\arabic*.]
-  \item \textbf{Hiệu năng nhận diện giảm trong điều kiện ánh sáng yếu}: Camera OV2640 không có khả năng tự động điều chỉnh ISO cao, dẫn đến ảnh nhiễu và tỉ lệ nhận diện giảm đáng kể khi độ chiếu sáng dưới 50~lux.
+  \item \textbf{Hiệu năng nhận diện giảm trong điều kiện ánh sáng yếu}: Camera OV3660 không có khả năng tự động điều chỉnh ISO cao, dẫn đến ảnh nhiễu và tỉ lệ nhận diện giảm đáng kể khi độ chiếu sáng dưới 50~lux.
   \item \textbf{Không có cơ chế chống giả mạo (anti-spoofing)}: Hệ thống hiện tại có thể bị đánh lừa bằng ảnh in hoặc video phát lại trên điện thoại, vì chưa triển khai kỹ thuật phát hiện ``liveness''.
   \item \textbf{Giao tiếp UART không mã hóa}: Lệnh giữa STM32 và ESP32-S3 truyền dưới dạng văn bản thuần túy. Trong môi trường có nguy cơ tấn công vật lý, đây là điểm yếu bảo mật tiềm năng.
   \item \textbf{Sử dụng \texttt{HAL\_Delay()} trong vòng lặp chính}: Mặc dù đã tách xử lý ra khỏi ISR, việc dùng delay blocking trong main loop vẫn có thể làm trễ phản hồi nút nhấn nếu nhiều sự kiện xảy ra đồng thời.
