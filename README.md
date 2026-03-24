@@ -154,7 +154,7 @@ Hệ thống sử dụng **3 mức điện áp riêng biệt** từ nguồn cấ
 
 ```
 Nguồn 3.3V ──► OLED VCC
-           ──► Black Pill 3.3V pin   ← để Nucleo không bị sụt áp nội bộ
+           ──► Black Pill 3V3 pin (pin 24)   ← cấp thẳng, bỏ qua LDO nội bộ
 
 Nguồn 5V   ──► ESP32-S3 5V pin
            ──► DFPlayer Mini VCC
@@ -199,8 +199,8 @@ ESP32-S3          STM32F411CEU6 (Black Pill)     Nguồn
 ─────────         ──────────────────────────    ──────
 5V            ◄──  (không nối STM32)         ◄── Nguồn 5V
 GND           ───  GND                       ─── GND chung
-GPIO19 (TX)   ──►  PA10 / D2  (USART1 RX)
-GPIO20 (RX)   ◄──  PA9  / D8  (USART1 TX)
+GPIO19 (TX)   ──►  PA10  (USART1 RX)   [pin 31]
+GPIO20 (RX)   ◄──  PA9   (USART1 TX)   [pin 30]
 ```
 
 > Camera OV3660 tích hợp sẵn trên board ESP32-S3, **không cần nối thêm dây nào** cho camera.
@@ -325,11 +325,15 @@ Trong firmware hiện tại: `PC13` dùng EXTI, còn `PA0/PA1` đọc theo polli
 ```
 3.3V (pull-up nội bộ trong STM32)
   │
-  ├── PA0  (BTN_ENROLL) ──[Nút ENROLL]── GND
-  ├── PA1  (BTN_DELETE) ──[Nút DELETE]── GND
-  └── PC13 (BTN_EXIT)   ──[Nút ngoài]── GND
+  ├── PA0  (BTN_ENROLL) ──[KEY onboard]── GND   ← nút KEY có sẵn trên board
+  ├── PA1  (BTN_DELETE) ──[Nút ngoài] ── GND   ← đấu nút ngoài PA1 → GND
+  └── PC13 (BTN_EXIT)   ──[Nút ngoài] ── GND   ← đấu nút ngoài PC13 → GND
 ```
 
+> **PA0:** Board Black Pill có sẵn nút **KEY** nối PA0 → GND — dùng làm BTN_ENROLL, không cần đấu dây ngoài.
+>
+> **PC13:** Chân này có **LED BLUE onboard** (active-LOW). Khi nhấn nút BTN_EXIT nối PC13 → GND, LED xanh sẽ sáng lên — đây là hành vi bình thường.
+>
 > Code đã cấu hình **PULLUP + FALLING edge** cho `PC13`, `PA0`, `PA1` trong `MX_GPIO_Init()`.
 
 ---
@@ -338,21 +342,21 @@ Trong firmware hiện tại: `PC13` dùng EXTI, còn `PA0/PA1` đọc theo polli
 
 ![STM32F411CEU6 Black Pill Pinout](docs/stm32f411ceu6_blackpill_pinout.webp)
 
-| Chân STM32 | Tín hiệu | Kết nối tới |
-|-----------|----------|-------------|
-| **PA9** | USART1 TX | ESP32-S3 **GPIO20** (RX) |
-| **PA10** | USART1 RX | ESP32-S3 **GPIO19** (TX) |
-| **PA11** | USART6 TX | DFPlayer **RX** (qua 1kΩ) |
-| **PA12** | USART6 RX | DFPlayer **TX** |
-| **PA2** | USART2 TX | ST-Link Virtual COM (debug) |
-| **PA3** | USART2 RX | ST-Link Virtual COM (debug) |
-| **PB6** | I2C1 SCL | OLED **SCL** |
-| **PB7** | I2C1 SDA | OLED **SDA** |
-| **PB0** | GPIO OUT | [1kΩ] → **BC547 Base** |
-| **PA5** | GPIO OUT | LED onboard (LD2) |
-| **PC13** | EXTI13 | Nút **BTN_EXIT** → GND |
-| **PA0** | GPIO input (polling) | Nút **ENROLL** → GND |
-| **PA1** | GPIO input (polling) | Nút **DELETE** → GND |
+| Chân STM32 | Số chân | Tín hiệu | Kết nối tới |
+|-----------|---------|----------|-------------|
+| **PA9** | 30 | USART1 TX | ESP32-S3 **GPIO20** (RX) |
+| **PA10** | 31 | USART1 RX | ESP32-S3 **GPIO19** (TX) |
+| **PA11** | 32 | USART6 TX | DFPlayer **RX** (qua 1kΩ) |
+| **PA12** | 33 | USART6 RX | DFPlayer **TX** |
+| **PA2** | 12 | USART2 TX | ST-Link Virtual COM (debug) |
+| **PA3** | 13 | USART2 RX | ST-Link Virtual COM (debug) |
+| **PB6** | 42 | I2C1 SCL | OLED **SCL** |
+| **PB7** | 43 | I2C1 SDA | OLED **SDA** |
+| **PB0** | 18 | GPIO OUT | [1kΩ] → **BC547 Base** (Relay) |
+| **PA5** | 15 | GPIO OUT | LED ngoài (tùy chọn) |
+| **PC13** | 2 | EXTI13 | Nút **BTN_EXIT** → GND *(LED BLUE onboard sáng khi nhấn)* |
+| **PA0** | 10 | GPIO input | Nút **BTN_ENROLL** *(KEY onboard — không cần dây ngoài)* |
+| **PA1** | 11 | GPIO input | Nút **BTN_DELETE** → GND |
 
 ---
 
