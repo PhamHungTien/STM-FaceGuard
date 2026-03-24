@@ -7,10 +7,10 @@
 \section{Kết luận}
 \label{sec:conclusion}
 
-Tiểu luận đã trình bày toàn bộ quá trình thiết kế và hiện thực hệ thống khóa thông minh nhận diện khuôn mặt trên nền tảng Dual-MCU (STM32F303RE + ESP32-S3). Các đóng góp chính của nhóm bao gồm:
+Tiểu luận đã trình bày toàn bộ quá trình thiết kế và hiện thực hệ thống khóa thông minh nhận diện khuôn mặt trên nền tảng Dual-MCU (STM32F411CEU6 + ESP32-S3). Các đóng góp chính của nhóm bao gồm:
 
 \begin{enumerate}[label=\arabic*.]
-  \item \textbf{Kiến trúc Dual-MCU hợp lý}: Phân tách rõ ràng tầng xử lý AI (ESP32-S3) và tầng điều khiển ngoại vi (STM32F303RE) giúp mỗi vi điều khiển tập trung vào thế mạnh của mình, đồng thời tăng tính mô-đun và khả năng bảo trì của hệ thống.
+  \item \textbf{Kiến trúc Dual-MCU hợp lý}: Phân tách rõ ràng tầng xử lý AI (ESP32-S3) và tầng điều khiển ngoại vi (STM32F411CEU6) giúp mỗi vi điều khiển tập trung vào thế mạnh của mình, đồng thời tăng tính mô-đun và khả năng bảo trì của hệ thống.
   \item \textbf{Giao thức UART nội bộ gọn nhẹ}: Thiết kế giao thức văn bản ASCII đơn giản giữa hai MCU cho phép debug dễ dàng và mở rộng lệnh trong tương lai mà không cần thay đổi cấu trúc phần cứng.
   \item \textbf{Trải nghiệm người dùng đa kênh}: Tích hợp phản hồi qua OLED, âm thanh và LED tạo ra trải nghiệm rõ ràng, trực quan cho người dùng ở mọi điều kiện môi trường.
   \item \textbf{Vận hành độc lập, không cần internet}: Toàn bộ thuật toán nhận diện và cơ sở dữ liệu khuôn mặt được lưu trữ và xử lý trực tiếp trên thiết bị, đảm bảo tính riêng tư và hoạt động liên tục kể cả khi mất kết nối mạng.

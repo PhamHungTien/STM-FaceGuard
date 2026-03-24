@@ -18,7 +18,7 @@ Tiểu luận này đặt ra các mục tiêu cụ thể sau:
 
 \begin{enumerate}[label=\arabic*.]
   \item Thiết kế và xây dựng hoàn chỉnh hệ thống khóa thông minh tích hợp nhận diện khuôn mặt theo thời gian thực trên phần cứng nhúng.
-  \item Đề xuất và hiện thực kiến trúc Dual-MCU phân tách tầng xử lý AI (ESP32-S3) khỏi tầng điều khiển ngoại vi (STM32F303RE), đảm bảo tính mô-đun và dễ bảo trì.
+  \item Đề xuất và hiện thực kiến trúc Dual-MCU phân tách tầng xử lý AI (ESP32-S3) khỏi tầng điều khiển ngoại vi (STM32F411CEU6), đảm bảo tính mô-đun và dễ bảo trì.
   \item Xây dựng giao thức truyền thông nội bộ đơn giản, tin cậy giữa hai vi điều khiển qua UART.
   \item Tích hợp phản hồi đa kênh (màn hình OLED, âm thanh, LED) để nâng cao trải nghiệm người dùng.
   \item Hỗ trợ đăng ký và quản lý khuôn mặt trực tiếp trên thiết bị mà không cần máy tính hỗ trợ.
@@ -30,7 +30,7 @@ Tiểu luận này đặt ra các mục tiêu cụ thể sau:
 \begin{itemize}
   \item \textbf{Phần cứng:}
     \begin{itemize}
-      \item Vi điều khiển: STM32F303RE (Nucleo-64), ESP32-S3-N16R8
+      \item Vi điều khiển: STM32F411CEU6 (Black Pill), ESP32-S3-N16R8
       \item Ngoại vi: Camera OV3660, màn hình OLED SSD1306 (128$\times$64 px), relay 5~V, solenoid 12~V, module DFPlayer Mini, loa 8~$\Omega$
       \item Nút nhấn: 3 nút (Enroll, Delete, Exit)
     \end{itemize}
