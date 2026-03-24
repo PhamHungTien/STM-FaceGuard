@@ -186,6 +186,12 @@ static int      noMatchCount    = 0;   // số frame liên tiếp không khớp
 // ── Lockout state ─────────────────────────────────────────────────────────────
 static int      failureCount    = 0;           // lần thất bại liên tiếp
 static uint32_t lockoutUntilMs  = 0;           // khóa đến thời điểm này
+
+// ── Web UI — event tracking ───────────────────────────────────────────────────
+static char     lastEventStr[12] = "";   // "OPEN","DENIED","ENROLLED","DELETED","LOCKOUT"
+static int      lastEventIdWeb   = -1;   // face ID cho OPEN / ENROLLED
+static float    lastEventSim     = 0.0F; // similarity của lần nhận diện gần nhất
+static uint32_t lastEventSeq     = 0;    // đếm tăng mỗi sự kiện; JS dùng để phát hiện thay đổi
 static esp_err_t cameraInitErr  = ESP_OK;      // lưu lỗi init camera để chẩn đoán
 static bool     cameraReady     = false;
 static uint32_t lastCamFailTxMs = 0;
@@ -214,6 +220,15 @@ static const char *reset_reason_name(esp_reset_reason_t reason)
 static const char *app_state_name()
 {
     return (appState == STATE_ENROLLING) ? "ENROLLING" : "IDLE";
+}
+
+static void record_event(const char *type, int id = -1, float sim = 0.0F)
+{
+    strncpy(lastEventStr, type, sizeof(lastEventStr) - 1);
+    lastEventStr[sizeof(lastEventStr) - 1] = '\0';
+    lastEventIdWeb = id;
+    lastEventSim   = sim;
+    lastEventSeq++;
 }
 
 static const char *wifi_status_name(wl_status_t status)
@@ -351,83 +366,112 @@ static void face_light_poll()
 static void preview_handle_root()
 {
     String html;
-    html.reserve(2200);
-    html += F(
-        "<!doctype html><html><head><meta charset='utf-8'>"
-        "<meta name='viewport' content='width=device-width,initial-scale=1'>"
-        "<title>STM-FaceGuard Preview</title>"
-        "<style>"
-        "body{margin:0;background:#0b1724;color:#eaf2ff;font-family:Helvetica,Arial,sans-serif;}"
-        ".wrap{max-width:980px;margin:0 auto;padding:24px;}"
-        ".hero{display:grid;grid-template-columns:1.3fr .7fr;gap:18px;align-items:start;}"
-        ".card{background:#102235;border:1px solid #27435f;border-radius:18px;padding:18px;"
-        "box-shadow:0 12px 32px rgba(0,0,0,.25);}"
-        "h1{margin:0 0 8px;font-size:28px;letter-spacing:.02em;}"
-        ".sub{margin:0 0 18px;color:#97b7d9;}"
-        ".cam{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:14px;background:#07111c;"
-        "border:1px solid #1e3851;}"
-        ".grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}"
-        ".pill{display:inline-block;padding:4px 10px;border-radius:999px;background:#16314b;color:#9fd2ff;"
-        "font-size:12px;margin-bottom:14px;}"
-        ".label{font-size:12px;color:#97b7d9;text-transform:uppercase;letter-spacing:.08em;}"
-        ".value{font-size:20px;font-weight:700;margin-top:4px;}"
-        ".mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;color:#d4e6ff;}"
-        "@media (max-width:780px){.hero{grid-template-columns:1fr;}}"
-        "</style></head><body><div class='wrap'>"
-        "<span class='pill'>ESP32-S3 Camera Preview</span>"
-        "<h1>STM-FaceGuard</h1>"
-        "<p class='sub'>Preview dạng ảnh chụp nhanh để giảm tải cho face AI trong lúc debug.</p>"
-        "<div class='hero'><div class='card'>"
-        "<img id='cam' class='cam' alt='Camera preview' src='/capture'>"
-        "</div><div class='card'><div class='grid'>"
-        "<div><div class='label'>Camera</div><div class='value' id='camera'>...</div></div>"
-        "<div><div class='label'>Faces</div><div class='value' id='faces'>...</div></div>"
-        "<div><div class='label'>State</div><div class='value' id='state'>...</div></div>"
-        "<div><div class='label'>Failures</div><div class='value' id='failures'>...</div></div>"
-        "<div><div class='label'>Lockout</div><div class='value' id='lockout'>...</div></div>"
-        "<div><div class='label'>AP URL</div><div class='value mono' id='apurl'>...</div></div>"
-        "<div><div class='label'>STA URL</div><div class='value mono' id='staurl'>...</div></div>"
-        "</div>"
-        "<p class='sub' style='margin-top:16px'>"
-        "AP mặc định: <span class='mono'>http://192.168.4.1/</span><br>"
-        "SSID: <span class='mono'>");
+    html.reserve(5000);
+    html += F("<!doctype html><html><head><meta charset='utf-8'>"
+              "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+              "<title>STM-FaceGuard</title><style>"
+              "*{box-sizing:border-box}"
+              "body{margin:0;background:#0b1724;color:#eaf2ff;font-family:Helvetica,Arial,sans-serif}"
+              ".wrap{max-width:980px;margin:0 auto;padding:20px}"
+              ".hero{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}"
+              ".card{background:#102235;border:1px solid #27435f;border-radius:16px;padding:16px}"
+              "h1{margin:0 0 4px;font-size:26px}"
+              ".sub{margin:0 0 14px;color:#97b7d9;font-size:13px}"
+              ".pill{display:inline-block;padding:3px 10px;border-radius:999px;background:#16314b;"
+              "color:#9fd2ff;font-size:11px;margin-bottom:10px}"
+              ".cam{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:12px;"
+              "background:#07111c;border:1px solid #1e3851;display:block}"
+              ".grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}"
+              ".cell{padding:8px 10px;background:#0d1c2e;border-radius:10px}"
+              ".lbl{font-size:10px;color:#97b7d9;text-transform:uppercase;letter-spacing:.06em}"
+              ".val{font-size:18px;font-weight:700;margin-top:2px;transition:color .3s}"
+              ".evbox{background:#0d1c2e;border-radius:10px;padding:8px;min-height:64px}"
+              ".ev{font-size:12px;padding:4px 0;border-bottom:1px solid #1a304a;display:flex;"
+              "justify-content:space-between;align-items:center}"
+              ".ev:last-child{border-bottom:none}"
+              ".evt{font-size:10px;color:#4a6a8a}"
+              ".info{display:flex;gap:14px;font-size:11px;color:#4a6a8a;margin-top:10px;flex-wrap:wrap}"
+              ".mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}"
+              "@media(max-width:680px){.hero{grid-template-columns:1fr}}"
+              "</style></head><body><div class='wrap'>"
+              "<span class='pill'>ESP32-S3 Face Recognition</span>"
+              "<h1>STM-FaceGuard</h1>"
+              "<p class='sub'>SSID: <span class='mono'>");
     html += PREVIEW_AP_SSID;
-    html += F("</span> | Password: <span class='mono'>");
+    html += F("</span>&nbsp;&nbsp;Pass: <span class='mono'>");
     html += PREVIEW_AP_PASS;
-    html += F("</span></p>");
+    html += F("</span></p>"
+              "<div class='hero'>"
+              "<div class='card'>"
+              "<img id='cam' class='cam' src='/capture' alt=''>"
+              "</div>"
+              "<div class='card'>"
+              "<div class='grid'>"
+              "<div class='cell'><div class='lbl'>Camera</div><div class='val' id='vcam'>…</div></div>"
+              "<div class='cell'><div class='lbl'>Khuôn mặt</div><div class='val' id='vfaces'>…</div></div>"
+              "<div class='cell'><div class='lbl'>Trạng thái</div><div class='val' id='vstate'>…</div></div>"
+              "<div class='cell'><div class='lbl'>Khóa</div><div class='val' id='vlockout'>…</div></div>"
+              "</div>"
+              "<div class='lbl' style='margin-bottom:6px'>Lịch sử sự kiện</div>"
+              "<div class='evbox' id='evlog'>"
+              "<div class='ev'><span style='color:#4a6a8a'>Chưa có sự kiện</span></div>"
+              "</div>"
+              "<div class='info'>"
+              "<span>Uptime: <b id='vuptime'>…</b>s</span>"
+              "<span>Heap: <b id='vheap'>…</b> KB</span>"
+              "<span>Lỗi: <b id='vfail'>…</b></span>"
+              "<span class='mono' id='vapurl'></span>"
+              "</div></div></div>");
 
-    if (strlen(PREVIEW_STA_SSID) > 0) {
-        html += F("<p class='sub'>STA target: <span class='mono'>");
-        html += PREVIEW_STA_SSID;
-        html += F("</span></p>");
-    } else {
-        html += F("<p class='sub'>STA mode đang tắt. Muốn mở qua router, điền "
-                  "<span class='mono'>PREVIEW_STA_SSID/PASS</span> trong firmware.</p>");
-    }
-
-    html += F(
-        "</div></div></div>"
-        "<script>"
-        "const img=document.getElementById('cam');"
-        "const refreshMs=");
+    html += F("<script>"
+              "const EV_COL={OPEN:'#4ade80',DENIED:'#f87171',ENROLLED:'#22d3ee',"
+              "DELETED:'#fb923c',LOCKOUT:'#f87171'};"
+              "let evSeq=-1,evLog=[],lockRemain=0,lockTimer=null;"
+              "function fmtT(d){return d.toLocaleTimeString('vi-VN',{hour:'2-digit',"
+              "minute:'2-digit',second:'2-digit'});}"
+              "function sv(id,txt,col){const e=document.getElementById(id);"
+              "e.textContent=txt;e.style.color=col||'';}"
+              "function tickLock(){"
+              "lockRemain--;if(lockRemain<=0){clearInterval(lockTimer);lockTimer=null;"
+              "lockRemain=0;sv('vlockout','Bình thường','#4ade80');}"
+              "else sv('vlockout','🔒 '+lockRemain+'s','#f87171');}"
+              "function setLock(sec){"
+              "lockRemain=sec;"
+              "if(lockTimer){clearInterval(lockTimer);lockTimer=null;}"
+              "if(sec>0){sv('vlockout','🔒 '+sec+'s','#f87171');"
+              "lockTimer=setInterval(tickLock,1000);}"
+              "else sv('vlockout','Bình thường','#4ade80');}"
+              "function updateStatus(){"
+              "fetch('/status',{cache:'no-store'}).then(r=>r.json()).then(s=>{"
+              "sv('vcam',s.cameraReady?'OK':'LỖI',s.cameraReady?'#4ade80':'#f87171');"
+              "sv('vfaces',s.faces,'#eaf2ff');"
+              "sv('vfail',s.failures,'#eaf2ff');"
+              "let sc='#4ade80';"
+              "if(s.lockout)sc='#f87171';"
+              "else if(s.state==='ENROLLING')sc='#fbbf24';"
+              "sv('vstate',s.state,sc);"
+              "if(s.lockoutRemainSec>0&&s.lockoutRemainSec>lockRemain)setLock(s.lockoutRemainSec);"
+              "else if(!s.lockout&&lockRemain<=0)sv('vlockout','Bình thường','#4ade80');"
+              "document.getElementById('vapurl').textContent=s.apUrl;"
+              "sv('vuptime',s.uptimeSec);sv('vheap',s.heapFreeKB);"
+              "if(s.lastEventSeq!==evSeq&&s.lastEvent){"
+              "evSeq=s.lastEventSeq;"
+              "const col=EV_COL[s.lastEvent]||'#eaf2ff';"
+              "const idS=s.lastEventId>=0?' #'+s.lastEventId:'';"
+              "const simS=parseFloat(s.lastSim)>0?' ('+parseFloat(s.lastSim).toFixed(2)+')':(s.lastEvent==='DENIED'?' ('+parseFloat(s.lastSim).toFixed(2)+')':'');"
+              "evLog.unshift({t:fmtT(new Date()),ev:s.lastEvent+idS+simS,c:col});"
+              "if(evLog.length>6)evLog.pop();"
+              "document.getElementById('evlog').innerHTML=evLog.map(e=>"
+              "'<div class=\"ev\"><b style=\"color:'+e.c+'\">'+e.ev+'</b>"
+              "<span class=\"evt\">'+e.t+'</span></div>').join('');"
+              "}}).catch(()=>{});}"
+              "const camImg=document.getElementById('cam');"
+              "function refreshCam(){camImg.src='/capture?t='+Date.now();}"
+              "refreshCam();updateStatus();"
+              "setInterval(refreshCam,");
     html += String(PREVIEW_REFRESH_MS);
-    html += F(
-        ";"
-        "function refreshShot(){img.src='/capture?ts='+Date.now();}"
-        "function updateStatus(){fetch('/status',{cache:'no-store'})"
-        ".then(r=>r.json()).then(s=>{"
-        "document.getElementById('camera').textContent=s.cameraReady?'READY':'ERROR';"
-        "document.getElementById('faces').textContent=s.faces;"
-        "document.getElementById('state').textContent=s.state;"
-        "document.getElementById('failures').textContent=s.failures;"
-        "document.getElementById('lockout').textContent=s.lockout?'ACTIVE':'CLEAR';"
-        "document.getElementById('apurl').textContent=s.apUrl;"
-        "document.getElementById('staurl').textContent=s.staConnected?s.staUrl:'-';"
-        "}).catch(()=>{});}"
-        "refreshShot();updateStatus();"
-        "setInterval(refreshShot,refreshMs);"
-        "setInterval(updateStatus,1000);"
-        "</script></body></html>");
+    html += F(");setInterval(updateStatus,1000);"
+              "</script></body></html>");
 
     previewServer.sendHeader("Cache-Control", "no-store, no-cache, must-revalidate");
     previewServer.send(200, "text/html; charset=utf-8", html);
@@ -461,7 +505,25 @@ static void preview_handle_status()
         json += WiFi.localIP().toString();
         json += "/";
     }
-    json += F("\"}");
+
+    // ── Event tracking fields ──────────────────────────────────────────────────
+    json += F("\",\"lastEvent\":\"");
+    json += lastEventStr;
+    json += F("\",\"lastEventId\":");
+    json += String(lastEventIdWeb);
+    json += F(",\"lastSim\":");
+    char simBuf[8];
+    snprintf(simBuf, sizeof(simBuf), "%.3f", lastEventSim);
+    json += simBuf;
+    json += F(",\"lastEventSeq\":");
+    json += String(lastEventSeq);
+    json += F(",\"lockoutRemainSec\":");
+    json += String(lockoutActive ? (uint32_t)((lockoutUntilMs - millis()) / 1000UL) : 0U);
+    json += F(",\"uptimeSec\":");
+    json += String(millis() / 1000UL);
+    json += F(",\"heapFreeKB\":");
+    json += String(esp_get_free_heap_size() / 1024U);
+    json += F("}");
 
     previewServer.sendHeader("Cache-Control", "no-store, no-cache, must-revalidate");
     previewServer.send(200, "application/json", json);
@@ -783,6 +845,7 @@ static void process_cmd(const String &cmd)
         failureCount = 0;      // clear failure counter after admin delete
         lockoutUntilMs = 0;    // also clear any active lockout
         Serial1.println("DELETED");
+        record_event("DELETED");
         Serial.println("[SYS] Face DB cleared");
     }
     else if (cmd == "CANCEL") {
@@ -909,6 +972,7 @@ static void process_frame()
                 Serial.printf("[ENROLL] Done! ID=%d  total=%d  flash=%d\n",
                               enrolledId, recognizer.get_enrolled_id_num(), persisted);
                 Serial1.printf("ENROLLED:%d\n", enrolledId);
+                record_event("ENROLLED", enrolledId);
                 appState     = STATE_IDLE;
                 enrollStep   = 0;
                 enrolledId   = -1;
@@ -941,6 +1005,7 @@ static void process_frame()
                 Serial.printf("[ENROLL] Done! ID=%d  total=%d  flash=%d\n",
                               enrolledId, recognizer.get_enrolled_id_num(), persisted);
                 Serial1.printf("ENROLLED:%d\n", enrolledId);
+                record_event("ENROLLED", enrolledId);
                 appState     = STATE_IDLE;
                 enrollStep   = 0;
                 enrolledId   = -1;
@@ -1014,6 +1079,7 @@ static void process_frame()
                 lastMatchId  = -1;
                 lastOpenMs   = now;
                 Serial1.printf("OPEN:%d\n", res.id);
+                record_event("OPEN", res.id, res.similarity);
                 Serial.printf("[RECOG] CONFIRMED  id=%d  sim=%.3f\n",
                               res.id, res.similarity);
             }
@@ -1042,12 +1108,14 @@ static void process_frame()
                 failureCount   = 0;
                 lockoutUntilMs = now + LOCKOUT_DURATION_MS;
                 Serial1.printf("LOCKOUT:%lu\n", LOCKOUT_DURATION_MS);
+                record_event("LOCKOUT", -1, res.similarity);
                 Serial.printf("[SECURITY] LOCKOUT for %lu ms\n", LOCKOUT_DURATION_MS);
 
                 // Gửi LOCKOUT_CLEAR sau khi hết thời gian (dùng một lần trigger)
                 // — được xử lý bởi lockout_check() trong loop()
             } else {
                 Serial1.println("DENIED");
+                record_event("DENIED", -1, res.similarity);
             }
         }
     }
