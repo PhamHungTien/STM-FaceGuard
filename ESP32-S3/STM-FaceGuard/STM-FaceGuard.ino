@@ -117,19 +117,19 @@
 #define OPEN_COOLDOWN_MS          3000   // ms sau OPEN trước khi nhận diện lại
 #define DENIED_COOLDOWN_MS         800   // ms sau DENIED trước khi thử lại
 #define ENROLL_FACE_TIMEOUT_MS   10000   // ms chờ phát hiện khuôn mặt mỗi bước
-#define ENROLL_STEP_DELAY_MS      2500   // ms tối thiểu giữ mỗi tư thế (bước 2–5)
-#define ENROLL_TOTAL_STEPS           5
+#define ENROLL_STEP_DELAY_MS      2500   // ms tối thiểu giữ mỗi tư thế (bước 2–N, không dùng khi ENROLL_TOTAL_STEPS=1)
+#define ENROLL_TOTAL_STEPS           1   // 1 = chỉ chụp mặt thẳng, xong ngay; tăng lên 5 để yêu cầu đa góc độ
 #define MAX_ENROLLED_FACES           7   // giới hạn thư viện ESP32 face recognition
 #define RX_BUF_MAX_LEN              32   // bảo vệ rxBuf khỏi overflow
 #define AUTO_STATUS_BEACON_MS     2000   // phát READY/FACES định kỳ khi rảnh
 
 // ── Ngưỡng nhận diện ──────────────────────────────────────────────────────────
-// Giá trị cao hơn = an toàn hơn. 0.55 giúp dễ nhận hơn trong nhà nhưng vẫn tương đối an toàn.
-#define RECOGNITION_THRESHOLD     0.55F
+// 0.45: nhạy hơn cho in-door, single-pose DB. Tăng lên 0.55+ nếu bị false positive.
+#define RECOGNITION_THRESHOLD     0.45F
 
 // ── Voting: yêu cầu N frame liên tiếp khớp trước khi mở cửa ─────────────────
-// Loại bỏ false positive từ 1 frame nhiễu. N=2 thêm ~0.2 s độ trễ (chấp nhận được).
-#define REQUIRED_MATCHES             2
+// N=1: phản hồi ngay lập tức (1 frame). Tăng lên 2 nếu bị false positive.
+#define REQUIRED_MATCHES             1
 
 // ── Negative voting: chỉ DENIED sau N frame liên tiếp không khớp ────────────
 #define REQUIRED_NO_MATCHES          2
@@ -879,10 +879,9 @@ static void process_frame()
     if (appState == STATE_ENROLLING)
     {
         if (enrollStep == 0) {
-            // Stability gate: require 3 consecutive frames with face before capturing.
-            // Prevents capturing a blurry or partially-aligned face mid-motion.
+            // Stability gate: require 2 consecutive frames with face before capturing.
             step0StableCount++;
-            if (step0StableCount < 3) {
+            if (step0StableCount < 2) {
                 esp_camera_fb_return(fb);
                 return;
             }
@@ -900,6 +899,26 @@ static void process_frame()
             step0StableCount = 0;
             enrolledId = result;
             Serial.printf("[ENROLL] Captured FRONT, ID=%d\n", result);
+
+            // Nếu chỉ có 1 bước (ENROLL_TOTAL_STEPS==1), hoàn tất enrollment ngay
+            if (ENROLL_TOTAL_STEPS == 1) {
+                int persisted = recognizer.write_ids_to_flash();
+                if (persisted < 0) {
+                    Serial.println("[ENROLL] WARNING: flash write failed — embedding in RAM only");
+                }
+                Serial.printf("[ENROLL] Done! ID=%d  total=%d  flash=%d\n",
+                              enrolledId, recognizer.get_enrolled_id_num(), persisted);
+                Serial1.printf("ENROLLED:%d\n", enrolledId);
+                appState     = STATE_IDLE;
+                enrollStep   = 0;
+                enrolledId   = -1;
+                matchCount   = 0;
+                noMatchCount = 0;
+                lastMatchId  = -1;
+                esp_camera_fb_return(fb);
+                return;
+            }
+
             enrollStep++;
             stepStartMs = millis();
             Serial1.printf("%s\n", ENROLL_STEPS[enrollStep]);
