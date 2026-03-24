@@ -68,17 +68,17 @@ Toàn bộ chân GPIO, UART và I2C của STM32F303RE được phân công theo 
     \toprule
     \textbf{Chân MCU} & \textbf{Tín hiệu} & \textbf{Cấu hình} & \textbf{Kết nối đến} \\
     \midrule
-    PA0  & BTN\_ENROLL & EXTI0, Pull-up, Falling  & Nút đăng ký khuôn mặt \\
-    PA1  & BTN\_DELETE & EXTI1, Pull-up, Falling  & Nút xóa tất cả \\
-    PC13 & BTN\_EXIT   & EXTI13, Pull-up, Falling & Nút xanh Nucleo (User Button) \\
+    PA0  & BTN\_ENROLL & EXTI0, Pull-up nội       & Nút đăng ký khuôn mặt \\
+    PA1  & BTN\_DELETE & EXTI1, Pull-up nội       & Nút xóa tất cả \\
+    PC13 & BTN\_EXIT   & EXTI13, Pull-up nội      & Nút xanh Nucleo (Mở cửa) \\
     PA5  & LD2         & GPIO Output, Push-Pull   & LED xanh lá trên Nucleo \\
     PB0  & RELAY       & GPIO Output, Push-Pull   & Relay $\to$ Solenoid 12~V \\
-    PA9  & USART1\_TX  & AF7, 115200~baud, 8N1    & $\to$ ESP32-S3 RXD \\
-    PA10 & USART1\_RX  & AF7, 115200~baud, 8N1    & $\leftarrow$ ESP32-S3 TXD \\
-    PA2  & USART2\_TX  & AF7, 38400~baud, 8N1     & ST-Link Virtual COM (debug) \\
-    PA3  & USART2\_RX  & AF7, 38400~baud, 8N1     & ST-Link Virtual COM (debug) \\
-    PC10 & USART3\_TX  & AF7, 9600~baud, 8N1      & $\to$ DFPlayer Mini RX \\
-    PC11 & USART3\_RX  & AF7, 9600~baud, 8N1      & $\leftarrow$ DFPlayer Mini TX \\
+    PA9  & USART1\_TX  & AF7, 115200~baud         & $\to$ ESP32-S3 RXD \\
+    PA10 & USART1\_RX  & AF7, 115200~baud, \textbf{DMA} & $\leftarrow$ ESP32-S3 TXD \\
+    PA2  & USART2\_TX  & AF7, 38400~baud          & ST-Link Virtual COM (debug) \\
+    PA3  & USART2\_RX  & AF7, 38400~baud          & ST-Link Virtual COM (debug) \\
+    PC10 & USART3\_TX  & AF7, 9600~baud           & $\to$ DFPlayer Mini RX \\
+    PC11 & USART3\_RX  & AF7, 9600~baud           & $\leftarrow$ DFPlayer Mini TX \\
     PB8  & I2C1\_SCL   & AF4, Fast-mode 400~kHz   & OLED SSD1306 SCL \\
     PB9  & I2C1\_SDA   & AF4, Fast-mode 400~kHz   & OLED SSD1306 SDA \\
     \bottomrule
