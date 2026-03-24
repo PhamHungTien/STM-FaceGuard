@@ -1,8 +1,8 @@
-This is XeTeX, Version 3.141592653-2.6-0.999997 (TeX Live 2025) (preloaded format=xelatex 2026.3.2)  23 MAR 2026 14:28
+This is XeTeX, Version 3.141592653-2.6-0.999997 (TeX Live 2025) (preloaded format=xelatex 2026.3.2)  25 MAR 2026 01:58
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
-**main.tex
+**main
 (./main.tex
 LaTeX2e <2025-11-01>
 L3 programming layer <2026-01-19>
@@ -1683,7 +1683,7 @@ File: mt-cmr.cfg 2013/05/19 v2.2 microtype config. file: Computer Modern Roman
 
 ] (./main.lol
 LaTeX Font Info:    Font shape `TU/CourierNew(0)/m/n' will be
-(Font)              scaled to size 8.80005pt on input line 4.
+(Font)              scaled to size 8.80005pt on input line 2.
 Package microtype Info: Loading generic protrusion settings for font family
 (microtype)             `CourierNew' (encoding: TU).
 (microtype)             For optimal results, create family-specific settings.
@@ -1711,6 +1711,11 @@ Chương 2.
 
 ]) (./chapters/ch3_hardware.tex [4]
 Chương 3.
+
+Underfull \hbox (badness 10000) in paragraph at lines 53--53
+[]|\TU/TimesNewRoman(0)/m/n/10 STM32F411CEU6,
+ []
+
 [5
 
 ]) (./chapters/ch4_software.tex [6] [7] [8
@@ -1727,16 +1732,16 @@ Package hyperref Info: bookmark level for unknown lstlisting defaults to 0 on i
 nput line 58.
 LaTeX Font Info:    Font shape `TU/CourierNew(0)/m/n' will be
 (Font)              scaled to size 7.92004pt on input line 58.
-LaTeX Font Info:    Font shape `TU/CourierNew(0)/m/it' will be
-(Font)              scaled to size 7.92004pt on input line 59.
 LaTeX Font Info:    Font shape `TU/CourierNew(0)/b/n' will be
-(Font)              scaled to size 7.92004pt on input line 60.
+(Font)              scaled to size 7.92004pt on input line 59.
+LaTeX Font Info:    Font shape `TU/CourierNew(0)/m/it' will be
+(Font)              scaled to size 7.92004pt on input line 61.
  [10])
-(./chapters/ch5_results.tex [11] [12
-
-]
+(./chapters/ch5_results.tex [11] [12]
 Chương 5.
-[13]) (./chapters/ch6_conclusion.tex [14]
+[13
+
+]) (./chapters/ch6_conclusion.tex [14]
 Chương 6.
 [15
 
@@ -1767,18 +1772,18 @@ LaTeX2e <2025-11-01>
 L3 programming layer <2026-01-19>
  ***********
 Package rerunfilecheck Info: File `main.out' has not changed.
-(rerunfilecheck)             Checksum: 63BFE8739EAC6436945080B92374110E;10960.
+(rerunfilecheck)             Checksum: D80EC99E4B8D1687654EEBF928F868FE;12065.
 Package logreq Info: Writing requests to 'main.run.xml'.
 \openout1 = `main.run.xml'.
 
  ) 
 Here is how much of TeX's memory you used:
- 46163 strings out of 468223
- 986749 string characters out of 5437995
- 2037997 words of memory out of 5000000
- 74112 multiletter control sequences out of 15000+600000
+ 46135 strings out of 468223
+ 986218 string characters out of 5437995
+ 2034910 words of memory out of 5000000
+ 74084 multiletter control sequences out of 15000+600000
  635570 words of font info for 135 fonts, out of 8000000 for 9000
  1349 hyphenation exceptions out of 8191
- 84i,13n,103p,1197b,5562s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 84i,13n,103p,1193b,5562s stack positions out of 10000i,1000n,20000p,200000b,200000s
 
 Output written on main.pdf (41 pages).

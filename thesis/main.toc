@@ -26,21 +26,21 @@
 \contentsline {section}{\numberline {3.1}Tổng quan kiến trúc hệ thống}{5}{section.3.1}%
 \contentsline {section}{\numberline {3.2}Danh sách linh kiện}{5}{section.3.2}%
 \contentsline {section}{\numberline {3.3}Sơ đồ kết nối chân}{5}{section.3.3}%
-\contentsline {subsection}{\numberline {3.3.1}STM32F303RE (Nucleo-64)}{5}{subsection.3.3.1}%
+\contentsline {subsection}{\numberline {3.3.1}STM32F411CEU6 (Black Pill)}{5}{subsection.3.3.1}%
 \contentsline {subsection}{\numberline {3.3.2}ESP32-S3-N16R8}{6}{subsection.3.3.2}%
 \contentsline {section}{\numberline {3.4}Thiết kế nguồn điện}{6}{section.3.4}%
 \contentsline {section}{\numberline {3.5}Sơ đồ nguyên lý}{7}{section.3.5}%
 \contentsline {chapter}{\numberline {4}Thiết kế phần mềm}{9}{chapter.4}%
 \contentsline {section}{\numberline {4.1}Kiến trúc phần mềm tổng quan}{9}{section.4.1}%
-\contentsline {section}{\numberline {4.2}Firmware STM32F303RE}{9}{section.4.2}%
-\contentsline {subsection}{\numberline {4.2.1}Cấu trúc chương trình}{9}{subsection.4.2.1}%
-\contentsline {subsection}{\numberline {4.2.2}Máy trạng thái hệ thống}{9}{subsection.4.2.2}%
-\contentsline {subsection}{\numberline {4.2.3}Xử lý ngắt nút nhấn}{10}{subsection.4.2.3}%
-\contentsline {subsection}{\numberline {4.2.4}Điều khiển relay mở khóa}{10}{subsection.4.2.4}%
-\contentsline {section}{\numberline {4.3}Firmware ESP32-S3}{10}{section.4.3}%
-\contentsline {subsection}{\numberline {4.3.1}Cấu trúc task FreeRTOS}{10}{subsection.4.3.1}%
-\contentsline {subsection}{\numberline {4.3.2}Quy trình nhận diện khuôn mặt}{11}{subsection.4.3.2}%
-\contentsline {subsection}{\numberline {4.3.3}Đăng ký khuôn mặt}{11}{subsection.4.3.3}%
+\contentsline {section}{\numberline {4.2}Firmware STM32F411CEU6: Bộ điều phối hướng sự kiện}{9}{section.4.2}%
+\contentsline {subsection}{\numberline {4.2.1}Cấu trúc nhận dữ liệu UART DMA với Idle Line Detection}{9}{subsection.4.2.1}%
+\contentsline {subsection}{\numberline {4.2.2}Máy trạng thái hệ thống (FSM)}{9}{subsection.4.2.2}%
+\contentsline {subsection}{\numberline {4.2.3}Xử lý thời gian thực không chặn (Non-blocking Logic)}{10}{subsection.4.2.3}%
+\contentsline {subsection}{\numberline {4.2.4}Bảo vệ hệ thống với Watchdog (IWDG)}{10}{subsection.4.2.4}%
+\contentsline {section}{\numberline {4.3}Firmware ESP32-S3: Tối ưu hóa Pipeline AI}{11}{section.4.3}%
+\contentsline {subsection}{\numberline {4.3.1}Phân phối tác vụ đa nhân (Dual-Core Processing)}{11}{subsection.4.3.1}%
+\contentsline {subsection}{\numberline {4.3.2}Quy trình nhận diện và Cơ chế Voting}{11}{subsection.4.3.2}%
+\contentsline {subsection}{\numberline {4.3.3}Đăng ký khuôn mặt đa góc độ}{11}{subsection.4.3.3}%
 \contentsline {section}{\numberline {4.4}Giao diện hiển thị OLED SSD1306}{11}{section.4.4}%
 \contentsline {section}{\numberline {4.5}Hệ thống âm thanh DFPlayer Mini}{11}{section.4.5}%
 \contentsline {chapter}{\numberline {5}Kết quả thực nghiệm và đánh giá}{13}{chapter.5}%
