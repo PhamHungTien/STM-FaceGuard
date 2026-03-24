@@ -1,5 +1,3 @@
-/* SPDX-License-Identifier: AGPL-3.0-or-later */
-/* Copyright (C) 2026 Phạm Hùng Tiến et al. -- STM-FaceGuard project */
 /* USER CODE BEGIN Header */
 /**
   ******************************************************************************
@@ -74,6 +72,7 @@ I2C_HandleTypeDef hi2c1;
 UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 UART_HandleTypeDef huart3;
+DMA_HandleTypeDef hdma_usart1_rx;
 
 /* USER CODE BEGIN PV */
 /* --- Button flags (set in ISR, cleared in main loop) --- */
@@ -88,6 +87,8 @@ static volatile uint8_t  btn_enroll_armed = 0;
 static volatile uint8_t  btn_delete_armed = 0;
 
 /* --- UART1 receive buffer (ESP32-S3 → STM32) --- */
+#define ESP32_DMA_RX_SIZE       64U
+static uint8_t esp32_dma_rx_buf[ESP32_DMA_RX_SIZE];
 static uint8_t  uart1_rx_byte    = 0;
 static char     uart1_line[UART1_BUF_SIZE];
 static uint16_t uart1_line_idx   = 0;
@@ -123,6 +124,7 @@ static uint32_t      lockout_last_second   = 0xFFFFFFFFU;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_USART1_UART_Init(void);
@@ -161,35 +163,48 @@ static uint8_t UART1_DequeueLine(char *out);
 /* USER CODE BEGIN 0 */
 
 /* -----------------------------------------------------------------------
- * HAL UART RX callback – called after each byte received on UART1 (ESP32)
- * Accumulates bytes into uart1_line until '\n', then enqueues the line.
+ * HAL UART RX Event callback – called when UART1 receives a full line or IDLE
  * ----------------------------------------------------------------------- */
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
     if (huart->Instance == USART1) {
-        if (uart1_rx_byte == '\n') {
-            uart1_line[uart1_line_idx] = '\0';
-            if (uart1_line_idx > 0U) {
-                uint8_t next_tail = (uint8_t)((uart1_queue_tail + 1U) % UART1_QUEUE_LEN);
-                if (next_tail != uart1_queue_head) {
-                    memcpy(uart1_queue[uart1_queue_tail], uart1_line, uart1_line_idx + 1U);
-                    uart1_queue_tail = next_tail;
-                } else {
-                    uart1_queue_drops++;
-                }
-            }
-            uart1_line_idx  = 0;
-        } else if (uart1_rx_byte != '\r') {
-            if (uart1_line_idx < UART1_BUF_SIZE - 1) {
-                uart1_line[uart1_line_idx++] = (char)uart1_rx_byte;
-            } else {
-                /* Buffer overflow guard: discard line */
-                uart1_line_idx = 0;
+        /* Ensure null-termination */
+        if (Size < ESP32_DMA_RX_SIZE) {
+            esp32_dma_rx_buf[Size] = '\0';
+        } else {
+            esp32_dma_rx_buf[ESP32_DMA_RX_SIZE - 1] = '\0';
+        }
+
+        /* Basic cleanup: remove \r or \n */
+        char *ptr = (char *)esp32_dma_rx_buf;
+        for (uint16_t i = 0; i < Size; i++) {
+            if (ptr[i] == '\r' || ptr[i] == '\n') {
+                ptr[i] = '\0';
+                break;
             }
         }
-        /* Restart reception for next byte */
-        HAL_UART_Receive_IT(&huart1, &uart1_rx_byte, 1);
+
+        if (strlen(ptr) > 0) {
+            /* Enqueue for main loop processing */
+            uint8_t next_tail = (uint8_t)((uart1_queue_tail + 1U) % UART1_QUEUE_LEN);
+            if (next_tail != uart1_queue_head) {
+                strncpy(uart1_queue[uart1_queue_tail], ptr, UART1_BUF_SIZE - 1);
+                uart1_queue[uart1_queue_tail][UART1_BUF_SIZE - 1] = '\0';
+                uart1_queue_tail = next_tail;
+            } else {
+                uart1_queue_drops++;
+            }
+        }
+
+        /* Restart DMA reception */
+        HAL_UARTEx_ReceiveToIdle_DMA(&huart1, esp32_dma_rx_buf, ESP32_DMA_RX_SIZE);
+        __HAL_DMA_DISABLE_IT(huart1.hdmarx, DMA_IT_HT);
     }
+}
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+    /* Keep for other UARTs if needed, USART1 now handled by RxEventCallback */
 }
 
 /* -----------------------------------------------------------------------
@@ -203,9 +218,11 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
         __HAL_UART_CLEAR_OREFLAG(huart);   /* Clear Overrun  */
         __HAL_UART_CLEAR_NEFLAG(huart);    /* Clear Noise    */
         __HAL_UART_CLEAR_FEFLAG(huart);    /* Clear Framing  */
-        uart1_line_idx = 0;                /* Discard partial line */
         uart1_error_count++;               /* Track for diagnostics */
-        HAL_UART_Receive_IT(&huart1, &uart1_rx_byte, 1);
+        
+        /* Re-start DMA reception after error */
+        HAL_UARTEx_ReceiveToIdle_DMA(&huart1, esp32_dma_rx_buf, ESP32_DMA_RX_SIZE);
+        __HAL_DMA_DISABLE_IT(huart1.hdmarx, DMA_IT_HT);
     }
 }
 
@@ -611,8 +628,10 @@ static void App_Init(void)
     HAL_NVIC_SetPriority(USART1_IRQn, 0, 0);
     HAL_NVIC_EnableIRQ(USART1_IRQn);
 
-    /* --- Start UART1 interrupt-driven receive --- */
-    HAL_UART_Receive_IT(&huart1, &uart1_rx_byte, 1);
+    /* --- Start UART1 DMA reception with Idle Line Detection --- */
+    HAL_UARTEx_ReceiveToIdle_DMA(&huart1, esp32_dma_rx_buf, ESP32_DMA_RX_SIZE);
+    __HAL_DMA_DISABLE_IT(huart1.hdmarx, DMA_IT_HT); // Disable half-transfer interrupt
+
     ESP32_RequestStatus(1);
 
     /* --- Enter CONNECTING state before other slow inits so READY/FACES
@@ -882,6 +901,7 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_USART2_UART_Init();
   MX_I2C1_Init();
   MX_USART1_UART_Init();
@@ -1135,6 +1155,22 @@ static void MX_USART3_UART_Init(void)
 }
 
 /**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA1_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA1_Channel5_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel5_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel5_IRQn);
+
+}
+
+/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -1166,7 +1202,7 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pins : BTN_ENROLL_Pin BTN_DELETE_Pin */
   GPIO_InitStruct.Pin = BTN_ENROLL_Pin|BTN_DELETE_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
@@ -1185,6 +1221,12 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(RELAY_GPIO_Port, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+
+  HAL_NVIC_SetPriority(EXTI1_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI1_IRQn);
+
   HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 

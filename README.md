@@ -41,8 +41,8 @@ Dự án đồ án môn học xây dựng hệ thống khóa cửa thông minh s
 - **Lưu khuôn mặt vào Flash** — Tối đa 7 khuôn mặt lưu trong NVS Flash của ESP32-S3
 - **Đèn trợ sáng khuôn mặt** — ESP32-S3 bật đèn trắng ngắn khi thấy mặt trong khung hình để tăng sáng lúc nhận diện/enroll
 - **Kết nối tự động** — Màn hình "Connecting..." khi boot; tự chuyển "OFFLINE" nếu ESP32 không phản hồi sau 30 giây
+- **UART DMA hiệu năng cao** — Sử dụng **DMA kết hợp Idle Line Detection** giúp nhận dữ liệu gói lớn không tốn CPU và không mất ký tự khi xử lý OLED.
 - **Watchdog kép** — IWDG (STM32, ~5.0s) + Task WDT (ESP32, 30s) reset tự động nếu firmware bị treo
-- **UART bền vững** — Hàng đợi 4 tin nhắn + tự phục hồi sau lỗi overrun/framing
 
 ---
 
@@ -56,7 +56,7 @@ Dự án đồ án môn học xây dựng hệ thống khóa cửa thông minh s
 │  [ESP32-S3 N16R8 CAM]               [BTN_DELETE  PA1          ] │
 │         │                                                        │
 └─────────┼────────────────────────────────────────────────────────┘
-          │ UART1 115200 baud
+          │ UART1 115200 baud (DMA + IDLE Line)
           │ PA9 (TX) ←→ GPIO20 (RX)
           │ PA10(RX) ←→ GPIO19 (TX)
           ▼
@@ -397,11 +397,12 @@ Trong firmware hiện tại: `PC13` dùng EXTI, còn `PA0/PA1` đọc theo polli
 |---------|--------|
 | Baud rate | 115200 |
 | Data / Stop / Parity | 8N1 |
+| STM32 RX Method | **DMA + IDLE Line Detection** |
 | STM32 TX | PA9 |
 | STM32 RX | PA10 |
 | ESP32-S3 TX | GPIO19 |
 | ESP32-S3 RX | GPIO20 |
-| Hàng đợi STM32 | 4 tin nhắn (tránh mất gói khi ESP32 gửi liên tiếp) |
+| Hàng đợi STM32 | 4 tin nhắn (đã tối ưu xử lý phi tập trung) |
 
 ### USART3 — DFPlayer Mini ↔ STM32 (9600 baud)
 
