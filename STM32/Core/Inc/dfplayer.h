@@ -20,7 +20,7 @@
 #define DFP_TRACK_ENROLL_UP     9   /* "Vui long ngoc dau len mot chut"     */
 #define DFP_TRACK_ENROLL_DOWN  10   /* "Vui long cui dau xuong mot chut"    */
 
-extern UART_HandleTypeDef huart3;
+extern UART_HandleTypeDef huart6;
 
 void DFPlayer_Init(void);
 void DFPlayer_Play(uint8_t track);

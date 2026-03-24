@@ -27,7 +27,7 @@ extern "C" {
 #endif
 
 /* Includes ------------------------------------------------------------------*/
-#include "stm32f3xx_hal.h"
+#include "stm32f4xx_hal.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -72,25 +72,23 @@ void Error_Handler(void);
 #define USART_RX_GPIO_Port GPIOA
 #define LD2_Pin GPIO_PIN_5
 #define LD2_GPIO_Port GPIOA
-#define RELAY_Pin GPIO_PIN_0
-#define RELAY_GPIO_Port GPIOB
 #define ESP32_TX_Pin GPIO_PIN_9
 #define ESP32_TX_GPIO_Port GPIOA
 #define ESP32_RX_Pin GPIO_PIN_10
 #define ESP32_RX_GPIO_Port GPIOA
+#define DFP_TX_Pin GPIO_PIN_11
+#define DFP_TX_GPIO_Port GPIOA
+#define DFP_RX_Pin GPIO_PIN_12
+#define DFP_RX_GPIO_Port GPIOA
 #define TMS_Pin GPIO_PIN_13
 #define TMS_GPIO_Port GPIOA
 #define TCK_Pin GPIO_PIN_14
 #define TCK_GPIO_Port GPIOA
-#define DFP_TX_Pin GPIO_PIN_10
-#define DFP_TX_GPIO_Port GPIOC
-#define DFP_RX_Pin GPIO_PIN_11
-#define DFP_RX_GPIO_Port GPIOC
-#define SWO_Pin GPIO_PIN_3
-#define SWO_GPIO_Port GPIOB
-#define OLED_SCL_Pin GPIO_PIN_8
+#define RELAY_Pin GPIO_PIN_0
+#define RELAY_GPIO_Port GPIOB
+#define OLED_SCL_Pin GPIO_PIN_6
 #define OLED_SCL_GPIO_Port GPIOB
-#define OLED_SDA_Pin GPIO_PIN_9
+#define OLED_SDA_Pin GPIO_PIN_7
 #define OLED_SDA_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */

@@ -1,6 +1,0 @@
-../Core/Src/dfplayer.c:7:17:dfp_checksum	24	static
-../Core/Src/dfplayer.c:14:13:dfp_send	32	static
-../Core/Src/dfplayer.c:33:6:DFPlayer_Init	8	static
-../Core/Src/dfplayer.c:42:6:DFPlayer_Play	16	static
-../Core/Src/dfplayer.c:47:6:DFPlayer_Stop	8	static
-../Core/Src/dfplayer.c:52:6:DFPlayer_SetVolume	16	static

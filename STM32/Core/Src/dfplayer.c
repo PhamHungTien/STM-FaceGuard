@@ -27,7 +27,7 @@ static void dfp_send(uint8_t cmd, uint8_t paramH, uint8_t paramL)
     frame[8] =  cs       & 0xFF;
     frame[9] = 0xEF;
 
-    HAL_UART_Transmit(&huart3, frame, 10, 100);
+    HAL_UART_Transmit(&huart6, frame, 10, 100);
 }
 
 void DFPlayer_Init(void)
