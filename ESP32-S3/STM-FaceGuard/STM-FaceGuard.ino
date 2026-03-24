@@ -44,6 +44,7 @@
 #include "esp_system.h"
 #include "img_converters.h"
 #include "human_face_detect_msr01.hpp"
+#include "human_face_detect_mnp01.hpp"
 #include "face_recognition_tool.hpp"
 #include "face_recognition_112_v1_s8.hpp"
 #include "esp_task_wdt.h"
@@ -156,9 +157,12 @@ static int      step0FailCount   = 0;   // consecutive enroll_id() failures at s
 static int      step0StableCount = 0;   // consecutive frames with face detected (stability gate)
 
 // ── Face AI objects ───────────────────────────────────────────────────────────
-// Detector params: score_threshold, nms_threshold, top_k, min_face_size
-// Nới min_face_size về 0.2 để bắt mặt xa hơn một chút; nms=0.5 bám sát example ESP32-S3.
-static HumanFaceDetectMSR01   detector(0.3F, 0.5F, 10, 0.2F);
+// Two-stage detection: MSR01 (stage 1 - detect regions) + MNP01 (stage 2 - refine keypoints)
+// Keypoints chính xác từ stage 2 là yếu tố quyết định recognition similarity.
+// Stage 1: score_threshold=0.15, nms=0.5, top_k=10, min_face_size=0.10
+// Stage 2: score_threshold=0.5,  nms=0.3, top_k=5
+static HumanFaceDetectMSR01   s1(0.15F, 0.5F, 10, 0.10F);
+static HumanFaceDetectMNP01   s2(0.5F,  0.3F, 5);
 static FaceRecognition112V1S8 recognizer;   // tự nạp face DB từ NVS/flash
 
 // ── Misc ──────────────────────────────────────────────────────────────────────
@@ -663,7 +667,7 @@ static bool camera_init()
     cfg.pin_pwdn      = PWDN_GPIO_NUM;
     cfg.pin_reset     = RESET_GPIO_NUM;
     cfg.xclk_freq_hz  = 20000000;
-    cfg.pixel_format  = PIXFORMAT_JPEG;      // Wi-Fi + RGB dễ lỗi, chụp JPEG rồi decode cho AI
+    cfg.pixel_format  = PIXFORMAT_RGB565;    // fmt2rgb888(JPEG) có bug silent-corrupt; RGB565→RGB888 ổn định
     cfg.frame_size    = FRAMESIZE_240X240;   // cân bằng tốt cho face AI
     cfg.jpeg_quality  = CAMERA_JPEG_QUALITY;
     cfg.fb_count      = psramFound() ? 2 : 1;
@@ -815,10 +819,23 @@ static void process_frame()
         return;
     }
 
-    // Phát hiện khuôn mặt trên buffer RGB888 đã decode từ JPEG
+    // Two-stage detection: stage 1 (MSR01) tìm vùng mặt → stage 2 (MNP01) tinh chỉnh keypoints
+    // Keypoints chính xác từ stage 2 giúp recognize() đạt similarity cao hơn đáng kể.
+    std::list<dl::detect::result_t> candidates =
+        s1.infer(rgbFrameBuf, {(int)fb->height, (int)fb->width, 3});
+    esp_task_wdt_reset();
+
     std::list<dl::detect::result_t> faces =
-        detector.infer(rgbFrameBuf, {(int)fb->height, (int)fb->width, 3});
-    esp_task_wdt_reset();   // detector.infer() can be slow — keep WDT happy
+        s2.infer(rgbFrameBuf, {(int)fb->height, (int)fb->width, 3}, candidates);
+    esp_task_wdt_reset();   // two-stage inference có thể chậm — giữ WDT happy
+
+    // Debug: in mỗi 2s để không spam, giúp xác nhận có detect được không
+    static uint32_t lastDetectLogMs = 0;
+    if ((millis() - lastDetectLogMs) >= 2000U) {
+        lastDetectLogMs = millis();
+        Serial.printf("[DETECT] faces=%d  size=%dx%d  state=%s\n",
+                      (int)faces.size(), fb->width, fb->height, app_state_name());
+    }
 
     if (faces.empty()) {
         // Không thấy khuôn mặt
@@ -870,7 +887,7 @@ static void process_frame()
                 return;
             }
 
-            int result = recognizer.enroll_id(img, face.keypoint, "", false);
+            int result = recognizer.enroll_id(img, face.keypoint, "", true);
             if (result < 0) {
                 // Alignment failed — reset stability and retry next detection
                 step0FailCount++;
