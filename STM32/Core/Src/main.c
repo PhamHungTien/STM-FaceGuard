@@ -89,9 +89,6 @@ static volatile uint8_t  btn_delete_armed = 0;
 /* --- UART1 receive buffer (ESP32-S3 → STM32) --- */
 #define ESP32_DMA_RX_SIZE       64U
 static uint8_t esp32_dma_rx_buf[ESP32_DMA_RX_SIZE];
-static uint8_t  uart1_rx_byte    = 0;
-static char     uart1_line[UART1_BUF_SIZE];
-static uint16_t uart1_line_idx   = 0;
 static char     uart1_queue[UART1_QUEUE_LEN][UART1_BUF_SIZE];
 static volatile uint8_t  uart1_queue_head  = 0;
 static volatile uint8_t  uart1_queue_tail  = 0;
@@ -618,7 +615,6 @@ static void App_Init(void)
     btn_delete_armed = Button_IsPressed(BTN_DELETE_GPIO_Port, BTN_DELETE_Pin) ? 0U : 1U;
     esp32_ready     = 0;
     delete_hold_active = 0;
-    uart1_line_idx  = 0;
     uart1_queue_head = 0;
     uart1_queue_tail = 0;
     esp32_sync_start_tick = HAL_GetTick();

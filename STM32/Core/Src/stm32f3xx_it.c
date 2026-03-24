@@ -272,12 +272,4 @@ void EXTI15_10_IRQHandler(void)
 
 /* USER CODE BEGIN 1 */
 
-/**
- * @brief USART1 – ESP32-S3 communication
- */
-void USART1_IRQHandler(void)
-{
-    HAL_UART_IRQHandler(&huart1);
-}
-
 /* USER CODE END 1 */
