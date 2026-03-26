@@ -1,0 +1,102 @@
+# Arduino IDE
+build/
+*.elf
+*.hex
+*.bin
+
+# STM32 Embedded Studio / IDE
+Debug/
+Release/
+.metadata/
+RemoteSystemsTempFiles/
+*.o
+*.d
+*.elf
+*.hex
+*.bin
+*.map
+*.su
+*.cyclo
+*.list
+
+# VS Code
+.vscode/
+*.code-workspace
+.DS_Store
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+.Spotlight-V100
+.Trashes
+._*
+
+# LaTeX (thesis)
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.lof
+*.lol
+*.lot
+*.out
+*.toc
+*.run.xml
+*.fdb_latexmk
+*.fls
+*.synctex.gz
+*.pdf
+thesis/main.pdf
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+
+# Node/npm
+node_modules/
+npm-debug.log
+package-lock.json
+
+# IDE general
+*.swp
+*.swo
+*~
+.idea/
+*.sublime-workspace
+
+# Build artifacts
+obj/
+bin/
+dist/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+*~
+
+# OS specific
+Thumbs.db
+.DS_Store
+
+# Compiled binaries
+*.exe
+*.dll
+*.so
+*.dylib
+
+# ESP32 tools
+.pio/
+.platformio/
+
+# Project specific
+*.log
+config.local.h
+secrets.h
