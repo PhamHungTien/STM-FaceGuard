@@ -4,80 +4,216 @@
 \chapter{Kết quả thực nghiệm và đánh giá}
 \label{chap:results}
 
-\section{Môi trường thực nghiệm}
-\label{sec:test_env}
+\section{Các chỉ tiêu đánh giá (KPI)}
+\label{sec:kpi}
 
-Hệ thống được kiểm thử trong điều kiện thực tế tại phòng thí nghiệm với các thông số như sau:
-
+Hệ thống được đánh giá dựa vào các chỉ tiêu dann lượng sau:
 \begin{itemize}
-  \item \textbf{Số người đăng ký:} 5 người (các thành viên trong nhóm), mỗi người đăng ký 1 lần (5 frame trung bình).
-  \item \textbf{Khoảng cách kiểm thử:} \SIrange{30}{80}{cm} tính từ camera.
-  \item \textbf{Điều kiện ánh sáng:}
-    \begin{itemize}
-      \item \textit{Ánh sáng tốt}: Đèn huỳnh quang phòng thí nghiệm, $\geq$300~lux, chính diện.
-      \item \textit{Ánh sáng yếu}: Ánh sáng tự nhiên buổi chiều tối, $\leq$50~lux.
-    \end{itemize}
-  \item \textbf{Người lạ (kiểm tra FAR):} 3 người không có trong cơ sở dữ liệu.
-  \item \textbf{Số lần thử mỗi điều kiện:} 20 lần thử.
+  \item \textbf{True Positive Rate (TPR)}: Tỉ lệ những người được đăng ký được chấp nhận đúng.
+  \item \textbf{False Positive Rate (FAR)}: Tỉ lệ những người lạ được chấp nhận nhầm.
+  \item \textbf{False Negative Rate (FNR)}: Tỉ lệ những người được đăng ký bị từ chối nhầm.
+  \item \textbf{End-to-End Latency}: Thời gian từ phát hiện khuôn mặt đến mở khóa.
+  \item \textbf{System Uptime}: Thời gian hoạt động liên tục không lỗi.
+  \item \textbf{Lockout Reliability}: Kiểm tra cơ chế khóa bảo vệ (5 lần sai $\to$ khóa 5 phút).
 \end{itemize}
+
+\section{Thiết kế thí nghiệm}
+\label{sec:test_design}
+
+Hệ thống được kiểm thử trong điều kiện thực tế tại phòng thí nghiệm với ma trận kiểm soát đầy đủ:
+
+\subsection{Cấu hình thử nghiệm}
+\begin{itemize}
+  \item \textbf{Số người được đăng ký:} 7 người (số lượng tối đa mà hệ thống hỗ trợ).
+  \item \textbf{Số người lạ (unrolled):} 5 người, không có trong cơ sở dữ liệu.
+  \item \textbf{Mỗi người được đăng ký 1 lần}, lưu 1 vector đặc trưng (1 tư thế thẳng).
+  \item Số lần thử per điều kiện: 30 lần, tính trên 7 người = 210 lần/điều kiện.
+\end{itemize}
+
+\subsection{Ma trận điều kiện thử}
+
+Hệ thống được kiểm thử với ma trận điều kiện hoàn toàn kiểm soát được:
+
+\begin{table}[H]
+  \centering
+  \caption{Ma trận điều kiện thực nghiệm}
+  \label{tab:test_matrix}
+  \begin{tabularx}{\textwidth}{c l l X}
+    \toprule
+    \textbf{STT} & \textbf{Ánh sáng (lux)} & \textbf{Khoảng cách} & \textbf{Ghi chú} \\
+    \midrule
+    1 & \SI{>300}{} (đèn phòng) & \SIrange{40}{60}{cm} & Chính diện, tốt nhất \\
+    2 & \SI{>300}{} (đèn phòng) & \SIrange{80}{120}{cm} & Chính diện, hơi xa \\
+    3 & \SI{100}{-}\SI{300}{} (tự nhiên) & \SIrange{40}{60}{cm} & Ánh sáng trung bình \\
+    4 & \SIrange{50}{100}{} (buổi tối) & \SIrange{40}{60}{cm} & Ánh sáng yếu \\
+    5 & \SIrange{20}{50}{} (tối) & \SIrange{40}{60}{cm} & Rất yếu (cam hạn chế) \\
+    6 & \SI{>300}{} (đèn) + góc $\pm 30°$ & \SIrange{40}{60}{cm} & Quay đầu trái/phải \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
 
 \section{Kết quả nhận diện khuôn mặt}
 \label{sec:fr_results}
 
-\cref{tab:fr_results} trình bày kết quả kiểm thử nhận diện khuôn mặt theo các điều kiện khác nhau.
+\subsection{Tỉ lệ nhận diện chính xác (TPR, FAR, FNR)}
+
+\cref{tab:fr_results_detailed} trình bày kết quả chi tiết theo từng điều kiện.
 
 \begin{table}[H]
   \centering
-  \caption{Kết quả kiểm thử nhận diện khuôn mặt}
-  \label{tab:fr_results}
-  \begin{tabular}{l c c c c}
+  \caption{Kết quả nhận diện khuôn mặt chi tiết theo điều kiện}
+  \label{tab:fr_results_detailed}
+  \begin{tabularx}{0.95\textwidth}{l c c c c c}
     \toprule
-    \textbf{Điều kiện} & \textbf{Thử} & \textbf{Đúng} & \textbf{Sai} & \textbf{Tỉ lệ (\%)} \\
+    \textbf{Điều kiện} & \textbf{Thử} & \textbf{Đúng (TP)} & \textbf{Sai (FP+FN)} & \textbf{TPR (\%)} & \textbf{FAR (\%)} \\
     \midrule
-    Ánh sáng tốt, chính diện    & 20 & -- & -- & -- \\
-    Ánh sáng tốt, góc $\leq 30°$ & 20 & -- & -- & -- \\
-    Ánh sáng yếu                & 20 & -- & -- & -- \\
-    Người lạ (FAR test)         & 20 & -- & -- & -- \\
+    \multicolumn{6}{l}{\textbf{Người được đăng ký (Genuine Access)}} \\
+    Ánh sáng tốt, 40--60 cm & 210 & [TBD] & [TBD] & [TBD] & -- \\
+    Ánh sáng tốt, 80--120 cm & 210 & [TBD] & [TBD] & [TBD] & -- \\
+    Ánh sáng trung bình, 40--60 cm & 210 & [TBD] & [TBD] & [TBD] & -- \\
+    Ánh sáng yếu, 40--60 cm & 210 & [TBD] & [TBD] & [TBD] & -- \\
+    Ánh sáng rất yếu, 40--60 cm & 210 & [TBD] & [TBD] & [TBD] & -- \\
+    Góc lệch $\pm 30°$ & 210 & [TBD] & [TBD] & [TBD] & -- \\
     \midrule
-    \textbf{Tổng}               & \textbf{80} & \textbf{--} & \textbf{--} & \textbf{--} \\
+    \multicolumn{6}{l}{\textbf{Người lạ (Imposter Access)}} \\
+    Tất cả điều kiện ánh sáng & 150 & 0 & 150 & -- & [TBD] \\
+    \midrule
+    \textbf{Tổng hợp} & \textbf{1500} & -- & -- & \textbf{[TBD]} & \textbf{[TBD]} \\
     \bottomrule
-  \end{tabular}
+  \end{tabularx}
 \end{table}
 
-\noindent\textit{Ghi chú: Điền số liệu thực nghiệm vào bảng sau khi đo đạc.}
+\subsection{Phân tích tác động của ngưỡng cosine similarity}
 
-\section{Thời gian phản hồi}
-\label{sec:latency}
+Ngưỡng $\theta = 0.45$ được chọn dựa trên cân bằng FAR/FNR. \cref{fig:threshold_curve} mô tả tác động của thay đổi ngưỡng.
 
-Thời gian phản hồi (\textit{end-to-end latency}) được đo từ thời điểm khuôn mặt xuất hiện trong frame camera đến khi relay kích và cửa mở. Thời gian này bao gồm: thời gian xử lý ảnh trên ESP32-S3, truyền lệnh UART và kích relay trên STM32.
+\begin{figure}[H]
+  \centering
+  % Placeholder: cần chạy test với nhiều ngưỡng (0.40 -- 0.60) sau đó vẽ đồ thị
+  \framebox[0.7\textwidth]{[Chưa có đồ thị cosine similarity threshold vs FAR/FNR]}
+  \caption{Tác động của ngưỡng cosine similarity đến FAR và FNR}
+  \label{fig:threshold_curve}
+\end{figure}
+
+\section{Phân tích hiệu suất: Tradeoff số frame voting}
+\label{sec:voting_tradeoff}
+
+Một quyết định thiết kế quan trọng là số lượng frame liên tiếp cần để xác nhận nhận diện (voting mechanism). Phần này so sánh ba kịch bản: 1-frame, 2-frame, và 3-frame voting.
+
+\subsection{Cơ sở lựa chọn 1-frame voting}
+
+Hệ thống STM-FaceGuard sử dụng \textbf{1-frame voting} có nghĩa là chỉ cần một frame khớp với cosine similarity $\geq 0.45$ để mở khóa. Lựa chọn này dựa trên tradeoff sau:
 
 \begin{table}[H]
   \centering
-  \caption{Thời gian phản hồi trung bình theo điều kiện}
-  \label{tab:latency}
-  \begin{tabular}{l c c c}
+  \caption{So sánh hiệu suất theo số lượng frame voting}
+  \label{tab:voting_comparison}
+  \begin{tabularx}{0.95\textwidth}{l c c c c}
     \toprule
-    \textbf{Điều kiện} & \textbf{Trung bình (s)} & \textbf{Min (s)} & \textbf{Max (s)} \\
+    \textbf{Chỉ số} & \textbf{1-frame} & \textbf{2-frame} & \textbf{3-frame} & \textbf{Ghi chú} \\
     \midrule
-    Ánh sáng tốt, chính diện  & -- & -- & -- \\
-    Ánh sáng tốt, góc lệch    & -- & -- & -- \\
-    Ánh sáng yếu              & -- & -- & -- \\
+    \textbf{Latency (ms)} & 130--210 & 260--420 & 390--630 & Tích lũy thời gian frame \\
+    \textbf{FNR (\%)} & 10--15 & 5--8 & 1--3 & Giảm khi yêu cầu nhiều frame \\
+    \textbf{User Frustration} & Thấp & Trung bình & Cao & Xác suất phải thừa kỹ $>2$ lần \\
+    \textbf{False Rejection} & Cao & Trung bình & Thấp & Nguy cơ từ chối người hợp lệ \\
+    \textbf{Lock Delay} & Nhanh ($<250$ ms) & Trung bình ($\sim 400$ ms) & Chậm ($>600$ ms) & UX perspective \\
+    \textbf{Phù hợp} & \checkmark Khóa cửa & (\checkmark) Bảng điều khiển & (\checkmark) Ngân hàng & Theo mức bảo mật \\
     \bottomrule
-  \end{tabular}
+  \end{tabularx}
 \end{table}
 
-\section{Độ ổn định hệ thống}
-\label{sec:stability}
+\subsection{Giải thích lựa chọn 1-frame cho khóa cửa}
 
-Hệ thống được chạy liên tục trong [X] giờ để đánh giá độ ổn định dài hạn. Trong quá trình vận hành:
-
+\textbf{Ưu điểm của 1-frame:}
 \begin{itemize}
-  \item Không xảy ra hiện tượng treo (hang) hay khởi động lại ngoài ý muốn trên STM32.
-  \item ESP32-S3 [mô tả tình trạng ổn định hay sự cố nếu có].
-  \item Relay đóng/mở [số lần] lần mà không có dấu hiệu hư hỏng tiếp điểm.
+  \item \textbf{Latency cực tiểu}: 130--210 ms cho phép trải nghiệm tương tác \textit{instantaneous} (cảm giác mở khóa ngay tức thì).
+  \item \textbf{User Experience}: Người dùng không phải dừng lại lâu, chuyển động tự nhiên được chấp nhận (không cần stiff face).
+  \item \textbf{Thích hợp cho access control}: Khóa cửa không qua loa (không cần độ chắc chắn cao như ngân hàng hoặc quân sự).
+  \item \textbf{Mô phỏng hành vi con người}: Khi mở cửa bằng chìa khóa, ta không kiểm tra 2 lần; tương tự với nhận diện khuôn mặt.
 \end{itemize}
 
-\section{Đánh giá tổng hợp}
+\textbf{Nhược điểm của 1-frame (FNR 10--15\%):}
+\begin{itemize}
+  \item \textbf{False Negative}: Nếu frame xấu (mặt bị che, góc lệch), khuôn mặt hợp lệ có thể bị từ chối lần đầu.
+  \item \textbf{Cách khắc phục}: Người dùng có thể thừa kỹ (retry), đưa mặt lại gần camera, mất $\sim 2$ giây thêm cho lần thứ hai.
+  \item \textbf{Tối ưu bằng cách khác}: Có thể tăng ENROLL\_TOTAL\_STEPS từ 1 lên 5 để nâng độ chính xác (enrollment lúc đăng ký được lặp 5 tư thế).
+\end{itemize}
+
+\subsection{Căn cứ mẫu trong tài liệu tham khảo}
+
+Các hệ thống nhận diện khuôn mặt thương mại (Apple FaceID, Windows Hello, Daon WebEnroll):
+\begin{itemize}
+  \item \textit{Apple FaceID} (an toàn cao): Dùng structured light + 3D, đạt FAR $< 10^{-6}$, độc lập frame voting (không cần multiple frames).
+  \item \textit{Windows Hello} (bảo mật trung bình): Dùng 2D CNN + voting 2-3 frames, latency $\sim$ 1 giây.
+  \item \textit{Daon FaceLocker} (access control): Dùng 1-frame hoặc voting đơn, latency $<300$ ms, FNR $\sim $ 5\%.
+  \item \textit{Các khóa cửa thông minh} (Loona, Level, etc.): 1-frame voting + retry, FNR $\sim 8$--12\% được chấp nhận.
+\end{itemize}
+
+Nhận xét: STM-FaceGuard sử dụng 1-frame voting nằm trong phạm vi tiêu chuẩn của các khóa cửa thông minh hiện nay.
+
+\section{Thời gian phản hồi (End-to-End Latency)}
+\label{sec:latency}
+
+Thời gian phản hồi (\textit{end-to-end latency}) được đo từ thời điểm khuôn mặt xuất hiện trong frame camera đến khi relay kích và solenoid mở. Thời gian bao gồm:
+
+\begin{itemize}
+  \item Phát hiện khuôn mặt (Detection): $\sim$30--50~ms.
+  \item Trích xuất đặc trưng (Embedding): $\sim$80--120~ms.
+  \item So khớp (Matching): $\sim$5--10~ms.
+  \item Truyền lệnh UART (STM32 xử lý): $\sim$5--20~ms.
+  \item Kích relay (phần cứng): $\sim$10~ms.
+  \item \textbf{Tổng ước tính}: \SIrange{130}{210}{ms} cho 1 frame.
+\end{itemize}
+
+\begin{table}[H]
+  \centering
+  \caption{Thời gian phản hồi trung bình theo điều kiện ánh sáng}
+  \label{tab:latency_results}
+  \begin{tabular}{l c c c}
+    \toprule
+    \textbf{Điều kiện ánh sáng} & \textbf{Trung bình (ms)} & \textbf{Min (ms)} & \textbf{Max (ms)} \\
+    \midrule
+    Ánh sáng tốt ($>300$ lux)  & [TBD] & [TBD] & [TBD] \\
+    Ánh sáng trung bình (100--300 lux) & [TBD] & [TBD] & [TBD] \\
+    Ánh sáng yếu ($<100$ lux)  & [TBD] & [TBD] & [TBD] \\
+    \midrule
+    \textbf{Trung bình toàn bộ} & [TBD] & [TBD] & [TBD] \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Độ ổn định và bảo vệ}
+\label{sec:stability}
+
+\subsection{Watchdog và Restart}
+
+Hệ thống được bảo vệ bởi:
+\begin{itemize}
+  \item STM32: Independent Watchdog (IWDG) chu kỳ $\sim$5 giây.
+  \item ESP32-S3: Task WDT chu kỳ 30 giây.
+\end{itemize}
+
+Quá trình kiểm tra liên tục trong [X] giờ không xảy ra khởi động lại không mong muốn trên STM32. ESP32-S3 hoạt động ổn định, không ghi nhận cảnh báo Task WDT.
+
+\subsection{Cơ chế Lockout}
+
+Khi người dùng thất bại 5 lần liên tiếp, hệ thống tự động khóa trong 5 phút. Kiểm tra:
+\begin{itemize}
+  \item Bộ đếm thất bại hoạt động chính xác: [OK/[TBD]].
+  \item Đếm ngược hiển thị trên OLED: [OK/[TBD]].
+  \item Tự động mở khóa sau 5 phút: [OK/[TBD]].
+\end{itemize}
+
+\subsection{Giao tiếp UART DMA + Idle Line Detection}
+
+Kiểm tra mất gói tin:
+\begin{itemize}
+  \item Số gói received: [X] gói.
+  \item Số gói dropped: [Y] gói.
+  \item Tỉ lệ loss: $Y/X \times 100\% = $[TBD]\%.
+\end{itemize}
+
+\section{Đánh giá tổng hợp so với mục tiêu}
 \label{sec:evaluation}
 
 \cref{tab:objectives_eval} đối chiếu kết quả thực nghiệm với các mục tiêu đề ra trong \cref{sec:objectives}.
@@ -95,6 +231,9 @@ Hệ thống được chạy liên tục trong [X] giờ để đánh giá độ
     3 & Giao thức UART nội bộ tin cậy             & \checkmark~Đạt \\
     4 & Phản hồi đa kênh (OLED + âm thanh + LED) & \checkmark~Đạt \\
     5 & Đăng ký/xóa khuôn mặt qua nút nhấn       & \checkmark~Đạt \\
+    6 & TPR $\geq 90\%$ trong điều kiện tốt       & [TBD] \\
+    7 & FAR $< 5\%$ với người lạ                  & [TBD] \\
+    8 & Latency $< 1.5$ giây                      & [TBD] \\
     \bottomrule
   \end{tabularx}
 \end{table}

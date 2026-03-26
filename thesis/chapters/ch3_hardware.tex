@@ -53,6 +53,122 @@ Luồng hoạt động cơ bản như sau:
   \end{tabularx}
 \end{table}
 
+\section{Lý do lựa chọn thiết kế (Design Rationale)}
+\label{sec:design_rationale}
+
+Mặc dù nhiều các lựa chọn thay thế tồn tại đối với mỗi thành phần, việc lựa chọn linh kiện cho STM-FaceGuard được thực hiện dựa trên tiêu chí: \textit{chi phí}, \textit{hiệu suất}, \textit{sẵn có phần mềm}, và \textit{độ tin cậy}. Phần này giải thích các quyết định thiết kế chính.
+
+\subsection{Vi điều khiển STM32F411CEU6 (Black Pill) cho điều khiển}
+
+\textbf{Lý do chọn STM32F411CEU6:}
+\begin{itemize}
+  \item \textbf{Tốc độ xung nhịp}: 100 MHz (ARM Cortex-M4) đủ cho xử lý UART DMA, điều khiển relay, quản lý OLED mà không cần tối ưu hóa cao.
+  \item \textbf{UART đầy đủ}: 6 kênh UART với DMA độc lập, cho phép giao tiếp đa cấp tốc baud không chặn (115,200 baud với ESP32-S3, 9,600 baud với DFPlayer Mini, debug qua ST-Link).
+  \item \textbf{I2C}: Tích hợp I2C1 (100 kHz fast-mode) cho OLED SSD1306 - tốn 2 chân GPIO tận dụng các ngắt không cần phần mềm bit-banging.
+  \item \textbf{Giá thành}: Rẻ hơn STM32H7 (không cần hiệu suất cao), đủ tính năng hơn STM32L476 (tiêu thụ ít nhưng UART ít hơn).
+  \item \textbf{Sinh thái phần mềm}: STM32CubeIDE, ST-Link debug, HAL thành thạo, cộng đồng lớn.
+  \item \textbf{Kiến trúc Harvard}: Flash 512 KB, RAM 128 KB đủ cho state machine không chặn và các bộ đệm nhỏ.
+\end{itemize}
+
+\textbf{Lựa chọn thay thế đã xem xét:}
+\begin{itemize}
+  \item \textit{STM32L476}: Tiêu thụ năng lượng thấp hơn (tối ưu cho pin) nhưng chỉ 3 UART, loại bỏ vì dự án không cơ batter.
+  \item \textit{STM32H743}: Quá mạnh (480 MHz dual-core), chi phí cao, phức tạp - chỉ cần 100 MHz.
+  \item \textit{PIC32MX}: Ít tương thích với công cụ phát triển hiện đại, cộng đồng nhỏ hơn.
+  \item \textit{Raspberry Pi Pico (RP2040)}: Không đủ UART, không có I2C đủ số lượng, thiếu tính ứng dụng.
+\end{itemize}
+
+\subsection{Module ESP32-S3-N16R8 cho nhận diện khuôn mặt}
+
+\textbf{Lý do chọn ESP32-S3-N16R8:}
+\begin{itemize}
+  \item \textbf{Dual-core CPU}: 2 lõi 240 MHz cung cấp sức mạnh tính toán đủ cho TensorFlow Lite Micro inference (MSR01 + MNP01 models $\approx$ 100 MFLOPS).
+  \item \textbf{Camera tích hợp}: Hỗ trợ giao diện DVP (Digital Video Port) song song, loại bỏ nhu cầu cầu nối camera riêng. OV3660 chạy trên 8 chân dữ liệu + 4 chân điều khiển không cần UART/SPI overhead.
+  \item \textbf{Bộ nhớ}: 16 MB flash + 8 MB PSRAM cung cấp không gian cho 2 model hóa khuôn mặt (tổng $\approx$ 3 MB) + bộ nhớ đệm frame (QVGA 320×240×3 = 230 KB).
+  \item \textbf{Tính năng}: UART, I2C, GPIO đầy đủ; WiFi6 tích hợp (khả năng mở rộng cho cloud logging).
+  \item \textbf{Hỗ trợ TensorFlow}: esp-who framework, TensorFlow Lite Micro, công cụ chuyên dụng cho nhận diện khuôn mặt.
+  \item \textbf{Kiến trúc phân tác vụ}: FreeRTOS cho phép tách việc recieving từ STM32 (Task UART), xử lý camera (Task Camera), inference (Task ML), update display (Task I2C).
+\end{itemize}
+
+\textbf{Lựa chọn thay thế đã xem xét:}
+\begin{itemize}
+  \item \textit{Raspberry Pi 4}: Mạnh mẽ nhưng tiêu thụ 5W, cần Linux, lớn hơn 10cm × 10cm, đắt gấp 3-4 lần, dư thừa cho dự án này.
+  \item \textit{Jetson Nano}: Tương tự Pi 4, quá mạnh và quá cồng kềnh, yêu cầu GPU ngoài.
+  \item \textit{Sipeed M1 (RISC-V)}: Khám phá được nhưng sinh thái từng phần (ONNX support hạn chế), dù rẻ hơn ESP32-S3 nhưng khó debug.
+  \item \textit{Arduino Nano 33 BLE Sense}: Quá yếu (64 MHz Cortex-M4), không có camera tích hợp.
+\end{itemize}
+
+\subsection{Camera OV3660 cho nắn bắt video}
+
+\textbf{Lý do chọn OV3660:}
+\begin{itemize}
+  \item \textbf{Giao diện DVP}: 8 chân dữ liệu song song + 4 chân điều khiển (PCLK, HSYNC, VSYNC, XCLK) - không gây cạn kiệt GPIO của ESP32.
+  \item \textbf{Độ phân giải}: 3 MP (2048×1536) có thể downscale thành QVGA (320×240) để giảm tải tính toán khi vẫn giữ được độ chi tiết khuôn mặt.
+  \item \textbf{Chi phí}: Tương đương OV2640 nhưng độ phân giải cao hơn, tương thích với esp-idf camera driver.
+  \item \textbf{OV-SCCB protocol}: Cấu hình camera qua I2C (shared với SSD1306) - cùng bus logic.
+  \item \textbf{Tuổi thọ module}: Phổ biến, sẵn có supplier, hình ảnh debug tốt trên diễn đàn cộng đồng.
+\end{itemize}
+
+\textbf{Thay thế bị loại trừ:}
+\begin{itemize}
+  \item \textit{OV2640}: Thấp hơn (2 MP), không giảm bớt lượng tính toán đáng kể so với OV3660.
+  \item \textit{GC0308 (Gcam)}: Giao diện DVP nhưng driver esp-idf không chính thức hỗ trợ, yêu cầu porting.
+  \item \textit{USB UVC Webcam}: Yêu cầu USB host - điều kiện rất tốn tài nguyên GPIO/pin nguồn.
+\end{itemize}
+
+\subsection{Màn hình OLED SSD1306 cho phản hồi trực quan}
+
+\textbf{Lý do chọn SSD1306:}
+\begin{itemize}
+  \item \textbf{Giao tiếp I2C}: Chỉ 2 chân (SCL, SDA), rất tiết kiệm GPIO.
+  \item \textbf{Độ phân giải đủ}: 128×64 pixel đủ để hiển thị tên người, trạng thái (IDLE, ENROLLING, LOCKED), icon phản hồi.
+  \item \textbf{Công suất thấp}: $\leq$ 100 mW @ 3.3V, không cần tăng cường nguồn.
+  \item \textbf{Sẵn có code library}: u8g2, Adafruit\_SSD1306 (C/C++ open-source, đắt cải).
+  \item \textbf{Chi phí}: Khoảng \$8-12 cho module complete (mặt kinh + bo mạch + tụ).
+\end{itemize}
+
+\subsection{DFPlayer Mini cho phản hồi âm thanh}
+
+\textbf{Lý do chọn DFPlayer Mini:}
+\begin{itemize}
+  \item \textbf{Giao diện UART}: Gửi lệnh đơn giản qua serial (ví dụ ``Play file 001''), không cần DAC riêng.
+  \item \textbf{Hỗ trợ thẻ SD}: Lưu trữ file MP3 trên micro-SD card (dung lượng lên đến 32 GB), rẻ hơn lưu trữ flash.
+  \item \textbf{Công suất tích hợp}: Có amplifier tích hợp cho loa 3W, không cần bộ khuếch đại ngoài.
+  \item \textbf{Chi phí**: Khoảng \$5-7 cho module, rẻ hơn I2S DAC + amplifier tách riêng.
+  \item \textbf{Đơn giản hóa logic}: Firmware chỉ cần gửi lệnh \texttt{PLAY\_FILE(001)} khi unlock thành công, không cần quản lý audio buffer.
+\end{itemize}
+
+\textbf{Thay thế bị loại trừ:}
+\begin{itemize}
+  \item \textit{I2S DAC (ES8388, PCM5102)}: Chuyên dụng hơn nhưng yêu cầu code quản lý I2S phức tạp, tốn RAM cho audio buffer.
+  \item \textit{Buzzer piezoelectric}: Chỉ phát âm bip đơn, không phát file MP3 tùy chỉnh.
+\end{itemize}
+
+\subsection{Kiến trúc hai vi điều khiển (Dual-MCU Architecture)}
+
+Thay vì lựa chọn một vi điều khiển ``super-MCU'' chứa cả AI lẫn điều khiển, các hệ thống được thiết kế với \textbf{hai MCU độc lập}:
+
+\begin{itemize}
+  \item \textbf{ESP32-S3}: Chuyên nhận diện khuôn mặt, inference (AI edge).
+  \item \textbf{STM32F411}: Chuyên điều khiển relay, OLED, DFPlayer; quản lý state machine người dùng.
+  \item \textbf{UART DMA}: Giao tiếp ở 115,200 baud không chặn, tối ưu độ trễ.
+\end{itemize}
+
+\textbf{Lợi ích của kiến trúc này:}
+\begin{itemize}
+  \item \textbf{Tách biệt trách nhiệm}: AI layer riêng biệt với control layer, dễ bảo trì/nâng cấp.
+  \item \textbf{Hiệu suất}: Mỗi MCU có thể chạy event loop riêng (non-blocking) không cạnh tranh tài nguyên.
+  \item \textbf{Độ tin cậy}: Nếu ESP32 crash (ML inference lỗi, memory leak), STM32 vẫn điều khiển relay, không khóa người dùng.
+  \item \textbf{Chi phí}: ESP32-S3 module (\$10-15) + STM32F411 Black Pill (\$8-10) = \$18-25 rẻ hơn một Raspberry Pi (\$35-100).
+\end{itemize}
+
+\textbf{So sánh với single-MCU:}
+\begin{itemize}
+  \item \textit{Single Raspberry Pi}: Mạnh hơn nhưng overkill, tiêu thụ cao, khó đơn giản hóa.
+  \item \textit{Single STM32H7 + Camera}: Có thể chạy TensorFlow trên H7 nhưng clock rất cao, tạo hiệu ứng phụ (electromagnetic) gây khó khăn kỹ thuật.
+  \item \textit{Chipset tùy chỉnh (ASIC)}: Optimal nhưng chi phí phát triển prohibitive cho dự án sinh viên.
+\end{itemize}
+
 \section{Sơ đồ kết nối chân}
 \label{sec:pinout}
 

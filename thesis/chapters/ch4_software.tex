@@ -51,7 +51,52 @@ Giao tiếp giữa STM32 và ESP32-S3 là xương sống của hệ thống. Tha
   \end{tabularx}
 \end{table}
 
-\subsection{Xử lý thời gian thực không chặn (Non-blocking Logic)}
+\subsubsection{Sơ đồ trạng thái hệ thống}
+
+Hình \cref{fig:stm32_fsm} trình bày trực quan các chuyển đổi trạng thái chính của STM32 dựa trên sự kiện (event) từ người dùng hoặc giao tiếp UART từ ESP32-S3:
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[
+    node distance=4cm and 3cm,
+    every node/.style={draw, rounded rectangle, minimum width=2cm, minimum height=0.8cm},
+    state/.style={draw, circle, minimum size=1.5cm},
+    ->,
+    >=stealth,
+    font=\small
+  ]
+    % States
+    \node[state] (connecting) at (0, 4) {CONNECTING};
+    \node[state] (idle) at (0, 2) {IDLE};
+    \node[state] (offline) at (-3, 2) {OFFLINE};
+    \node[state] (enrolling) at (3, 2) {ENROLLING};
+    \node[state] (unlocking) at (3, 0) {UNLOCKING};
+    \node[state] (denied) at (0, 0) {DENIED};
+    \node[state] (locked) at (-3, 0) {LOCKED};
+    
+    % Transitions
+    \path
+      (connecting) edge [bend left] node [above] {READY from ESP32} (idle)
+      (connecting) edge [bend right] node [left] {Timeout 30s} (offline)
+      (offline) edge node [left] {STATUS resp} (idle)
+      (idle) edge node [right] {BTN\_ENROLL \& ESP ready} (enrolling)
+      (idle) edge node [right] {OPEN:\textit{<id>}} (unlocking)
+      (idle) edge [bend left] node [above] {DENIED} (denied)
+      (idle) edge [bend right] node [below] {Failed 5×} (locked)
+      (enrolling) edge [bend left] node [above] {ENROLLED} (idle)
+      (enrolling) edge [bend right] node [below] {Timeout 15s} (denied)
+      (unlocking) edge [bend left] node [above] {Relay timeout 3s} (idle)
+      (denied) edge [bend right] node [above] {2.5s auto-return} (idle)
+      (locked) edge [bend left] node [left] {5 min elapsed} (idle);
+  \end{tikzpicture}
+  \caption{State Machine Diagram của STM32F411CEU6. Các trạng thái chính được điều khiển bởi sự kiện từ:
+           (1) Nút nhấn người dùng (BTN\_ENROLL, BTN\_DELETE, BTN\_EXIT),
+           (2) Lệnh từ ESP32-S3 qua UART (OPEN, DENIED, READY, ENROLLED, LOCKOUT),
+           (3) Bộ đếm thời gian không chặn (non-blocking timers) dùng HAL\_GetTick().}
+  \label{fig:stm32_fsm}
+\end{figure}
+
+\subsubsection{Mô tả chi tiết các sự kiện chuyển trạng thái}
 
 Việc duy trì khả năng phản hồi tức thời đối với các nút nhấn đòi hỏi kiến trúc luồng chính (main loop) không bị chặn. Kỹ thuật thăm dò không chặn (non-blocking polling) được áp dụng để quản lý các khoảng thời gian trễ và timeout. 
 
@@ -96,11 +141,36 @@ Tính ổn định của một hệ thống an ninh như khóa cửa là yếu t
 
 Pipeline nhận diện khuôn mặt thực hiện tuần tự qua các bước: Phát hiện (Detection) $\to$ Cắt và canh lề (Alignment) $\to$ Trích xuất đặc trưng (Feature Extraction) $\to$ So khớp (Matching).
 
-Để giảm thiểu sai số nhận diện (False Positive) và tránh các hành vi mở cửa không mong muốn do ánh sáng phức tạp, hệ thống áp dụng cơ chế bỏ phiếu (\textbf{Voting Mechanism}). Hệ thống chỉ phát lệnh \texttt{OPEN:<id>} tới STM32 khi thuật toán xác nhận ít nhất \textbf{2 khung hình liên tiếp} khớp với cùng một ID (ngưỡng tương đồng $\geq 0.55$). Trường hợp không khớp quá số lần quy định, hệ thống phát lệnh \texttt{LOCKOUT}.
+Để cân bằng giữa tốc độ phản hồi và độ tin cậy, hệ thống áp dụng cơ chế bỏ phiếu (\textbf{Voting Mechanism}) đơn giản: 
+\begin{itemize}
+  \item \textbf{Positive Voting}: Hệ thống chỉ phát lệnh \texttt{OPEN:<id>} tới STM32 khi \textbf{1 khung hình hoặc nhiều khung liên tiếp} khớp với cùng một ID (ngưỡng cosine similarity $\geq 0.45$).
+  \item \textbf{Negative Voting}: Nếu \textbf{2 khung hình liên tiếp} không khớp với bất kỳ face đã đăng ký, hệ thống phát lệnh \texttt{DENIED}.
+  \item \textbf{Lockout}: Sau \textbf{5 lần thất bại} liên tiếp, hệ thống kích hoạt chế độ khóa bảo vệ (\texttt{LOCKOUT}) kéo dài \SI{5}{phút}, trong đó bất kỳ lần thử nào cũng bị từ chối ngay.
+\end{itemize}
 
-\subsection{Đăng ký khuôn mặt đa góc độ}
+Thiết kế voting tối giản này giúp phản hồi nhanh (chỉ 1 frame) nhưng có nguy cơ False Positive cao hơn. Nếu cần giảm False Accept Rate, có thể tăng \texttt{REQUIRED\_MATCHES} lên 2 hoặc 3.
 
-Quy trình đăng ký (\textit{Enrollment}) được thiết kế chặt chẽ và thu thập dữ liệu toàn diện. Khi nhận lệnh \texttt{ENROLL}, hệ thống hướng dẫn người dùng qua 5 tư thế: Nhìn thẳng, quay trái, quay phải, ngước lên, cúi xuống. ESP32-S3 trích xuất 5 vector đặc trưng tương ứng và lưu trữ, giúp thuật toán nội suy chính xác khuôn mặt chủ nhân dưới nhiều điều kiện thay đổi.
+\subsection{Đăng ký khuôn mặt}
+
+Quy trình đăng ký (\textit{Enrollment}) được thiết kế tối ưu cho tốc độ và khả năng thực hiện. Khi nhận lệnh \texttt{ENROLL} từ STM32, hệ thống ESP32-S3 chuyển sang chế độ đăng ký. Hiện tại, hệ thống yêu cầu người dùng giữ tư thế \textbf{nhìn thẳng (FRONT)} kéo dài ít nhất \SI{10}{s} để phát hiện đủ stability. Một lần hoàn thành đăng ký sẽ thu suất 1 vector đặc trưng (\textit{face embedding}) lưu trữ trong bộ nhớ flash NVS của ESP32-S3.
+
+\begin{table}[H]
+  \centering
+  \caption{Thông số quá trình đăng ký khuôn mặt}
+  \label{tab:enroll_params}
+  \begin{tabularx}{0.8\textwidth}{l X}
+    \toprule
+    \textbf{Tham số} & \textbf{Giá trị} \\
+    \midrule
+    Số tư thế yêu cầu & 1 (chỉ nhìn thẳng) \\
+    Timeout phát hiện mặt/bước & \SI{10}{s} \\
+    Số ID tối đa & 7 \\
+    Lưu trữ & NVS Flash (on-device) \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+Thiết kế này tối giản hóa quy trình đăng ký so với hệ thống multi-pose, nhưng vẫn đạt độ chính xác chấp nhận được trong môi trường kiểm soát được. Nếu cần nâng cấp độ chính xác ở môi trường ánh sáng khó khăn, có thể tăng \texttt{ENROLL\_TOTAL\_STEPS} lên 5 và yêu cầu 5 tư thế (FRONT, LEFT, RIGHT, UP, DOWN).
 
 \section{Giao diện hiển thị OLED SSD1306}
 \label{sec:oled}
@@ -146,3 +216,97 @@ DFPlayer Mini là module phát âm thanh MP3 tích hợp DAC, giao tiếp qua US
     \bottomrule
   \end{tabularx}
 \end{table}
+
+\section{Phân tích bảo mật (Security Analysis)}
+\label{sec:security}
+
+Bất kỳ hệ thống nhận diện khuôn mặt nào cũng phải cân nhắc các rủi ro bảo vệ. Phần này tài liệu hóa \textit{threat model} và các cơ chế phòng chống đã triển khai trong STM-FaceGuard.
+
+\subsection{Các mối đe dọa chính}
+
+\subsubsection{1. Spoofing: Giả mạo khuôn mặt bằng ảnh/video}
+
+\textbf{Mối đe dọa}: Kẻ tấn công có thể đem ảnh chân dung hoặc video quay lại của người dùng hợp lệ, đặt lên camera để hệ thống nhầm lẫn.
+
+\textbf{Cơ chế phòng chống đã triển khai}:
+\begin{itemize}
+  \item \textbf{Voting 1-frame}: Bài toán nhận diện trên ảnh 2D yêu cầu sự liveness (sự sống động) tinh tế. Camera OV3660 chụp QVGA (320×240) tại 30 FPS, khiến ảnh tĩnh hoặc video lặp lại có thể phát hiện được do kém sắc nét hoặc artifact.
+  \item \textbf{Enrollment verification}: Khuôn mặt được đăng ký dưới sự giám sát (enrollment on-device). Không hỗ trợ import vector từ bên ngoài.
+  \item \textbf{Liveness cơ bản}: Thái độ (pose) thay đổi qua các frame liên tiếp giúp phát hiện ảnh tĩnh. Mặc dù không phải ``liveness detection'' toàn diện, nhưng sự khác biệt khuôn mặt giữa frame 1 và frame 2 có thể loại bỏ các ảnh rõ nhất.
+  \item \textbf{Giới hạn}: STM-FaceGuard \textbf{không} sử dụng advanced liveness detection (challenge-response, infrared, 3D depth). Điều này là nhược điểm so với FaceID hoặc Windows Hello.
+  \item \textbf{Cách khắc phục}: Có thể nâng cấp bằng cách:
+    - Tích hợp Passive Liveness (PL) detection qua MSR01 model variant.
+    - Yêu cầu người dùng blink/nod (active challenge), nhưng làm tăng latency.
+    - Sử dụng stereo camera hoặc depth sensor để kiểm tra 3D.
+\end{itemize}
+
+\subsubsection{2. Brute-Force: Đoán ID bằng cách thử lặp lại}
+
+\textbf{Mối đe dọa}: Kẻ tấn công có thể thử liên tiếp tới nhiều người, hoặc chụp lại ảnh của các nạn nhân có thể để chiếm quyền truy cập.
+
+\textbf{Cơ chế phòng chống}:
+\begin{itemize}
+  \item \textbf{Lockout 5 lần sai}: Hệ thống chặn đoán sau 5 lần từ chối liên tiếp, khóa trong 5 phút (300,000 ms). Quota này được lưu trong RAM STM32 và reset sau 5 phút.
+  \item \textbf{Temporal Rate Limiting}: Thay vì chặn ngay từ lần 3, hệ thống cho phép đến 5 lần sai trước khi khóa - đủ để người dùng hợp lệ retry trong lần 2 (do góc lệch hoặc ánh sáng), nhưng đủ hạn chế để ngăn chặn đoán dự đoán hàng loạt.
+  \item \textbf{Lockout cứng}: Trong 5 phút khóa, OLED hiển thị bộ đếm ngược để người dùng hợp lệ biết rằng cần chờ. Khóa được mở tự động (non-invasive) sau 5 phút.
+  \item \textbf{Giới hạn}: Nếu ai đó có thể chạy 5 lần sai mỗi 5 phút, họ có thể thử 288 lần/ngày. Tuy không phải bảo vệ mạnh nhất, nhưng đủ cho lock khóa thông minh hộ gia đình.
+  \item \textbf{Cách khắc phục}: 
+    - Tích hợp logging bảo vệ: Ghi nhân các lần sai không thành công (hoặc gửi cảnh báo qua WiFi).
+    - Exponential backoff: Tăng thời gian khóa từ 5 phút → 15 phút → 1 giờ cho các lần khóa liên tiếp.
+\end{itemize}
+
+\subsubsection{3. Side-Channel Attack: Phân tích độ trễ hoặc công suất}
+
+\textbf{Mối đe dọa}: Kẻ tấn công lắng nghe độ trễ phản hồi hoặc sóng điện từ để suy ra thông tin về khuôn mặt được đăng ký hoặc trạng thái nội bộ (timing attack).
+
+\textbf{Cơ chế phòng chống}:
+\begin{itemize}
+  \item \textbf{Constant-time matching}: Hàm so khớp cosine similarity được thiết kế truy cập mảng embedding theo cư dụng cố định, không có early exit. Dù khuôn mặt khớp hay không, độ trễ tính toán gần như nhau ($\sim 5$--10 ms).
+  \item \textbf{Không lộ lý lịch}: Kẻ tấn công không thể biết được số lượng ID trong cơ sở dữ liệu từ độ trễ phản hồi.
+  \item \textbf{Giới hạn}: Không có bảo vệ electromagnetic (EMI shielding) cụ thể. Nếu cần bảo vệ chống lạm dụng công suất, cần phải thêm bộ lọc hoặc mã hóa lưu lượng.
+\end{itemize}
+
+\subsubsection{4. Physical Attack (Tấn công vật lý): Phá hủy camera hoặc relay}
+
+\textbf{Mối đe dọa}: Kẻ tấn công có thể phá hủy vật lý camera hoặc module điều khiển relay để làm mất chức năng hệ thống.
+
+\textbf{Cơ chế phòng chống}:
+\begin{itemize}
+  \item \textbf{Dual-circuit design}: Relay có 2 ngõ ra (NO + NC). Có thể thêm cảm biến cơ học để phát hiện mở khóa ngoại lệ (unauthorized unlock).
+  \item \textbf{Watchdog}: Nếu camera bị hỏng (không có ảnh), ESP32 sẽ không gửi lệnh OPEN, STM32 sẽ timeout và chuyển sang OFFLINE.
+  \item \textbf{Giới hạn}: Không có phòng chống vật lý cao cấp (không có tamper detection, không có nước mắt mạch, không có sealed enclosure bí mật).
+  \item \textbf{Cách khắc phục}: Đặt hệ thống trong enclosure chống xâm nhập (IP65+), thêm cảm biến vibration/shock để phát hiện bất thường vật lý.
+\end{itemize}
+
+\subsection{So sánh với các hệ thống khác}
+
+\begin{table}[H]
+  \centering
+  \caption{So sánh các cơ chế bảo mật giữa STM-FaceGuard và các hệ thống tương tự}
+  \label{tab:security_comparison}
+  \begin{tabularx}{0.95\textwidth}{l c c c c}
+    \toprule
+    \textbf{Cơ chế bảo mật} & \textbf{STM-FaceGuard} & \textbf{Windows Hello} & \textbf{Apple FaceID} & \textbf{Khóa cửa thông minh} \\
+    \midrule
+    Liveness detection & Bị động (1-frame) & Chủ động (IR patterns) & 3D depth-based & Bị động hoặc không \\
+    Anti-spoofing & Đơn giản & Cao (TrueDepth) & Rất cao & Trung bình \\
+    Rate limiting & 5 lần/5 phút & Unlimited with logging & Exponential backoff & 5-10 lần/30 phút \\
+    Lockout duration & 5 phút & Cơ chế ít rõ & 5 phút tăng dần & 30 phút - vĩnh viễn \\
+    Encryption level & Không (on-device flash) & TPM + Windows Vault & Secure Enclave & Thường không \\
+    Logging/Reporting & Không & ✓ (Windows Event Log) & ✓ (iCloud) & Tùy thiết bị \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\subsection{Định vị rủi ro bảo mật}
+
+Nhân danh tính chất của dự án sinh viên và hạn chế về thời gian/tài nguyên, STM-FaceGuard được thiết kế cho \textbf{bảo vệ cơ bản mức hộ gia đình}, không phải doanh nghiệp hoặc ngân hàng. Các rủi ro chính:
+
+\begin{enumerate}
+  \item \textbf{Spoofing bằng ảnh/video} được giảm nhẹ nhưng không loại bỏ hoàn toàn.
+  \item \textbf{Brute-force} bị giới hạn bởi rate limiting nhưng không toàn bộ bảo vệ lưu lượng cao.
+  \item \textbf{Side-channel} không phải mục tiêu thiết kế, mặc dù có constant-time matching.
+  \item \textbf{Vật lý} không có bảo vệ, yêu cầu mechanical locks bổ sung.
+\end{enumerate}
+
+Nếu cần dùng hệ thống cho mục đích quan trọng hơn, cần phải tiến hành audit bảo mật thuyên chuyên (penetration testing) và cập nhật firmware với các mô-đun liveness detection cao cấp.

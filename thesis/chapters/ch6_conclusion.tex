@@ -24,23 +24,58 @@ Kết quả thực nghiệm cho thấy hệ thống hoạt động ổn định,
 Bên cạnh những kết quả đạt được, hệ thống hiện tại còn một số hạn chế cần được cải thiện:
 
 \begin{enumerate}[label=\arabic*.]
-  \item \textbf{Hiệu năng nhận diện giảm trong điều kiện ánh sáng yếu}: Camera OV3660 không có khả năng tự động điều chỉnh ISO cao, dẫn đến ảnh nhiễu và tỉ lệ nhận diện giảm đáng kể khi độ chiếu sáng dưới 50~lux.
-  \item \textbf{Không có cơ chế chống giả mạo (anti-spoofing)}: Hệ thống hiện tại có thể bị đánh lừa bằng ảnh in hoặc video phát lại trên điện thoại, vì chưa triển khai kỹ thuật phát hiện ``liveness''.
-  \item \textbf{Giao tiếp UART không mã hóa}: Lệnh giữa STM32 và ESP32-S3 truyền dưới dạng văn bản thuần túy. Trong môi trường có nguy cơ tấn công vật lý, đây là điểm yếu bảo mật tiềm năng.
-  \item \textbf{Sử dụng \texttt{HAL\_Delay()} trong vòng lặp chính}: Mặc dù đã tách xử lý ra khỏi ISR, việc dùng delay blocking trong main loop vẫn có thể làm trễ phản hồi nút nhấn nếu nhiều sự kiện xảy ra đồng thời.
-  \item \textbf{Không có cơ chế khôi phục khi ESP32-S3 bị treo}: Nếu ESP32-S3 gặp lỗi và ngừng gửi tín hiệu \texttt{READY}, STM32 không có watchdog timeout để phát hiện và xử lý tình huống này.
+  \item \textbf{Chỉ hỗ trợ 1 tư thế (chính diện)}: Hiện tại \texttt{ENROLL\_TOTAL\_STEPS = 1}, chỉ đăng ký khuôn mặt nhìn thẳng. Điều này giảm độ chính xác khi người dùng quay đầu hoặc thay đổi góc mặt so với đúc nhất đăng ký. Có thể nâng cấp lên 5 tư thế nhưng tốn thời gian đăng ký hơn.
+  
+  \item \textbf{Hiệu năng giảm trong điều kiện ánh sáng yếu}: Camera OV3660 không có khả năng tự động điều chỉnh ISO cao, dẫn đến ảnh nhiễu và tỉ lệ nhận diện giảm đáng kể khi độ chiếu sáng dưới 100 lux. Mặc dù hệ thống có đèn trợ sáng (GPIO47), nhưng độ sáng vẫn còn hạn chế so với camera với IR illuminator.
+  
+  \item \textbf{Không có cơ chế chống giả mạo (anti-spoofing)}: Hệ thống hiện tại có thể bị đánh lừa bằng ảnh in hoặc video phát lại trên điện thoại, vì chưa triển khai kỹ thuật phát hiện ``liveness'' dựa trên blink detection hoặc depth sensing.
+  
+  \item \textbf{Voting quá tối giản (\texttt{REQUIRED\_MATCHES = 1})}: Chỉ cần 1 frame khớp là mở cửa ngay, dễ xảy ra False Positive với ánh sáng phức tạp. Nếu tăng voting lên 2--3 frames, độ tin cậy tăng nhưng latency cũng tăng.
+  
+  \item \textbf{Giao tiếp UART không mã hóa}: Lệnh giữa STM32 và ESP32-S3 truyền dưới dạng văn bản thuần túy. Trong môi trường có nguy cơ tấn công vật lý (không dây, kẹp tín hiệu UART thực tế), đây là điểm yếu bảo mật.
+  
+  \item \textbf{Không có cơ chế khôi phục toàn tự động cho lỗi ESP32}: Nếu ESP32-S3 gặp sự cố camera (CAM\_FAIL) và ngừng gửi READY, STM32 sẽ chuyển sang OFFLINE. Tuy vậy, không có cơ chế tự động reset ESP32 từ STM32 nếu mất kết nối quá lâu.
+  
+  \item \textbf{Dữ liệu khuôn mặt không được backup}: Cơ sở dữ liệu 7 khuôn mặt được lưu trong NVS Flash của ESP32-S3. Nếu flash bị lỗi hoặc bị xóa tình cờ, toàn bộ dữ liệu khuôn mặt sẽ mất mà không có cách phục hồi (không có backup on-cloud hay on-device ngoài).
 \end{enumerate}
 
 \section{Hướng phát triển}
 \label{sec:future_work}
 
-Từ những hạn chế trên, nhóm đề xuất các hướng phát triển tiếp theo:
+Từ những hạn chế trên, nhóm đề xuất các hướng phát triển tiếp theo theo mức ưu tiên:
+
+\subsection{Ưu tiên cao (High Priority)}
 
 \begin{enumerate}[label=\arabic*.]
-  \item \textbf{Bổ sung đèn hồng ngoại và camera IR}: Giải quyết vấn đề ánh sáng yếu và đồng thời là cơ sở triển khai liveness detection dựa trên phản xạ hồng ngoại.
-  \item \textbf{Triển khai anti-spoofing}: Tích hợp mô hình phát hiện giả mạo nhỏ gọn (ví dụ: MiniVGG-based liveness detector) song song với pipeline FR hiện tại.
-  \item \textbf{Mã hóa giao tiếp nội bộ}: Áp dụng giao thức SLIP với CRC-16 hoặc HMAC đơn giản để xác thực tính toàn vẹn lệnh UART.
-  \item \textbf{Tích hợp kết nối IoT}: Khai thác Wi-Fi tích hợp sẵn trong ESP32-S3 để gửi log truy cập lên server MQTT, cho phép giám sát từ xa qua ứng dụng di động.
-  \item \textbf{Thiết kế PCB tích hợp}: Thay thế board Nucleo và breadboard bằng PCB thiết kế riêng để tăng độ tin cậy, giảm kích thước và phù hợp hơn cho sản phẩm thực tế.
-  \item \textbf{Nâng cấp firmware STM32 dùng RTOS}: Chuyển sang FreeRTOS trên STM32 để xử lý đa nhiệm thực sự, loại bỏ hoàn toàn blocking delay và tăng khả năng mở rộng.
+  \item \textbf{Tăng voting thành 2--3 frames}: Thay đổi \texttt{REQUIRED\_MATCHES} từ 1 lên 2 hoặc 3 để giảm False Positive. Trade-off: latency tăng từ $\sim$130 ms lên 260--400 ms, không quá lớn.
+  
+  \item \textbf{Nâng cấp lên 5-pose enrollment}: Đặt \texttt{ENROLL\_TOTAL\_STEPS = 5} để yêu cầu 5 tư thế (FRONT, LEFT, RIGHT, UP, DOWN). Cải thiện đáng kể độ chính xác khi người dùng quay đầu, nhưng tăng thời gian đăng ký lên $\sim$50 giây.
+  
+  \item \textbf{Bổ sung đèn trợ sáng IR}: Lắp thêm IR LED (850 nm hoặc 940 nm) song song với visible LED (GPIO47) để cải thiện hiệu năng trong ánh sáng yếu. Cần điều chỉnh camera exposure settings.
+  
+  \item \textbf{Triển khai Liveness Detection}: Tích hợp mô hình nhỏ gọn dựa on blink detection hoặc optical flow để phát hiện giả mạo video/ảnh in. Có thể dùng MiniVGG hoặc Face Anti-Spoofing CVPR 2014 model được lượng tử hóa.
+\end{enumerate}
+
+\subsection{Ưu tiên trung (Medium Priority)}
+
+\begin{enumerate}[label=\arabic*.]
+  \item \textbf{Bảo vệ giao tiếp UART}: Thêm CRC-16 hoặc HMAC đơn giản vào mỗi gói tin để xác thực tính toàn vẹn. Chuẩn SLIP + CRC-16 có thể sử dụng.
+  
+  \item \textbf{Backup \& restore khuôn mặt}: Triển khai cơ chế xuất/nhập dữ liệu khuôn mặt qua UART hoặc USB, cho phép backup lên máy tính hoặc SD card bên ngoài.
+  
+  \item \textbf{Cơ chế watchdog 2 chiều}: STM32 gửi heartbeat `PING` định kỳ cho ESP32, ESP32 phản hồi `PONG`. Nếu mất PONG quá 60 giây, STM32 tự động reset ESP32 qua GPIO.
+  
+  \item \textbf{Tích hợp NTP + Timestamping}: Sử dụng Wi-Fi của ESP32 để đồng bộ giờ từ NTP server, ghi timestamp vào log truy cập.
+\end{enumerate}
+
+\subsection{Ưu tiên thấp (Low Priority)}
+
+\begin{enumerate}[label=\arabic*.]
+  \item \textbf{Ứng dụng di động (Mobile App)}: Phát triển app iOS/Android để quản lý người dùng từ xa qua BLE hoặc Wi-Fi.
+  
+  \item \textbf{Nâng cấp RTOS cho STM32}: Chuyển từ superloop sang FreeRTOS để xử lý đa nhiệm thực sự, khử hoàn toàn blocking delay.
+  
+  \item \textbf{PCB thiết kế riêng}: Thay thế breadboard + dev boards bằng PCB để tăng độ tin cậy và giảm kích thước.
+  
+  \item \textbf{Machine Learning tự thích ứng}: Huấn luyện bổ sung embeddings trong quá trình vận hành để điều chỉnh theo thay đổi độ sáng hoặc góc độ mới của người dùng.
 \end{enumerate}

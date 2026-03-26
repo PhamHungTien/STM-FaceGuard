@@ -11,3 +11,193 @@
 %   \caption{Sơ đồ nguyên lý toàn hệ thống STM-FaceGuard}
 %   \label{fig:schematic}
 % \end{figure}
+
+\section*{A.1 \quad Sơ đồ khối tổng quan hệ thống}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[scale=0.85, node distance=2.5cm]
+    % Định nghĩa style
+    \tikzstyle{block} = [draw, rectangle, minimum width=2.5cm, minimum height=1cm, font=\small]
+    \tikzstyle{sensor} = [draw, circle, minimum size=1cm, font=\tiny]
+    \tikzstyle{connection} = [->, thick]
+    
+    % MCUs
+    \node[block] (esp32) at (0, 4) {ESP32-S3 N16R8 \\ (AI Edge)};
+    \node[block] (stm32) at (0, 0) {STM32F411 \\ (Control)};
+    
+    % Peripherals
+    \node[block] (camera) at (-4, 4) {OV3660 Camera \\ 3MP};
+    \node[block] (oled) at (-4, 0) {SSD1306 OLED \\ I2C};
+    \node[block] (dfplayer) at (4, 0) {DFPlayer Mini \\ MP3};
+    \node[block] (relay) at (4, -2) {Relay Module \\ + Solenoid};
+    
+    % Input/Output
+    \node[sensor] (btn1) at (-6, -3) {BTN1};
+    \node[sensor] (btn2) at (-5, -3) {BTN2};
+    \node[sensor] (btn3) at (-4, -3) {BTN3};
+    \node[block] (psu) at (0, -4) {12V Adapter};
+    
+    % Connections
+    \draw[connection] (camera) -- (esp32) node[midway, above] {DVP};
+    \draw[connection] (esp32) -- (stm32) node[midway, right] {UART 115.2k};
+    \draw[connection] (stm32) -- (oled) node[midway, above] {I2C};
+    \draw[connection] (stm32) -- (dfplayer) node[midway, above] {UART 9.6k};
+    \draw[connection] (stm32) -- (relay) node[midway, above] {GPIO};
+    
+    % Input buttons
+    \draw[connection] (btn1) -- (stm32.south);
+    \draw[connection] (btn2) -- (stm32.south);
+    \draw[connection] (btn3) -- (stm32.south);
+    
+    % Power
+    \draw[connection] (psu) -- (esp32) node[midway, left] {5V};
+    \draw[connection] (psu) -- (stm32) node[midway, left] {5V};
+    \draw[connection] (psu) -- (relay) node[midway, right] {12V};
+    
+    % Annotations
+    \node[anchor=south west, font=\tiny] at (-0.5, -0.7) {Non-blocking FSM};
+    \node[anchor=south west, font=\tiny] at (-0.5, 3.2) {TensorFlow Lite};
+  \end{tikzpicture}
+  \caption{Sơ đồ khối hệ thống STM-FaceGuard. Kiến trúc hai MCU độc lập: ESP32-S3 xứ lý AI, STM32F411 điều khiển ngoại vi.}
+  \label{fig:block_diagram}
+\end{figure}
+
+\section*{A.2 \quad Định dạng và Timing của thông điệp UART}
+
+Giao tiếp giữa STM32 và ESP32-S3 sử dụng protocol UART tới giản. Mỗi thông điệp kết thúc bằng ký tự newline (\texttt{\textbackslash n}), cho phép phương pháp Idle Line Detection hoạt động hiệu quả.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[scale=1.0, font=\small]
+    % UART frame timing
+    \draw[thick] (0,0) -- (10,0);
+    \node at (-0.5, 0) [left] {TXD};
+    
+    % Idle state
+    \draw[thick, dashed] (0,0.3) -- (0.5,0.3);
+    \node at (0.25, 0.6) {\tiny Idle};
+    
+    % Start bit
+    \draw[thick] (0.5,-0.3) -- (0.5,0) -- (1,-0.3);
+    \node at (0.75, -0.6) {\tiny START};
+    
+    % Data bits (example: 'O' = 0x4F = 01001111)
+    \foreach \i/\bit in {1/0, 1.5/1, 2/0, 2.5/0, 3/1, 3.5/1, 4/1, 4.5/1} {
+        \draw[thick] (\i,{0.3*(\bit-0.5)}) -- (\i+0.5,{0.3*(\bit-0.5)});
+        \node at (\i+0.25, {0.3*(\bit-0.5)+0.4}) {\tiny \bit};
+    }
+    \node at (2.75, -0.8) {Data[8]};
+    
+    % Stop bit
+    \draw[thick] (5,-0.3) -- (5,0) -- (5.5,-0.3);
+    \node at (5.25, -0.6) {\tiny STOP};
+    
+    % Idle again
+    \draw[thick, dashed] (5.5,0.3) -- (10,0.3);
+    \node at (7.75, 0.6) {\tiny Idle (Idle Line Detection fires here)};
+    
+    % Timing annotations
+    \draw[<->] (0.5, -1.2) -- (5.5, -1.2);
+    \node at (3, -1.5) {~10 bit-times @ 115.2k = ~87 µs/byte};
+  \end{tikzpicture}
+  \caption{UART Bit Timing Diagram. Idle line được phát hiện khi đường không có chuyển đổi bit trong khoảng thời gian cụ thể.}
+  \label{fig:uart_timing}
+\end{figure}
+
+\begin{table}[H]
+  \centering
+  \caption{Định dạng thông điệp UART ESPv32-S3 $\to$ STM32}
+  \label{tab:uart_msg_format}
+  \begin{tabularx}{0.9\textwidth}{l l X}
+    \toprule
+    \textbf{Lệnh} & \textbf{Format} & \textbf{Ý nghĩa} \\
+    \midrule
+    Open lock       & \texttt{OPEN:5\textbackslash n} & Mở khóa, ID person = 5 \\
+    Denied          & \texttt{DENIED\textbackslash n} & Từ chối nhận diện \\
+    Ready signal    & \texttt{READY\textbackslash n} & ESP32 sẵn sàng \\
+    Enrolled        & \texttt{ENROLLED\textbackslash n} & Đăng ký thành công \\
+    Deleted         & \texttt{DELETED\textbackslash n} & Xóa toàn bộ dữ liệu \\
+    Face count      & \texttt{FACES:7\textbackslash n} & Số khuôn mặt lưu = 7 \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\section*{A.3 \quad Biểu đồ Timing chuyên sâu: Unlock Sequence}
+
+Sơ đồ timing sau mô tả toàn bộ quá trình từ lúc camera phát hiện khuôn mặt đến khi relay mở khóa.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[scale=0.9, font=\footnotesize]
+    % Timeline
+    \draw[very thick] (0,0) -- (14,0);
+    \foreach \t in {0,2,4,6,8,10,12,14} {
+      \draw (\t,0.1) -- (\t,-0.1);
+      \node at (\t, -0.4) {\t ms};
+    }
+    \node at (7, -0.8) {Time →};
+    
+    % Camera detection
+    \draw[blue, ultra thick] (0, 1) -- (1, 1) -- (1, 1.5) -- (1.5, 1.5) -- (1.5, 1);
+    \node[blue, left] at (-0.5, 1.25) {Camera};
+    \node[blue] at (0.75, 1.8) {\small Frame 1 (detect face)};
+    
+    % ML inference (80-120 ms)
+    \draw[green, ultra thick] (1, 2) -- (3, 2);
+    \draw[green, dashed] (1, 1.8) -- (1, 2.2);
+    \node[green, left] at (-0.5, 2) {Inference};
+    \node[green] at (2, 2.3) {\small 80--120 ms};
+    
+    % UART transmission (5-20 ms)
+    \draw[red, ultra thick] (3, 3) -- (3.5, 3);
+    \draw[red, dashed] (3, 2.8) -- (3, 3.2);
+    \node[red, left] at (-0.5, 3) {UART Tx};
+    \node[red] at (3.25, 3.3) {\small 5--20 ms};
+    
+    % STM32 DMA reception (0-5 ms)
+    \draw[purple, ultra thick] (3.5, 4) -- (3.7, 4);
+    \draw[purple, dashed] (3.5, 3.8) -- (3.5, 4.2);
+    \node[purple, left] at (-0.5, 4) {DMA RX};
+    
+    % FSM processing (1-5 ms)
+    \draw[orange, ultra thick] (3.7, 5) -- (4, 5);
+    \node[orange] at (3.85, 5.3) {\small <5 ms};
+    \node[orange, left] at (-0.5, 5) {FSM};
+    
+    % Relay activation (10 ms electrical)
+    \draw[red!80!black, ultra thick] (4, 6) -- (4.3, 6);
+    \node[red!80!black, left] at (-0.5, 6) {Relay};
+    \node[red!80!black] at (4.15, 6.3) {\small 10 ms};
+    
+    % Total: 127-210 ms
+    \draw[thick, dotted] (0, -1.5) -- (4.3, -1.5);
+    \node at (2.15, -2) {\bf Total Latency: 127--210 ms};
+    
+  \end{tikzpicture}
+  \caption{End-to-End Latency Diagram: Từ khi camera phát hiện khuôn mặt đến khi relay mở. Các thành phần độc lập không chặn nhau.}
+  \label{fig:unlock_timing}
+\end{figure}
+
+\section*{A.4 \quad Sơ đồ Quản lý Nguồn Điện}
+
+\begin{table}[H]
+  \centering
+  \caption{Phân phối và tiêu thụ công suất từng module}
+  \label{tab:power_usage}
+  \begin{tabularx}{0.9\textwidth}{l r r r X}
+    \toprule
+    \textbf{Module} & \textbf{Voltage} & \textbf{Current} & \textbf{Power} & \textbf{Notes} \\
+    \midrule
+    STM32F411 @ 100 MHz & 3.3V & 80 mA & 0.26W & Idle: 30 mA \\
+    ESP32-S3 dual-core & 3.3V & 250 mA & 0.83W & Idle: 50 mA \\
+    OV3660 Camera active & 3.3V / 1.8V & 150 mA & 0.5W & ~30 FPS \\
+    SSD1306 OLED 128×64 & 3.3V & 15 mA & 0.05W & Display on \\
+    DFPlayer Mini & 5V & 40 mA & 0.2W & Audio idle \\
+    Solenoid lock 12V & 12V & 500 mA & 6W & Brief activation~3s \\
+    \midrule
+    \textbf{Total average} & -- & -- & \textbf{~1.84W} & Without solenoid \\
+    \textbf{Total (lock open)} & -- & -- & \textbf{~8W} & With solenoid 500 mA \\
+    \bottomrule
+  \end{tabularx}
+\end{table}

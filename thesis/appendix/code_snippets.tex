@@ -44,3 +44,171 @@ if (res.id >= 0 && res.similarity >= RECOGNITION_THRESHOLD) {
         Serial1.println("DENIED");
 }
 \end{lstlisting}
+
+\section*{B.3 \quad Cấu hình UART DMA với Idle Line Detection --- STM32}
+
+\begin{lstlisting}[style=cstyle,
+  caption={Khởi tạo UART1 DMA và ngắt Idle Line (STM32F411CEU6)},
+  label={lst:uart_dma_init}]
+// STM32/Core/Src/main.c - init_uart_dma()
+#define UART1_DMA_BUF_SIZE 64
+static char uart1_dma_rx_buf[UART1_DMA_BUF_SIZE] = {0};
+
+void init_uart_dma(void)
+{
+    // Enable DMA1 Stream 2 cho USART1 RX
+    __HAL_RCC_DMA1_CLK_ENABLE();
+    
+    // Khởi tạo DMA Handle
+    DMA_HandleTypeDef hdma;
+    hdma.Instance = DMA1_Stream2;
+    hdma.Init.Channel = DMA_CHANNEL_0;
+    hdma.Init.Direction = DMA_PERIPH_TO_MEMORY;
+    hdma.Init.PeriphInc = DMA_PINC_DISABLE;
+    hdma.Init.MemInc = DMA_MINC_ENABLE;
+    hdma.Init.Mode = DMA_CIRCULAR;  // Vòng tròn bộ đệm
+    hdma.Init.Priority = DMA_PRIORITY_HIGH;
+    HAL_DMA_Init(&hdma);
+    
+    // Liên kết DMA với USART1
+    __HAL_LINKDMA(&huart1, hdmarx, hdma);
+    
+    // Bắt đầu DMA nhận vào buf
+    HAL_UART_Receive_DMA(&huart1, (uint8_t *)uart1_dma_rx_buf, 
+                         UART1_DMA_BUF_SIZE);
+    
+    // Kích hoạt ngắt Idle Line (UART_IT_IDLE)
+    __HAL_UART_ENABLE_IT(&huart1, UART_IT_IDLE);
+}
+\end{lstlisting}
+
+\section*{B.4 \quad Xử lý sự kiện Idle Line và phân tích thông điệp --- STM32}
+
+\begin{lstlisting}[style=cstyle,
+  caption={Callback ngắt Idle Line - xử lý thông điệp hoàn chỉnh},
+  label={lst:uart_idle_callback}]
+// STM32/Core/Src/main.c
+void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, 
+                                uint16_t Size)
+{
+    if (huart->Instance == USART1) {
+        // Size = số byte nhận được (từ thăm do DMA)
+        if (Size > 0 && Size < UART1_DMA_BUF_SIZE) {
+            // Sao chép bộ đệm DMA vào queue tin nhắn
+            uart1_dma_rx_buf[Size] = '\0';  // Null terminate
+            enqueue_message(uart1_dma_rx_buf);  // Đưa vào hàng đợi
+            
+            // Khởi động lại DMA mới
+            HAL_UART_Receive_DMA(&huart1, (uint8_t *)uart1_dma_rx_buf,
+                                 UART1_DMA_BUF_SIZE);
+        }
+    }
+}
+\end{lstlisting}
+
+\section*{B.5 \quad Vòng lặp máy trạng thái (FSM) không chặn --- STM32}
+
+\begin{lstlisting}[style=cstyle,
+  caption={Main loop FSM xử lý sự kiện không chặn},
+  label={lst:fsm_main_loop}]
+// STM32/Core/Src/main.c - main loop
+void main_loop(void)
+{
+    uint32_t last_tick = 0;
+    while (1) {
+        uint32_t now = HAL_GetTick();
+        if (now - last_tick >= 50)  // Gọi FSM mỗi 50 ms
+        {
+            // Xử lý sự kiện từ queue
+            if (!is_queue_empty(&uart1_queue)) {
+                char *msg = dequeue_message(&uart1_queue);
+                Parse_ESP32_Msg(msg);
+            }
+            
+            // Cập nhật máy trạng thái
+            fsm_update(&sys_state);
+            
+            // Cập nhật OLED (không chặn)
+            update_oled(&sys_state);
+            
+            // Kiểm tra bộ đếm lockout
+            if (sys_state == SYS_LOCKED)
+                update_lockout_timer();
+            
+            last_tick = now;
+        }
+    }
+}
+
+// Hàm FSM core
+void fsm_update(SystemState_t *state)
+{
+    switch (*state) {
+        case SYS_IDLE:
+            if (button_enroll_pressed())
+                *state = SYS_ENROLLING;
+            break;
+        case SYS_ENROLLING:
+            if (enroll_timeout_expired())
+                *state = SYS_DENIED;
+            break;
+        case SYS_UNLOCKING:
+            if (relay_timeout_expired())  // 3 giây
+                *state = SYS_IDLE;
+            break;
+        case SYS_LOCKED:
+            if (lockout_expired())
+                *state = SYS_IDLE;
+            break;
+        // ... (các trạng thái khác)
+    }
+}
+\end{lstlisting}
+
+\section*{B.6 \quad Cấu hình Watchdog --- STM32 \& ESP32-S3}
+
+\begin{lstlisting}[style=cstyle,
+  caption={Independent Watchdog (IWDG) STM32F411 - ~5s timeout},
+  label={lst:iwdg_config}]
+// STM32/Core/Src/main.c
+static void init_watchdog(void)
+{
+    // IWDG: LSI clock ~ 32 kHz, prescaler = 32,
+    // reload = 5000 -> timeout ~ (32000 / 32) * 5000 ~ 5 giây
+    hiwdg.Instance = IWDG;
+    hiwdg.Init.Prescaler = IWDG_PRESCALER_32;
+    hiwdg.Init.Reload = 5000;
+    HAL_IWDG_Init(&hiwdg);
+}
+
+// Gọi periodically trong main loop
+void feed_watchdog(void)
+{
+    HAL_IWDG_Refresh(&hiwdg);  // Feed (reset counter)
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=cstyle,
+  caption={Task Watchdog (Task WDT) ESP32-S3 - 30s timeout},
+  label={lst:esp_task_wdt}]
+// ESP32-S3/STM-FaceGuard/STM-FaceGuard.ino - setup()
+void setup() {
+    Serial.begin(115200);
+    Serial1.begin(115200, SERIAL_8N1, 20, 19);  // RX, TX
+    
+    // Khởi tạo camera
+    if (!camera.init(config)) {
+        Serial.println("Camera init failed!");
+        // Không reset, để STM32 phát hiện OFFLINE
+    }
+    
+    // Cấu hình Task WDT
+    esp_task_wdt_init(30, true);  // 30 sec timeout, panic on timeout
+    esp_task_wdt_add(NULL);  // Add current task
+}
+
+void loop() {
+    // Xử lý nhận diện khuôn mặt
+    esp_task_wdt_reset();  // Feed watchdog
+}
+\end{lstlisting}

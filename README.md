@@ -28,11 +28,11 @@ Dự án đồ án môn học xây dựng hệ thống khóa cửa thông minh s
 
 ## Tính năng
 
-- **Nhận diện khuôn mặt thời gian thực** — ESP32-S3 xử lý AI với camera OV3660 3MP, cosine similarity ≥ 0.55
-- **Voting 2 frame liên tiếp** — yêu cầu 2 frame khớp liền nhau mới mở cửa, loại bỏ false positive từ nhiễu ảnh
-- **Bảo vệ brute-force (Lockout)** — khoá 5 phút sau 5 lần nhận diện thất bại liên tiếp
+- **Nhận diện khuôn mặt thời gian thực** — ESP32-S3 xử lý AI với camera OV3660 3MP, cosine similarity ≥ 0.45
+- **Voting 1 frame ngay lập tức** — phản hồi instant (1 khung hình), có thể nâng lên 2-3 frames để giảm false positive
+- **Bảo vệ brute-force (Lockout)** — khóa 5 phút sau 5 lần nhận diện thất bại liên tiếp
 - **Quản lý người dùng bằng nút nhấn** — Thêm và xóa khuôn mặt offline, không cần máy tính
-- **Đăng ký 5 tư thế** — FRONT / LEFT / RIGHT / UP / DOWN cho độ chính xác cao trong mọi góc độ
+- **Đăng ký đơn giản (1 tư thế)** — Chỉ cần nhìn thẳng (FRONT), có thể nâng lên 5 tư thế (FRONT/LEFT/RIGHT/UP/DOWN) để tăng độ chính xác
 - **Phản hồi âm thanh tiếng Việt** — DFPlayer Mini phát 10 file MP3 hướng dẫn
 - **Hiển thị trạng thái OLED** — Màn hình 128×64 px hiển thị thông tin và hướng dẫn từng bước
 - **Hiển thị số khuôn mặt** — Màn hình READY hiện số face đã đăng ký và slot còn trống
