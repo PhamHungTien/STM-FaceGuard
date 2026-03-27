@@ -229,6 +229,14 @@
 \cleardoublepage
 \pagenumbering{roman}
 
+% ── Lời cam đoan ────────────────────────────────────────────
+\input{chapters/00_declaration}
+\cleardoublepage
+
+% ── Lời cảm ơn ──────────────────────────────────────────────
+\input{chapters/00_acknowledgments}
+\cleardoublepage
+
 % ── Tóm tắt ─────────────────────────────────────────────────
 \input{chapters/00_abstract}
 \cleardoublepage
@@ -249,12 +257,6 @@
 \listoftables
 \cleardoublepage
 
-% ── Danh mục mã nguồn ───────────────────────────────────────
-\phantomsection
-\addcontentsline{toc}{chapter}{Danh mục mã nguồn}
-\lstlistoflistings
-\cleardoublepage
-
 % ── Danh mục từ viết tắt ────────────────────────────────────
 \input{chapters/00_abbreviations}
 \cleardoublepage
@@ -269,19 +271,19 @@
 \input{chapters/ch5_results}
 \input{chapters/ch6_conclusion}
 
+% ── Tài liệu tham khảo ──────────────────────────────────────
+\cleardoublepage
+\phantomsection
+\addcontentsline{toc}{chapter}{Tài liệu tham khảo}
+\printbibliography[title={Tài liệu tham khảo}]
+
 % ── Phụ lục ─────────────────────────────────────────────────
 \appendix
 \input{appendix/schematic}
 \input{appendix/code_snippets}
 
-% ── Phân công công việc ──────────────────────────────────────
+% ── Phân công công việc (tài liệu hành chính) ───────────────
 \cleardoublepage
 \input{chapters/00_task_division}
-
-% ── Tài liệu tham khảo (cuối tài liệu) ──────────────────────
-\cleardoublepage
-\phantomsection
-\addcontentsline{toc}{chapter}{Tài liệu tham khảo}
-\printbibliography[title={Tài liệu tham khảo}]
 
 \end{document}
