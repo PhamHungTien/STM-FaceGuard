@@ -284,16 +284,16 @@ Bất kỳ hệ thống nhận diện khuôn mặt nào cũng phải cân nhắc
   \centering
   \caption{So sánh các cơ chế bảo mật giữa STM-FaceGuard và các hệ thống tương tự}
   \label{tab:security_comparison}
-  \begin{tabularx}{0.95\textwidth}{l c c c c}
+  \begin{tabularx}{0.95\textwidth}{l c c c X}
     \toprule
     \textbf{Cơ chế bảo mật} & \textbf{STM-FaceGuard} & \textbf{Windows Hello} & \textbf{Apple FaceID} & \textbf{Khóa cửa thông minh} \\
     \midrule
     Liveness detection & Bị động (1-frame) & Chủ động (IR patterns) & 3D depth-based & Bị động hoặc không \\
     Anti-spoofing & Đơn giản & Cao (TrueDepth) & Rất cao & Trung bình \\
-    Rate limiting & 5 lần/5 phút & Unlimited with logging & Exponential backoff & 5-10 lần/30 phút \\
+    Rate limiting & 5 lần/5 phút & Không giới hạn & Exp.\ backoff & 5--10 lần/30 phút \\
     Lockout duration & 5 phút & Cơ chế ít rõ & 5 phút tăng dần & 30 phút - vĩnh viễn \\
-    Encryption level & Không (on-device flash) & TPM + Windows Vault & Secure Enclave & Thường không \\
-    Logging/Reporting & Không & ✓ (Windows Event Log) & ✓ (iCloud) & Tùy thiết bị \\
+    Encryption level & Không & TPM + Win Vault & Secure Enclave & Thường không \\
+    Logging/Reporting & Không & \checkmark~Win Log & \checkmark~iCloud & Tùy thiết bị \\
     \bottomrule
   \end{tabularx}
 \end{table}

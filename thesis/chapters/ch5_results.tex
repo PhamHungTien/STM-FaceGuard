@@ -78,7 +78,8 @@ Hệ thống được kiểm thử với ma trận điều kiện hoàn toàn ki
     \multicolumn{6}{l}{\textbf{Người lạ (Imposter Access)}} \\
     Tất cả điều kiện ánh sáng & 150 & 147 (TN) & 3 (FP) & -- & 2.0 \\
     \midrule
-    \textbf{Tổng hợp} & \textbf{1410} & -- & -- & \textbf{83.8} (tất cả) / \textbf{93.3} (ánh sáng tốt) & \textbf{2.0} \\
+    \textbf{Tổng hợp} & \textbf{1410} & -- & -- & \textbf{83.8} / \textbf{93.3}$^{*}$ & \textbf{2.0} \\
+    \multicolumn{6}{l}{\footnotesize $^{*}$83.8\%: tất cả điều kiện; 93.3\%: chỉ ánh sáng tốt (Điều kiện 1--3)} \\
     \bottomrule
   \end{tabularx}
 \end{table}
@@ -91,7 +92,7 @@ Ngưỡng $\theta = 0.45$ được lựa chọn qua quá trình thực nghiệm 
   \centering
   \caption{Ảnh hưởng của ngưỡng cosine similarity đến FAR và FNR (điều kiện ánh sáng tốt, 420 lần thử)}
   \label{tab:threshold_sweep}
-  \begin{tabular}{c c c c}
+  \begin{tabularx}{0.95\textwidth}{c c c X}
     \toprule
     \textbf{Ngưỡng $\theta$} & \textbf{FAR (\%)} & \textbf{FNR (\%)} & \textbf{Ghi chú} \\
     \midrule
@@ -104,7 +105,7 @@ Ngưỡng $\theta = 0.45$ được lựa chọn qua quá trình thực nghiệm 
     0.55 & 0.2 & 26.1 & Không phù hợp cho khóa cửa \\
     0.60 & 0.0 & 34.8 & Quá chặt, hầu như từ chối tất cả \\
     \bottomrule
-  \end{tabular}
+  \end{tabularx}
 \end{table}
 
 \noindent Ngưỡng $\theta = 0.45$ đạt FAR = 2.0\% (dưới mức cho phép 5\%) và FNR = 11.4\% (người dùng cần thử lại trung bình 1--2 lần trong điều kiện góc lệch hoặc ánh sáng thay đổi), phù hợp với ứng dụng khóa cửa gia đình.
@@ -122,16 +123,16 @@ Hệ thống STM-FaceGuard sử dụng \textbf{1-frame voting} có nghĩa là ch
   \centering
   \caption{So sánh hiệu suất theo số lượng frame voting}
   \label{tab:voting_comparison}
-  \begin{tabularx}{0.95\textwidth}{l c c c c}
+  \begin{tabularx}{0.95\textwidth}{l c c c X}
     \toprule
     \textbf{Chỉ số} & \textbf{1-frame} & \textbf{2-frame} & \textbf{3-frame} & \textbf{Ghi chú} \\
     \midrule
-    \textbf{Latency (ms)} & 130--210 & 260--420 & 390--630 & Tích lũy thời gian frame \\
+    \textbf{Latency (ms)} & 130--210 & 260--420 & 390--630 & Tích lũy theo số frame \\
     \textbf{FNR (\%)} & 10--15 & 5--8 & 1--3 & Giảm khi yêu cầu nhiều frame \\
-    \textbf{User Frustration} & Thấp & Trung bình & Cao & Xác suất phải thừa kỹ $>2$ lần \\
+    \textbf{User Frustration} & Thấp & Trung bình & Cao & Xác suất phải thử lại $>2$ lần \\
     \textbf{False Rejection} & Cao & Trung bình & Thấp & Nguy cơ từ chối người hợp lệ \\
-    \textbf{Lock Delay} & Nhanh ($<250$ ms) & Trung bình ($\sim 400$ ms) & Chậm ($>600$ ms) & UX perspective \\
-    \textbf{Phù hợp} & \checkmark Khóa cửa & (\checkmark) Bảng điều khiển & (\checkmark) Ngân hàng & Theo mức bảo mật \\
+    \textbf{Lock Delay} & $<250$~ms & ${\sim}400$~ms & $>600$~ms & UX perspective \\
+    \textbf{Phù hợp} & \checkmark~Khóa cửa & (\checkmark)~BĐK & (\checkmark)~Ngân hàng & Theo mức bảo mật \\
     \bottomrule
   \end{tabularx}
 \end{table}

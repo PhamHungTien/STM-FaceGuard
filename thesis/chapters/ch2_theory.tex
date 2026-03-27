@@ -92,13 +92,13 @@ Mục này so sánh kiến trúc và hiệu năng của dự án STM-FaceGuard v
     \toprule
     \textbf{Tiêu chí} & \textbf{STM-FaceGuard} & \textbf{Daon Face Lock} & \textbf{DoorBell AI} & \textbf{Cloud-based} \\
     \midrule
-    Xử lý local & ✓ & ✓ & Hybrid & ✗ \\
-    Không internet & ✓ & ✓ & ✗ & ✗ \\
-    Dual-MCU & ✓ & ✗ & ✓ & N/A \\
+    Xử lý local & \checkmark & \checkmark & Hybrid & $\times$ \\
+    Không internet & \checkmark & \checkmark & $\times$ & $\times$ \\
+    Dual-MCU & \checkmark & $\times$ & \checkmark & N/A \\
     Giá (~USD) & 50--80 & 120--150 & 30--50 & 10--20/tháng \\
     Độ chính xác (\%) & 90--95 & 95--98 & 80--85 & 99+ \\
     Latency (s) & 0.13--0.5 & 0.5--1.5 & 0.2--0.8 & 2--5 \\
-    Độc lập dữ liệu & ✓ & ✓ & Hybrid & ✗ \\
+    Độc lập dữ liệu & \checkmark & \checkmark & Hybrid & $\times$ \\
     \bottomrule
   \end{tabularx}
 \end{table}

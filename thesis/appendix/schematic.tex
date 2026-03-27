@@ -16,50 +16,48 @@
 
 \begin{figure}[H]
   \centering
-  \begin{tikzpicture}[scale=0.85, node distance=2.5cm]
-    % Định nghĩa style
-    \tikzstyle{block} = [draw, rectangle, minimum width=2.5cm, minimum height=1cm, font=\small]
-    \tikzstyle{sensor} = [draw, circle, minimum size=1cm, font=\tiny]
-    \tikzstyle{connection} = [->, thick]
-    
-    % MCUs
-    \node[block] (esp32) at (0, 4) {ESP32-S3 N16R8 \\ (AI Edge)};
-    \node[block] (stm32) at (0, 0) {STM32F411 \\ (Control)};
-    
-    % Peripherals
-    \node[block] (camera) at (-4, 4) {OV3660 Camera \\ 3MP};
-    \node[block] (oled) at (-4, 0) {SSD1306 OLED \\ I2C};
-    \node[block] (dfplayer) at (4, 0) {DFPlayer Mini \\ MP3};
-    \node[block] (relay) at (4, -2) {Relay Module \\ + Solenoid};
-    
-    % Input/Output
-    \node[sensor] (btn1) at (-6, -3) {BTN1};
-    \node[sensor] (btn2) at (-5, -3) {BTN2};
-    \node[sensor] (btn3) at (-4, -3) {BTN3};
-    \node[block] (psu) at (0, -4) {12V Adapter};
-    
-    % Connections
-    \draw[connection] (camera) -- (esp32) node[midway, above] {DVP};
-    \draw[connection] (esp32) -- (stm32) node[midway, right] {UART 115.2k};
-    \draw[connection] (stm32) -- (oled) node[midway, above] {I2C};
-    \draw[connection] (stm32) -- (dfplayer) node[midway, above] {UART 9.6k};
-    \draw[connection] (stm32) -- (relay) node[midway, above] {GPIO};
-    
-    % Input buttons
-    \draw[connection] (btn1) -- (stm32.south);
-    \draw[connection] (btn2) -- (stm32.south);
-    \draw[connection] (btn3) -- (stm32.south);
-    
-    % Power
-    \draw[connection] (psu) -- (esp32) node[midway, left] {5V};
-    \draw[connection] (psu) -- (stm32) node[midway, left] {5V};
-    \draw[connection] (psu) -- (relay) node[midway, right] {12V};
-    
-    % Annotations
-    \node[anchor=south west, font=\tiny] at (-0.5, -0.7) {Non-blocking FSM};
-    \node[anchor=south west, font=\tiny] at (-0.5, 3.2) {TensorFlow Lite};
+  \begin{tikzpicture}[
+    node distance = 1.4cm and 2.2cm,
+    mcu/.style   = {draw, rectangle, rounded corners=3pt,
+                    minimum width=3cm, minimum height=1.2cm,
+                    font=\small\bfseries, align=center, fill=blue!8},
+    periph/.style = {draw, rectangle, minimum width=2.6cm, minimum height=0.9cm,
+                    font=\small, align=center, fill=gray!10},
+    btn/.style   = {draw, circle, minimum size=0.7cm, font=\scriptsize, fill=yellow!20},
+    arr/.style   = {->, >=Stealth, thick},
+    lbl/.style   = {font=\scriptsize, midway, align=center}
+  ]
+    %% --- MCU nodes (centre column) ---
+    \node[mcu] (esp32) {ESP32-S3\\N16R8\\{\scriptsize AI Processor}};
+    \node[mcu, below=2.0cm of esp32] (stm32) {STM32F411\\CEU6\\{\scriptsize Peripheral Ctrl}};
+
+    %% --- Left column ---
+    \node[periph, left=of esp32]  (camera)   {OV3660\\Camera 3\,MP};
+    \node[periph, left=of stm32]  (oled)     {SSD1306\\OLED 128×64};
+
+    %% --- Right column ---
+    \node[periph, right=of stm32, yshift= 0.8cm] (dfplayer) {DFPlayer\\Mini MP3};
+    \node[periph, right=of stm32, yshift=-0.8cm] (relay)    {Relay +\\Solenoid 12\,V};
+
+    %% --- Buttons (below STM32) ---
+    \node[btn, below=1.5cm of stm32, xshift=-1.0cm] (btn1) {EN};
+    \node[btn, below=1.5cm of stm32]                (btn2) {DEL};
+    \node[btn, below=1.5cm of stm32, xshift= 1.0cm] (btn3) {EXT};
+
+    %% --- Connections ---
+    \draw[arr] (camera)   -- node[lbl, above]{DVP 8-bit}  (esp32);
+    \draw[arr] (esp32)    -- node[lbl, right]{UART\\115.2k baud} (stm32);
+    \draw[arr] (stm32)    -- node[lbl, above]{I2C 400k}   (oled);
+    \draw[arr] (stm32.east|-dfplayer) -- node[lbl, above]{UART 9.6k} (dfplayer);
+    \draw[arr] (stm32.east|-relay)    -- node[lbl, above]{GPIO}       (relay);
+    \draw[arr] (btn1.north) -- (stm32.south -| btn1);
+    \draw[arr] (btn2.north) -- (stm32.south);
+    \draw[arr] (btn3.north) -- (stm32.south -| btn3);
+
+    %% --- Power label ---
+    \node[font=\scriptsize, gray] at ([xshift=-0.4cm]esp32.north west) [above left]{12\,V/2\,A Adapter};
   \end{tikzpicture}
-  \caption{Sơ đồ khối hệ thống STM-FaceGuard. Kiến trúc hai MCU độc lập: ESP32-S3 xứ lý AI, STM32F411 điều khiển ngoại vi.}
+  \caption{Sơ đồ khối hệ thống STM-FaceGuard. Kiến trúc Dual-MCU: ESP32-S3 xử lý AI, STM32F411CEU6 điều khiển ngoại vi. Ba nút nhấn EN/DEL/EXT kết nối trực tiếp vào GPIO ngắt của STM32.}
   \label{fig:block_diagram}
 \end{figure}
 
@@ -69,39 +67,59 @@ Giao tiếp giữa STM32 và ESP32-S3 sử dụng protocol UART tới giản. M�
 
 \begin{figure}[H]
   \centering
-  \begin{tikzpicture}[scale=1.0, font=\small]
-    % UART frame timing
-    \draw[thick] (0,0) -- (10,0);
-    \node at (-0.5, 0) [left] {TXD};
-    
-    % Idle state
-    \draw[thick, dashed] (0,0.3) -- (0.5,0.3);
-    \node at (0.25, 0.6) {\tiny Idle};
-    
-    % Start bit
-    \draw[thick] (0.5,-0.3) -- (0.5,0) -- (1,-0.3);
-    \node at (0.75, -0.6) {\tiny START};
-    
-    % Data bits (example: 'O' = 0x4F = 01001111)
-    \foreach \i/\bit in {1/0, 1.5/1, 2/0, 2.5/0, 3/1, 3.5/1, 4/1, 4.5/1} {
-        \draw[thick] (\i,{0.3*(\bit-0.5)}) -- (\i+0.5,{0.3*(\bit-0.5)});
-        \node at (\i+0.25, {0.3*(\bit-0.5)+0.4}) {\tiny \bit};
+  \resizebox{0.92\textwidth}{!}{%
+  \begin{tikzpicture}[font=\small, >=Stealth]
+    %% Baseline
+    \draw[thick] (0,0) -- (11,0);
+    \node[left, font=\small\ttfamily] at (0,0) {TXD};
+
+    %% Idle (before)
+    \draw[thick] (0,0.4) -- (0.8,0.4);
+    \node[above, font=\scriptsize] at (0.4,0.4) {Idle (HIGH)};
+
+    %% Start bit (LOW)
+    \draw[thick] (0.8,0.4) -- (0.8,0) -- (1.6,0);
+    \node[below, font=\scriptsize] at (1.2,-0.05) {START};
+
+    %% Data bits D0–D7 (01001111 = 'O' = 0x4F, LSB first)
+    \foreach \idx/\bit/\lbl in {
+        0/1/D0, 1/1/D1, 2/1/D2, 3/1/D3,
+        4/0/D4, 5/0/D5, 6/1/D6, 7/0/D7} {
+      \pgfmathsetmacro{\x}{1.6 + \idx*0.9}
+      \pgfmathsetmacro{\xn}{1.6 + (\idx+1)*0.9}
+      \pgfmathsetmacro{\h}{0.4*\bit}
+      \draw[thick] (\x,\h) -- (\xn,\h);
+      \node[above, font=\tiny] at ({(\x+\xn)/2}, \h) {\bit};
     }
-    \node at (2.75, -0.8) {Data[8]};
-    
-    % Stop bit
-    \draw[thick] (5,-0.3) -- (5,0) -- (5.5,-0.3);
-    \node at (5.25, -0.6) {\tiny STOP};
-    
-    % Idle again
-    \draw[thick, dashed] (5.5,0.3) -- (10,0.3);
-    \node at (7.75, 0.6) {\tiny Idle (Idle Line Detection fires here)};
-    
-    % Timing annotations
-    \draw[<->] (0.5, -1.2) -- (5.5, -1.2);
-    \node at (3, -1.5) {~10 bit-times @ 115.2k = ~87 µs/byte};
-  \end{tikzpicture}
-  \caption{UART Bit Timing Diagram. Idle line được phát hiện khi đường không có chuyển đổi bit trong khoảng thời gian cụ thể.}
+    %% Transitions between data bits
+    \foreach \idx/\cur/\nxt in {
+        0/1/1, 1/1/1, 2/1/1, 3/1/0, 4/0/0, 5/0/1, 6/1/0} {
+      \pgfmathsetmacro{\x}{1.6 + (\idx+1)*0.9}
+      \pgfmathsetmacro{\hc}{0.4*\cur}
+      \pgfmathsetmacro{\hn}{0.4*\nxt}
+      \draw[thick] (\x,\hc) -- (\x,\hn);
+    }
+
+    %% Stop bit (HIGH)
+    \pgfmathsetmacro{\stopx}{1.6+8*0.9}  % = 8.8
+    \draw[thick] (\stopx,0) -- (\stopx,0.4) -- ({(\stopx+0.9)},0.4);
+    \node[below, font=\scriptsize] at ({(\stopx+0.45)},-0.05) {STOP};
+
+    %% Idle after
+    \pgfmathsetmacro{\idlex}{\stopx+0.9}  % = 9.7
+    \draw[thick] (\idlex,0.4) -- (11,0.4);
+    \draw[thick, dashed, gray] (\idlex,0) -- (11,0);
+    \node[above, font=\scriptsize, align=left] at ({(\idlex+11)/2}, 0.4)
+          {Idle → Idle Line\\Detection kích hoạt};
+
+    %% Brace annotation for data byte
+    \draw[<->, thin] (1.6,-0.7) -- ({1.6+8*0.9},-0.7)
+          node[midway, below, font=\scriptsize] {8 data bits};
+    \draw[<->, thin] (0.8,-1.1) -- ({1.6+8*0.9+0.9},-1.1)
+          node[midway, below, font=\scriptsize]
+          {1 frame = 10 bit-times @ 115\,200~baud $\approx$ 87~µs/byte};
+  \end{tikzpicture}}
+  \caption{UART Bit Timing Diagram (ví dụ byte \texttt{0x4F} = ký tự `O'). Idle Line Detection kích hoạt khi đường truyền giữ mức HIGH liên tục sau bit STOP, đánh dấu kết thúc một gói tin hoàn chỉnh.}
   \label{fig:uart_timing}
 \end{figure}
 
