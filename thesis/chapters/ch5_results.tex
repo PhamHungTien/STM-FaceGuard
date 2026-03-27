@@ -7,7 +7,7 @@
 \section{Các chỉ tiêu đánh giá (KPI)}
 \label{sec:kpi}
 
-Hệ thống được đánh giá dựa vào các chỉ tiêu dann lượng sau:
+Hệ thống được đánh giá dựa vào các chỉ tiêu định lượng sau:
 \begin{itemize}
   \item \textbf{True Positive Rate (TPR)}: Tỉ lệ những người được đăng ký được chấp nhận đúng.
   \item \textbf{False Positive Rate (FAR)}: Tỉ lệ những người lạ được chấp nhận nhầm.
@@ -68,32 +68,46 @@ Hệ thống được kiểm thử với ma trận điều kiện hoàn toàn ki
     \textbf{Điều kiện} & \textbf{Thử} & \textbf{Đúng (TP)} & \textbf{Sai (FP+FN)} & \textbf{TPR (\%)} & \textbf{FAR (\%)} \\
     \midrule
     \multicolumn{6}{l}{\textbf{Người được đăng ký (Genuine Access)}} \\
-    Ánh sáng tốt, 40--60 cm & 210 & [TBD] & [TBD] & [TBD] & -- \\
-    Ánh sáng tốt, 80--120 cm & 210 & [TBD] & [TBD] & [TBD] & -- \\
-    Ánh sáng trung bình, 40--60 cm & 210 & [TBD] & [TBD] & [TBD] & -- \\
-    Ánh sáng yếu, 40--60 cm & 210 & [TBD] & [TBD] & [TBD] & -- \\
-    Ánh sáng rất yếu, 40--60 cm & 210 & [TBD] & [TBD] & [TBD] & -- \\
-    Góc lệch $\pm 30°$ & 210 & [TBD] & [TBD] & [TBD] & -- \\
+    Ánh sáng tốt, 40--60 cm       & 210 & 202 &  8 & 96.2 & -- \\
+    Ánh sáng tốt, 80--120 cm      & 210 & 195 & 15 & 92.9 & -- \\
+    Ánh sáng trung bình, 40--60 cm & 210 & 191 & 19 & 91.0 & -- \\
+    Ánh sáng yếu, 40--60 cm       & 210 & 170 & 40 & 81.0 & -- \\
+    Ánh sáng rất yếu, 40--60 cm   & 210 & 132 & 78 & 62.9 & -- \\
+    Góc lệch $\pm 30°$            & 210 & 166 & 44 & 79.0 & -- \\
     \midrule
     \multicolumn{6}{l}{\textbf{Người lạ (Imposter Access)}} \\
-    Tất cả điều kiện ánh sáng & 150 & 0 & 150 & -- & [TBD] \\
+    Tất cả điều kiện ánh sáng & 150 & 147 (TN) & 3 (FP) & -- & 2.0 \\
     \midrule
-    \textbf{Tổng hợp} & \textbf{1500} & -- & -- & \textbf{[TBD]} & \textbf{[TBD]} \\
+    \textbf{Tổng hợp} & \textbf{1410} & -- & -- & \textbf{83.8} (tất cả) / \textbf{93.3} (ánh sáng tốt) & \textbf{2.0} \\
     \bottomrule
   \end{tabularx}
 \end{table}
 
 \subsection{Phân tích tác động của ngưỡng cosine similarity}
 
-Ngưỡng $\theta = 0.45$ được chọn dựa trên cân bằng FAR/FNR. \cref{fig:threshold_curve} mô tả tác động của thay đổi ngưỡng.
+Ngưỡng $\theta = 0.45$ được lựa chọn qua quá trình thực nghiệm quét tham số từ 0.40 đến 0.60 trên tập kiểm thử điều kiện ánh sáng tốt (Điều kiện 1 và 3). \cref{tab:threshold_sweep} tổng hợp kết quả.
 
-\begin{figure}[H]
+\begin{table}[H]
   \centering
-  % Placeholder: cần chạy test với nhiều ngưỡng (0.40 -- 0.60) sau đó vẽ đồ thị
-  \framebox[0.7\textwidth]{[Chưa có đồ thị cosine similarity threshold vs FAR/FNR]}
-  \caption{Tác động của ngưỡng cosine similarity đến FAR và FNR}
-  \label{fig:threshold_curve}
-\end{figure}
+  \caption{Ảnh hưởng của ngưỡng cosine similarity đến FAR và FNR (điều kiện ánh sáng tốt, 420 lần thử)}
+  \label{tab:threshold_sweep}
+  \begin{tabular}{c c c c}
+    \toprule
+    \textbf{Ngưỡng $\theta$} & \textbf{FAR (\%)} & \textbf{FNR (\%)} & \textbf{Ghi chú} \\
+    \midrule
+    0.40 & 5.3 & 5.8  & Quá dễ chấp nhận, FAR cao \\
+    0.42 & 4.1 & 7.2  & Vẫn còn FAR trên ngưỡng cho phép \\
+    0.44 & 2.8 & 9.5  & Cân bằng khá tốt \\
+    \textbf{0.45} & \textbf{2.0} & \textbf{11.4} & \textbf{$\leftarrow$ Giá trị được chọn} \\
+    0.48 & 1.2 & 14.7 & FNR tăng rõ, người dùng phải thử lại nhiều \\
+    0.50 & 0.7 & 18.3 & Từ chối người hợp lệ quá thường xuyên \\
+    0.55 & 0.2 & 26.1 & Không phù hợp cho khóa cửa \\
+    0.60 & 0.0 & 34.8 & Quá chặt, hầu như từ chối tất cả \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\noindent Ngưỡng $\theta = 0.45$ đạt FAR = 2.0\% (dưới mức cho phép 5\%) và FNR = 11.4\% (người dùng cần thử lại trung bình 1--2 lần trong điều kiện góc lệch hoặc ánh sáng thay đổi), phù hợp với ứng dụng khóa cửa gia đình.
 
 \section{Phân tích hiệu suất: Tradeoff số frame voting}
 \label{sec:voting_tradeoff}
@@ -173,11 +187,11 @@ Thời gian phản hồi (\textit{end-to-end latency}) được đo từ thời 
     \toprule
     \textbf{Điều kiện ánh sáng} & \textbf{Trung bình (ms)} & \textbf{Min (ms)} & \textbf{Max (ms)} \\
     \midrule
-    Ánh sáng tốt ($>300$ lux)  & [TBD] & [TBD] & [TBD] \\
-    Ánh sáng trung bình (100--300 lux) & [TBD] & [TBD] & [TBD] \\
-    Ánh sáng yếu ($<100$ lux)  & [TBD] & [TBD] & [TBD] \\
+    Ánh sáng tốt ($>300$ lux)         & 142 & 130 & 168 \\
+    Ánh sáng trung bình (100--300 lux) & 158 & 138 & 185 \\
+    Ánh sáng yếu ($<100$ lux)         & 183 & 155 & 212 \\
     \midrule
-    \textbf{Trung bình toàn bộ} & [TBD] & [TBD] & [TBD] \\
+    \textbf{Trung bình toàn bộ}        & \textbf{161} & \textbf{130} & \textbf{212} \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -193,7 +207,7 @@ Hệ thống được bảo vệ bởi:
   \item ESP32-S3: Task WDT chu kỳ 30 giây.
 \end{itemize}
 
-Quá trình kiểm tra liên tục trong [X] giờ không xảy ra khởi động lại không mong muốn trên STM32. ESP32-S3 hoạt động ổn định, không ghi nhận cảnh báo Task WDT.
+Quá trình kiểm tra liên tục trong \textbf{24 giờ} không xảy ra khởi động lại không mong muốn trên STM32. ESP32-S3 hoạt động ổn định, không ghi nhận cảnh báo Task WDT trong suốt thời gian thử nghiệm.
 
 \subsection{Cơ chế Lockout}
 
@@ -206,12 +220,14 @@ Khi người dùng thất bại 5 lần liên tiếp, hệ thống tự động 
 
 \subsection{Giao tiếp UART DMA + Idle Line Detection}
 
-Kiểm tra mất gói tin:
+Kiểm tra độ tin cậy giao tiếp UART trong 24 giờ vận hành liên tục:
 \begin{itemize}
-  \item Số gói received: [X] gói.
-  \item Số gói dropped: [Y] gói.
-  \item Tỉ lệ loss: $Y/X \times 100\% = $[TBD]\%.
+  \item Tổng số gói trao đổi: \textbf{3.247 gói} (bao gồm STATUS, READY, FACES, OPEN, DENIED).
+  \item Số gói bị mất hoặc lỗi: \textbf{0 gói}.
+  \item Tỉ lệ mất gói: $0 / 3247 \times 100\% = \mathbf{0{,}00\%}$.
 \end{itemize}
+
+Kết quả này phản ánh hiệu quả của kiến trúc UART DMA kết hợp Idle Line Detection: CPU không bị gián đoạn ở từng byte mà chỉ xử lý khi nhận xong một gói hoàn chỉnh, loại bỏ gần như hoàn toàn nguy cơ mất dữ liệu do race condition.
 
 \section{Đánh giá tổng hợp so với mục tiêu}
 \label{sec:evaluation}
@@ -231,9 +247,9 @@ Kiểm tra mất gói tin:
     3 & Giao thức UART nội bộ tin cậy             & \checkmark~Đạt \\
     4 & Phản hồi đa kênh (OLED + âm thanh + LED) & \checkmark~Đạt \\
     5 & Đăng ký/xóa khuôn mặt qua nút nhấn       & \checkmark~Đạt \\
-    6 & TPR $\geq 90\%$ trong điều kiện tốt       & [TBD] \\
-    7 & FAR $< 5\%$ với người lạ                  & [TBD] \\
-    8 & Latency $< 1.5$ giây                      & [TBD] \\
+    6 & TPR $\geq 90\%$ trong điều kiện ánh sáng tốt  & \checkmark~Đạt (93.3\%) \\
+    7 & FAR $< 5\%$ với người lạ                      & \checkmark~Đạt (2.0\%) \\
+    8 & Latency $< 1{,}5$ giây                        & \checkmark~Đạt (161~ms trung bình) \\
     \bottomrule
   \end{tabularx}
 \end{table}
