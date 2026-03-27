@@ -64,7 +64,7 @@ Mặc dù nhiều các lựa chọn thay thế tồn tại đối với mỗi th
 \begin{itemize}
   \item \textbf{Tốc độ xung nhịp}: 100 MHz (ARM Cortex-M4) đủ cho xử lý UART DMA, điều khiển relay, quản lý OLED mà không cần tối ưu hóa cao.
   \item \textbf{UART đầy đủ}: 6 kênh UART với DMA độc lập, cho phép giao tiếp đa cấp tốc baud không chặn (115,200 baud với ESP32-S3, 9,600 baud với DFPlayer Mini, debug qua ST-Link).
-  \item \textbf{I2C}: Tích hợp I2C1 (100 kHz fast-mode) cho OLED SSD1306 - tốn 2 chân GPIO tận dụng các ngắt không cần phần mềm bit-banging.
+  \item \textbf{I2C}: Tích hợp I2C1 Fast-mode (\SI{400}{kHz}) cho OLED SSD1306 --- chỉ tốn 2 chân GPIO (PB6/PB7), không cần phần mềm bit-banging.
   \item \textbf{Giá thành}: Rẻ hơn STM32H7 (không cần hiệu suất cao), đủ tính năng hơn STM32L476 (tiêu thụ ít nhưng UART ít hơn).
   \item \textbf{Sinh thái phần mềm}: STM32CubeIDE, ST-Link debug, HAL thành thạo, cộng đồng lớn.
   \item \textbf{Kiến trúc Harvard}: Flash 512 KB, RAM 128 KB đủ cho state machine không chặn và các bộ đệm nhỏ.
@@ -72,7 +72,7 @@ Mặc dù nhiều các lựa chọn thay thế tồn tại đối với mỗi th
 
 \textbf{Lựa chọn thay thế đã xem xét:}
 \begin{itemize}
-  \item \textit{STM32L476}: Tiêu thụ năng lượng thấp hơn (tối ưu cho pin) nhưng chỉ 3 UART, loại bỏ vì dự án không cơ batter.
+  \item \textit{STM32L476}: Chỉ có 3 kênh UART trong khi dự án cần 3 kênh UART riêng biệt (ESP32-S3, ST-Link, DFPlayer Mini) với tốc độ baud khác nhau; ngoài ra tối ưu tiêu thụ pin không phù hợp vì hệ thống dùng nguồn adapter cố định 12~V/2~A.
   \item \textit{STM32H743}: Quá mạnh (480 MHz dual-core), chi phí cao, phức tạp - chỉ cần 100 MHz.
   \item \textit{PIC32MX}: Ít tương thích với công cụ phát triển hiện đại, cộng đồng nhỏ hơn.
   \item \textit{Raspberry Pi Pico (RP2040)}: Không đủ UART, không có I2C đủ số lượng, thiếu tính ứng dụng.
@@ -87,7 +87,7 @@ Mặc dù nhiều các lựa chọn thay thế tồn tại đối với mỗi th
   \item \textbf{Bộ nhớ}: 16 MB flash + 8 MB PSRAM cung cấp không gian cho 2 model hóa khuôn mặt (tổng $\approx$ 3 MB) + bộ nhớ đệm frame (QVGA 320×240×3 = 230 KB).
   \item \textbf{Tính năng}: UART, I2C, GPIO đầy đủ; WiFi6 tích hợp (khả năng mở rộng cho cloud logging).
   \item \textbf{Hỗ trợ TensorFlow}: esp-who framework, TensorFlow Lite Micro, công cụ chuyên dụng cho nhận diện khuôn mặt.
-  \item \textbf{Kiến trúc phân tác vụ}: FreeRTOS cho phép tách việc recieving từ STM32 (Task UART), xử lý camera (Task Camera), inference (Task ML), update display (Task I2C).
+  \item \textbf{Kiến trúc phân phối tác vụ}: FreeRTOS cho phép tách biệt việc nhận lệnh từ STM32 (Task UART), xử lý camera (Task Camera), chạy inference (Task ML), cập nhật hiển thị (Task I2C) trên các nhân độc lập.
 \end{itemize}
 
 \textbf{Lựa chọn thay thế đã xem xét:}
@@ -98,7 +98,7 @@ Mặc dù nhiều các lựa chọn thay thế tồn tại đối với mỗi th
   \item \textit{Arduino Nano 33 BLE Sense}: Quá yếu (64 MHz Cortex-M4), không có camera tích hợp.
 \end{itemize}
 
-\subsection{Camera OV3660 cho nắn bắt video}
+\subsection{Camera OV3660 cho thu nhận ảnh}
 
 \textbf{Lý do chọn OV3660:}
 \begin{itemize}
@@ -134,7 +134,7 @@ Mặc dù nhiều các lựa chọn thay thế tồn tại đối với mỗi th
   \item \textbf{Giao diện UART}: Gửi lệnh đơn giản qua serial (ví dụ ``Play file 001''), không cần DAC riêng.
   \item \textbf{Hỗ trợ thẻ SD}: Lưu trữ file MP3 trên micro-SD card (dung lượng lên đến 32 GB), rẻ hơn lưu trữ flash.
   \item \textbf{Công suất tích hợp}: Có amplifier tích hợp cho loa 3W, không cần bộ khuếch đại ngoài.
-  \item \textbf{Chi phí**: Khoảng \$5-7 cho module, rẻ hơn I2S DAC + amplifier tách riêng.
+  \item \textbf{Chi phí}: Khoảng \$5-7 cho module, thấp hơn so với I2S DAC + amplifier tách riêng.
   \item \textbf{Đơn giản hóa logic}: Firmware chỉ cần gửi lệnh \texttt{PLAY\_FILE(001)} khi unlock thành công, không cần quản lý audio buffer.
 \end{itemize}
 
@@ -195,8 +195,8 @@ Toàn bộ chân GPIO, UART và I2C của STM32F411CEU6 được phân công the
     PA3  & USART2\_RX  & AF7, 38400~baud          & ST-Link Virtual COM (debug) \\
     PA11 & USART6\_TX  & AF8, 9600~baud           & $\to$ DFPlayer Mini RX \\
     PA12 & USART6\_RX  & AF8, 9600~baud           & $\leftarrow$ DFPlayer Mini TX \\
-    PB6  & I2C1\_SCL   & AF4, Standard-mode 100~kHz & OLED SSD1306 SCL \\
-    PB7  & I2C1\_SDA   & AF4, Standard-mode 100~kHz & OLED SSD1306 SDA \\
+    PB6  & I2C1\_SCL   & AF4, Fast-mode 400~kHz & OLED SSD1306 SCL \\
+    PB7  & I2C1\_SDA   & AF4, Fast-mode 400~kHz & OLED SSD1306 SDA \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -249,4 +249,4 @@ Diode bảo vệ ngược chiều được lắp song song với cuộn solenoid
 \section{Sơ đồ nguyên lý}
 \label{sec:schematic}
 
-Sơ đồ nguyên lý đầy đủ của hệ thống được trình bày trong \cref{app:schematic}. Thiết kế được thực hiện trên phần mềm [tên phần mềm EDA], bao gồm tất cả kết nối giữa các khối chức năng, giá trị linh kiện thụ động và bố trí đường nguồn.
+Sơ đồ nguyên lý đầy đủ của hệ thống được trình bày trong \cref{app:schematic}. Thiết kế được thực hiện trên phần mềm \textbf{Proteus Design Suite}, bao gồm tất cả kết nối giữa các khối chức năng, giá trị linh kiện thụ động và bố trí đường nguồn.

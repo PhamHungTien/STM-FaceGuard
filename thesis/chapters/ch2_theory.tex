@@ -129,4 +129,4 @@ Hệ thống sử dụng ba kênh UART trên STM32:
 
 I2C là chuẩn giao tiếp nối tiếp đồng bộ đa điểm (multi-master, multi-slave) chỉ cần 2 dây: SDA (dữ liệu) và SCL (xung nhịp). Mỗi thiết bị slave có địa chỉ 7-bit duy nhất; master khởi tạo giao dịch bằng điều kiện START và kết thúc bằng STOP. Mỗi byte được xác nhận bằng bit ACK/NACK từ phía nhận.
 
-Hệ thống sử dụng I2C1 ở chế độ Standard-mode (\SI{100}{kHz}) để giao tiếp với màn hình OLED SSD1306 (địa chỉ 0x3C). Tốc độ này đủ để cập nhật giao diện OLED mà người dùng không cảm nhận độ trễ, đồng thời đảm bảo độ ổn định tín hiệu trên đường dây thực tế.
+Hệ thống sử dụng I2C1 ở chế độ Fast-mode (\SI{400}{kHz}) để giao tiếp với màn hình OLED SSD1306 (địa chỉ 0x3C). Tốc độ này đảm bảo giao diện OLED được cập nhật tức thì theo diễn biến máy trạng thái, đồng thời vẫn ổn định trên đường dây thực tế với khoảng cách ngắn trong mạch.

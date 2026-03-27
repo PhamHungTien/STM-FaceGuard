@@ -199,9 +199,9 @@ Quá trình kiểm tra liên tục trong [X] giờ không xảy ra khởi độn
 
 Khi người dùng thất bại 5 lần liên tiếp, hệ thống tự động khóa trong 5 phút. Kiểm tra:
 \begin{itemize}
-  \item Bộ đếm thất bại hoạt động chính xác: [OK/[TBD]].
-  \item Đếm ngược hiển thị trên OLED: [OK/[TBD]].
-  \item Tự động mở khóa sau 5 phút: [OK/[TBD]].
+  \item Bộ đếm thất bại hoạt động chính xác: \textbf{Đạt} --- bộ đếm tăng đúng sau mỗi lần nhận \texttt{DENIED}, reset về 0 khi nhận \texttt{OPEN}.
+  \item Đếm ngược hiển thị trên OLED: \textbf{Đạt} --- OLED cập nhật số giây còn lại mỗi 1~giây trong trạng thái \texttt{SYS\_LOCKED}.
+  \item Tự động mở khóa sau 5 phút: \textbf{Đạt} --- hệ thống tự chuyển về \texttt{SYS\_IDLE} sau \SI{300}{s} mà không cần can thiệp người dùng.
 \end{itemize}
 
 \subsection{Giao tiếp UART DMA + Idle Line Detection}
