@@ -1,0 +1,209 @@
+% ==========================================================================
+%  TikZ Block Diagram – Embedded MCU Architecture (STM32 + ESP32-S3)
+%  Compatible with: XeLaTeX / pdfLaTeX
+%
+%  Standalone usage:
+%    \documentclass[tikz,border=8pt]{standalone}
+%    \input{tikz_block_diagram.tex}
+%
+%  Inline usage inside thesis (already has tikz + libraries loaded):
+%    \begin{figure}[H]
+%      \centering
+%      \input{figures/tikz_block_diagram.tex}
+%      \caption{...}
+%    \end{figure}
+%
+%  Required libraries (already declared in main.tex):
+%    shapes.geometric, shapes.misc, arrows.meta,
+%    positioning, calc, fit
+%  Additional library needed – add to main.tex preamble if not present:
+%    \usetikzlibrary{shadows.blur}
+% ==========================================================================
+
+% ── Colour palette ──────────────────────────────────────────────────────────
+\definecolor{blkfill}{RGB}{214,228,246}   % light blue  – MCU blocks
+\definecolor{blkbord}{RGB}{ 70,130,180}   % steel blue  – border
+\definecolor{periph} {RGB}{220,240,220}   % light green – peripherals
+\definecolor{perborд}{RGB}{ 60,150, 60}   % dark green  – peripheral border
+\definecolor{extdev} {RGB}{255,243,205}   % light amber – external devices
+\definecolor{extbord}{RGB}{200,140,  0}   % amber       – external border
+\definecolor{power}  {RGB}{245,220,245}   % light purple – power
+\definecolor{pwrbord}{RGB}{130, 50,150}   % purple
+\definecolor{grpfill}{RGB}{240,245,255}   % very light – group background
+\definecolor{arrowcl}{RGB}{ 50, 50,150}   % arrow colour
+
+% ── Node styles ─────────────────────────────────────────────────────────────
+\tikzset{
+  % Standard rectangular block
+  blk/.style={
+    draw=blkbord, fill=blkfill, thick,
+    rectangle, rounded corners=3pt,
+    minimum width=2.4cm, minimum height=0.85cm,
+    align=center, font=\small\sffamily
+  },
+  % Peripheral block (smaller)
+  periph/.style={
+    draw=perborд, fill=periph, thick,
+    rectangle, rounded corners=3pt,
+    minimum width=2.2cm, minimum height=0.75cm,
+    align=center, font=\small\sffamily
+  },
+  % External device block
+  ext/.style={
+    draw=extbord, fill=extdev, thick,
+    rectangle, rounded corners=3pt,
+    minimum width=2.2cm, minimum height=0.75cm,
+    align=center, font=\small\sffamily
+  },
+  % Power block
+  pwr/.style={
+    draw=pwrbord, fill=power, thick,
+    rectangle, rounded corners=3pt,
+    minimum width=2.0cm, minimum height=0.7cm,
+    align=center, font=\small\sffamily
+  },
+  % Arrows
+  sig/.style={-{Stealth[length=5pt,width=4pt]}, thick, color=arrowcl},
+  sigr/.style={{Stealth[length=5pt,width=4pt]}-, thick, color=arrowcl},
+  bidir/.style={
+    {Stealth[length=5pt,width=4pt]}-{Stealth[length=5pt,width=4pt]},
+    thick, color=arrowcl
+  },
+  % Group bounding box label
+  grplabel/.style={
+    font=\scriptsize\sffamily\bfseries, text=blkbord, above
+  }
+}
+
+\begin{tikzpicture}[node distance=1.4cm and 1.6cm]
+
+% ── STM32F4 CORE (centre-left column) ───────────────────────────────────────
+\node[blk, minimum width=2.6cm, minimum height=1.0cm]
+      (cpu) {STM32F407\\{\scriptsize ARM Cortex-M4}};
+
+\node[periph, above=0.9cm of cpu]
+      (uart1) {UART1\\{\scriptsize Debug/Log}};
+
+\node[periph, below=0.9cm of cpu]
+      (spi1) {SPI1\\{\scriptsize Flash W25Q}};
+
+\node[periph, left=1.8cm of cpu]
+      (gpio) {GPIO\\{\scriptsize LED/Buzzer}};
+
+\node[periph, above=0.9cm of gpio]
+      (i2c1) {I2C1\\{\scriptsize OLED SSD1306}};
+
+\node[periph, below=0.9cm of gpio]
+      (tim2) {TIM2\\{\scriptsize PWM/Lock}};
+
+% ── ESP32-S3 AI NODE (centre-right column) ──────────────────────────────────
+\node[blk, minimum width=2.6cm, minimum height=1.0cm,
+      right=4.0cm of cpu]
+      (esp) {ESP32-S3\\{\scriptsize Xtensa LX7 Dual-Core}};
+
+\node[periph, above=0.9cm of esp]
+      (cam) {Camera\\{\scriptsize OV2640 DVP}};
+
+\node[periph, below=0.9cm of esp]
+      (wifi) {Wi-Fi / BLE\\{\scriptsize 802.11b/g/n}};
+
+\node[periph, right=1.8cm of esp]
+      (psram) {PSRAM 8 MB\\{\scriptsize Face Buffer}};
+
+\node[periph, above=0.9cm of psram]
+      (flash) {Flash 8 MB\\{\scriptsize Model / FS}};
+
+\node[periph, below=0.9cm of psram]
+      (webui) {Web UI\\{\scriptsize HTTP Server}};
+
+% ── INTER-MCU LINK (UART) ────────────────────────────────────────────────────
+\node[blk, minimum width=2.2cm, minimum height=0.75cm,
+      fill=white, draw=blkbord,
+      below=2.5cm of cpu, xshift=2.0cm]
+      (uart_link) {UART Link\\{\scriptsize 115200 bps}};
+
+% ── EXTERNAL DEVICES (bottom row) ───────────────────────────────────────────
+\node[ext, below=4.2cm of cpu, xshift=-1.2cm]
+      (relay) {Relay Module\\{\scriptsize Door Lock}};
+
+\node[ext, right=0.9cm of relay]
+      (keypad) {Keypad\\{\scriptsize 4×4 Matrix}};
+
+\node[ext, right=0.9cm of keypad]
+      (rfid) {RFID RC522\\{\scriptsize SPI}};
+
+\node[ext, right=0.9cm of rfid]
+      (oled) {OLED 0.96"\\{\scriptsize I2C}};
+
+% ── POWER SUPPLY (top row) ──────────────────────────────────────────────────
+\node[pwr, above=2.4cm of cpu, xshift=2.0cm]
+      (psu) {5 V USB\\{\scriptsize / Adapter}};
+
+\node[pwr, left=0.9cm of psu]
+      (reg33) {LDO 3.3 V\\{\scriptsize AMS1117}};
+
+\node[pwr, right=0.9cm of psu]
+      (reg50) {Buck 5 V\\{\scriptsize ESP32 Rail}};
+
+% ── ARROWS: CPU ↔ peripherals ────────────────────────────────────────────────
+\draw[bidir] (cpu) -- (uart1);
+\draw[bidir] (cpu) -- (spi1);
+\draw[bidir] (cpu) -- (gpio);
+\draw[bidir] (cpu) -- (i2c1);
+\draw[sig]   (cpu) -- (tim2);
+
+% ── ARROWS: ESP32 ↔ peripherals ─────────────────────────────────────────────
+\draw[sigr]  (esp) -- (cam);
+\draw[sig]   (esp) -- (wifi);
+\draw[bidir] (esp) -- (psram);
+\draw[bidir] (esp) -- (flash);
+\draw[sig]   (esp) -- (webui);
+
+% ── INTER-MCU UART link ──────────────────────────────────────────────────────
+\draw[bidir] (cpu.south) |- (uart_link.west);
+\draw[bidir] (uart_link.east) -| (esp.south);
+\node[font=\tiny\sffamily, above, color=blkbord] at (uart_link.north)
+      {CMD / ACK};
+
+% ── ARROWS: CPU → external devices ──────────────────────────────────────────
+\draw[sig]   (tim2.south)  |- (relay.west);
+\draw[bidir] (gpio.south)  |- (keypad.west);
+\draw[bidir] (spi1.south)  |- (rfid.west);
+\draw[bidir] (i2c1.south)  |- (oled.west);
+
+% ── ARROWS: Power ────────────────────────────────────────────────────────────
+\draw[sig, color=pwrbord] (psu.west)  -- (reg33.east);
+\draw[sig, color=pwrbord] (psu.east)  -- (reg50.west);
+\draw[sig, color=pwrbord] (reg33.south) -- ++(0,-0.35)
+      -| (cpu.north);
+\draw[sig, color=pwrbord] (reg50.south) -- ++(0,-0.35)
+      -| (esp.north);
+
+% ── GROUP LABELS & BOUNDING BOXES ───────────────────────────────────────────
+\begin{scope}[on background layer]
+  % STM32 group
+  \node[draw=blkbord, fill=grpfill, thick, dashed,
+        rounded corners=6pt,
+        fit=(uart1)(spi1)(gpio)(i2c1)(tim2)(cpu),
+        inner sep=6pt, label={[grplabel]above:STM32F4 Subsystem}] {};
+  % ESP32 group
+  \node[draw=blkbord!60!green, fill=grpfill, thick, dashed,
+        rounded corners=6pt,
+        fit=(cam)(wifi)(psram)(flash)(webui)(esp),
+        inner sep=6pt,
+        label={[grplabel, text=blkbord!60!green]above:ESP32-S3 AI Subsystem}] {};
+  % External devices group
+  \node[draw=extbord, fill=extdev!40, thick, dashed,
+        rounded corners=6pt,
+        fit=(relay)(keypad)(rfid)(oled),
+        inner sep=5pt,
+        label={[font=\scriptsize\sffamily\bfseries, text=extbord]below:External Devices}] {};
+  % Power group
+  \node[draw=pwrbord, fill=power!40, thick, dashed,
+        rounded corners=6pt,
+        fit=(psu)(reg33)(reg50),
+        inner sep=5pt,
+        label={[font=\scriptsize\sffamily\bfseries, text=pwrbord]above:Power Supply}] {};
+\end{scope}
+
+\end{tikzpicture}

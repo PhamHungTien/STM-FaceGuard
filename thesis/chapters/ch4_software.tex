@@ -57,38 +57,62 @@ Hình \cref{fig:stm32_fsm} trình bày trực quan các chuyển đổi trạng 
 
 \begin{figure}[H]
   \centering
-  \begin{tikzpicture}[
-    node distance=4cm and 3cm,
-    every node/.style={draw, rounded rectangle, minimum width=2cm, minimum height=0.8cm},
-    state/.style={draw, circle, minimum size=1.5cm},
-    ->,
-    >=stealth,
-    font=\small
+  \resizebox{0.95\textwidth}{!}{%
+  \begin{tikzpicture}[x=1cm, y=1cm, >=Stealth, font=\small,
+    st/.style  = {draw, circle, minimum size=3.0cm, align=center,
+                  fill=blue!8, draw=blue!50!black, line width=0.8pt},
+    lbl/.style = {font=\scriptsize, fill=white, inner sep=2pt, align=center}
   ]
-    % States
-    \node[state] (connecting) at (0, 4) {CONNECTING};
-    \node[state] (idle) at (0, 2) {IDLE};
-    \node[state] (offline) at (-3, 2) {OFFLINE};
-    \node[state] (enrolling) at (3, 2) {ENROLLING};
-    \node[state] (unlocking) at (3, 0) {UNLOCKING};
-    \node[state] (denied) at (0, 0) {DENIED};
-    \node[state] (locked) at (-3, 0) {LOCKED};
-    
-    % Transitions
-    \path
-      (connecting) edge [bend left] node [above] {READY from ESP32} (idle)
-      (connecting) edge [bend right] node [left] {Timeout 30s} (offline)
-      (offline) edge node [left] {STATUS resp} (idle)
-      (idle) edge node [right] {BTN\_ENROLL \& ESP ready} (enrolling)
-      (idle) edge node [right] {OPEN:\textit{<id>}} (unlocking)
-      (idle) edge [bend left] node [above] {DENIED} (denied)
-      (idle) edge [bend right] node [below] {Failed 5×} (locked)
-      (enrolling) edge [bend left] node [above] {ENROLLED} (idle)
-      (enrolling) edge [bend right] node [below] {Timeout 15s} (denied)
-      (unlocking) edge [bend left] node [above] {Relay timeout 3s} (idle)
-      (denied) edge [bend right] node [above] {2.5s auto-return} (idle)
-      (locked) edge [bend left] node [left] {5 min elapsed} (idle);
-  \end{tikzpicture}
+    %% ─── Layout (no text width → no hyphenation) ──────────────
+    %%   Col:   x=-5.5     x=0      x=5.5
+    %%   Row1:  OFFLINE    IDLE    ENROLLING   (y=1.0)
+    %%   Row2:  LOCKED   UNLOCKING   DENIED    (y=-3.5)
+    %%   CONNECTING at top-center  (0, 6.0)
+
+    \node[st] (conn)     at ( 0.0,  6.0) {CONNECTING};
+    \node[st] (offline)  at (-5.5,  1.0) {OFFLINE};
+    \node[st] (idle)     at ( 0.0,  1.0) {IDLE};
+    \node[st] (enrolling)at ( 5.5,  1.0) {ENROLLING};
+    \node[st] (locked)   at (-5.5, -3.5) {LOCKED};
+    \node[st] (unlocking)at ( 0.0, -3.5) {UNLOCKING};
+    \node[st] (denied)   at ( 5.5, -3.5) {DENIED};
+
+    %% CONNECTING → IDLE (straight down)
+    \draw[->] (conn)     -- node[lbl, right]{READY from ESP32}   (idle);
+    %% CONNECTING → OFFLINE (diagonal)
+    \draw[->] (conn)     -- node[lbl, left, pos=0.4]{Timeout 30s} (offline);
+    %% OFFLINE → IDLE (horizontal)
+    \draw[->] (offline)  -- node[lbl, above]{STATUS resp}        (idle);
+
+    %% IDLE ↔ ENROLLING (two parallel arcs, same row)
+    \draw[->, bend left=22]  (idle)     to
+      node[lbl, above]{BTN\_ENROLL / ESP ready}  (enrolling);
+    \draw[->, bend left=22]  (enrolling)to
+      node[lbl, below]{ENROLLED}                 (idle);
+
+    %% ENROLLING → DENIED (straight down, same column — no crossing!)
+    \draw[->] (enrolling) -- node[lbl, right]{Timeout 15s}       (denied);
+
+    %% IDLE ↔ UNLOCKING (two parallel arcs, same column)
+    \draw[->, bend left=22]  (idle)     to
+      node[lbl, right]{OPEN:\textit{<id>}}        (unlocking);
+    \draw[->, bend left=22]  (unlocking)to
+      node[lbl, left]{Relay timeout 3s}           (idle);
+
+    %% IDLE → DENIED (diagonal, arcs to separate from return)
+    \draw[->, bend left=12]  (idle)  to
+      node[lbl, above, pos=0.35]{DENIED}          (denied);
+    %% DENIED → IDLE (return, bends opposite side)
+    \draw[->, bend right=22] (denied)to
+      node[lbl, below, pos=0.4]{2.5s auto-return} (idle);
+
+    %% IDLE ↔ LOCKED (diagonal, two arcs)
+    \draw[->, bend right=18] (idle)  to
+      node[lbl, left, pos=0.4]{Failed 5$\times$}   (locked);
+    \draw[->, bend right=18] (locked)to
+      node[lbl, right, pos=0.6]{5 min elapsed}    (idle);
+
+  \end{tikzpicture}}
   \caption{State Machine Diagram của STM32F411CEU6. Các trạng thái chính được điều khiển bởi sự kiện từ:
            (1) Nút nhấn người dùng (BTN\_ENROLL, BTN\_DELETE, BTN\_EXIT),
            (2) Lệnh từ ESP32-S3 qua UART (OPEN, DENIED, READY, ENROLLED, LOCKOUT),

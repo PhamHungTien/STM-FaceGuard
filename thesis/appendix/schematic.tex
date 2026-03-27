@@ -16,48 +16,68 @@
 
 \begin{figure}[H]
   \centering
-  \begin{tikzpicture}[
-    node distance = 1.4cm and 2.2cm,
-    mcu/.style   = {draw, rectangle, rounded corners=3pt,
-                    minimum width=3cm, minimum height=1.2cm,
-                    font=\small\bfseries, align=center, fill=blue!8},
-    periph/.style = {draw, rectangle, minimum width=2.6cm, minimum height=0.9cm,
-                    font=\small, align=center, fill=gray!10},
-    btn/.style   = {draw, circle, minimum size=0.7cm, font=\scriptsize, fill=yellow!20},
-    arr/.style   = {->, >=Stealth, thick},
-    lbl/.style   = {font=\scriptsize, midway, align=center}
+  \resizebox{\linewidth}{!}{%
+  \begin{tikzpicture}[x=1cm, y=1cm, >=Stealth,
+    mcu/.style  = {draw, rectangle, rounded corners=3pt,
+                   minimum width=3.2cm, minimum height=1.6cm,
+                   font=\normalsize\bfseries, align=center,
+                   fill=blue!10, draw=blue!50!black, line width=1pt},
+    peri/.style = {draw, rectangle, rounded corners=2pt,
+                   minimum width=2.8cm, minimum height=1.0cm,
+                   font=\normalsize, align=center,
+                   fill=gray!10, draw=gray!60},
+    btn/.style  = {draw, circle, minimum size=0.85cm,
+                   font=\small\bfseries, fill=orange!15, draw=orange!60},
+    arr/.style  = {->, line width=1pt},
+    lbl/.style  = {font=\normalsize, fill=white,
+                   inner sep=2pt, align=center}
   ]
-    %% --- MCU nodes (centre column) ---
-    \node[mcu] (esp32) {ESP32-S3\\N16R8\\{\scriptsize AI Processor}};
-    \node[mcu, below=2.0cm of esp32] (stm32) {STM32F411\\CEU6\\{\scriptsize Peripheral Ctrl}};
+    %% ── Column 1: Camera ──────────────────────────────────
+    \node[peri] (cam) at (2.0, 0) {OV3660\\Camera 3\,MP};
 
-    %% --- Left column ---
-    \node[periph, left=of esp32]  (camera)   {OV3660\\Camera 3\,MP};
-    \node[periph, left=of stm32]  (oled)     {SSD1306\\OLED 128×64};
+    %% ── Column 2: ESP32-S3 ────────────────────────────────
+    \node[mcu] (esp) at (7.0, 0)
+      {ESP32-S3 N16R8\\{\small AI Processor}\\{\small TFLite + FreeRTOS}};
 
-    %% --- Right column ---
-    \node[periph, right=of stm32, yshift= 0.8cm] (dfplayer) {DFPlayer\\Mini MP3};
-    \node[periph, right=of stm32, yshift=-0.8cm] (relay)    {Relay +\\Solenoid 12\,V};
+    %% ── Column 3: STM32F411 ───────────────────────────────
+    \node[mcu] (stm) at (13.0, 0)
+      {STM32F411CEU6\\{\small Peripheral Ctrl}\\{\small HAL + FSM}};
 
-    %% --- Buttons (below STM32) ---
-    \node[btn, below=1.5cm of stm32, xshift=-1.0cm] (btn1) {EN};
-    \node[btn, below=1.5cm of stm32]                (btn2) {DEL};
-    \node[btn, below=1.5cm of stm32, xshift= 1.0cm] (btn3) {EXT};
+    %% ── Column 4: Peripherals ─────────────────────────────
+    \node[peri] (oled)  at (18.5,  1.8) {SSD1306\\OLED 128×64};
+    \node[peri] (dfp)   at (18.5,  0.0) {DFPlayer Mini\\MP3 / SD};
+    \node[peri] (relay) at (18.5, -1.8) {Relay Module\\+ Solenoid 12\,V};
 
-    %% --- Connections ---
-    \draw[arr] (camera)   -- node[lbl, above]{DVP 8-bit}  (esp32);
-    \draw[arr] (esp32)    -- node[lbl, right]{UART\\115.2k baud} (stm32);
-    \draw[arr] (stm32)    -- node[lbl, above]{I2C 400k}   (oled);
-    \draw[arr] (stm32.east|-dfplayer) -- node[lbl, above]{UART 9.6k} (dfplayer);
-    \draw[arr] (stm32.east|-relay)    -- node[lbl, above]{GPIO}       (relay);
-    \draw[arr] (btn1.north) -- (stm32.south -| btn1);
-    \draw[arr] (btn2.north) -- (stm32.south);
-    \draw[arr] (btn3.north) -- (stm32.south -| btn3);
+    %% ── Buttons ───────────────────────────────────────────
+    \node[btn] (b1) at (11.5, -3.2) {EN};
+    \node[btn] (b2) at (13.0, -3.2) {DEL};
+    \node[btn] (b3) at (14.5, -3.2) {EXT};
 
-    %% --- Power label ---
-    \node[font=\scriptsize, gray] at ([xshift=-0.4cm]esp32.north west) [above left]{12\,V/2\,A Adapter};
-  \end{tikzpicture}
-  \caption{Sơ đồ khối hệ thống STM-FaceGuard. Kiến trúc Dual-MCU: ESP32-S3 xử lý AI, STM32F411CEU6 điều khiển ngoại vi. Ba nút nhấn EN/DEL/EXT kết nối trực tiếp vào GPIO ngắt của STM32.}
+    %% ── Arrows ────────────────────────────────────────────
+    \draw[arr] (cam.east)  -- node[lbl, above]{DVP 8-bit} (esp.west);
+
+    \draw[arr] (esp.east)  -- node[lbl, above]{UART 115.2\,kbaud} (stm.west);
+
+    \draw[arr] (stm.east |- oled.west)
+               -- node[lbl, above]{I2C 400\,kHz} (oled.west);
+    \draw[arr] (stm.east |- dfp.west)
+               -- node[lbl, above]{UART 9.6\,kbaud} (dfp.west);
+    \draw[arr] (stm.east |- relay.west)
+               -- node[lbl, above]{GPIO} (relay.west);
+
+    \draw[arr] (b1.north) -- (stm.south -| b1.north);
+    \draw[arr] (b2.north) -- (stm.south);
+    \draw[arr] (b3.north) -- (stm.south -| b3.north);
+
+    %% ── Group labels ──────────────────────────────────────
+    \node[font=\small\itshape, gray] at (2.0,  1.3) {Input};
+    \node[font=\small\itshape, gray] at (7.0,  1.6) {AI Layer};
+    \node[font=\small\itshape, gray] at (13.0, 1.6) {Control Layer};
+    \node[font=\small\itshape, gray] at (18.5, 3.0) {Output};
+    \node[font=\small\itshape, gray] at (13.0,-4.3) {User Input};
+
+  \end{tikzpicture}}
+  \caption{Sơ đồ khối hệ thống STM-FaceGuard. Kiến trúc Dual-MCU phân tách rõ ràng: ESP32-S3 đảm nhận xử lý AI (TFLite), STM32F411CEU6 điều khiển toàn bộ ngoại vi thông qua máy trạng thái hướng sự kiện. Ba nút nhấn EN/DEL/EXT kết nối vào GPIO ngắt ngoài (EXTI) của STM32.}
   \label{fig:block_diagram}
 \end{figure}
 

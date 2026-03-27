@@ -1,4 +1,4 @@
-\contentsline {lstlisting}{\numberline {4.1}{\ignorespaces Xử lý đếm ngược chế độ khóa an ninh (Security Lockout)}}{14}{lstlisting.4.1}%
+\contentsline {lstlisting}{\numberline {4.1}{\ignorespaces Xử lý đếm ngược chế độ khóa an ninh (Security Lockout)}}{15}{lstlisting.4.1}%
 \contentsline {lstlisting}{\numberline {B.1}{\ignorespaces Hàm \texttt {Parse\_ESP32\_Msg} --- phân tích giao thức ESP32 $\to $ STM32}}{31}{lstlisting.B.1}%
 \contentsline {lstlisting}{\numberline {B.2}{\ignorespaces Voting pipeline nhận diện khuôn mặt (ESP32-S3)}}{31}{lstlisting.B.2}%
 \contentsline {lstlisting}{\numberline {B.3}{\ignorespaces Khởi tạo UART1 DMA và ngắt Idle Line (STM32F411CEU6)}}{31}{lstlisting.B.3}%

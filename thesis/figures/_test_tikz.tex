@@ -1,0 +1,32 @@
+% Standalone test: compiles both TikZ figures independently
+% Build: xelatex _test_tikz.tex
+\documentclass[a4paper]{article}
+\usepackage{fontspec}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric,shapes.misc,arrows.meta,positioning,calc,fit,backgrounds}
+\usepackage{float}
+\usepackage{graphicx}
+\usepackage{caption}
+\usepackage{xcolor}
+
+% Reuse thesis colour definitions so both \input files work standalone
+\definecolor{tableheader}{RGB}{220,230,242}
+\definecolor{blkfill}{RGB}{214,228,246}
+\definecolor{blkbord}{RGB}{ 70,130,180}
+
+\begin{document}
+\section*{Block Diagram Test}
+\begin{figure}[H]
+  \centering
+  \resizebox{0.98\textwidth}{!}{\input{tikz_block_diagram.tex}}
+  \caption{Embedded MCU Architecture Block Diagram}
+\end{figure}
+
+\clearpage
+\section*{Waveform Timing Diagram Test}
+\begin{figure}[H]
+  \centering
+  \resizebox{0.98\textwidth}{!}{\input{tikz_waveform.tex}}
+  \caption{UART Handshake Timing Diagram (STM32 $\leftrightarrow$ ESP32-S3)}
+\end{figure}
+\end{document}

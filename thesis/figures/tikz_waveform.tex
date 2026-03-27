@@ -1,0 +1,252 @@
+% ==========================================================================
+%  TikZ Waveform / Timing Diagram – Face-Recognition Protocol
+%  (STM32 ↔ ESP32-S3 UART handshake + Door-Lock sequence)
+%
+%  Does NOT require the tikz-timing package.
+%  Uses only core TikZ + \usetikzlibrary{positioning,calc,arrows.meta}
+%  (all already loaded in main.tex).
+%
+%  Standalone usage:
+%    \documentclass[tikz,border=8pt]{standalone}
+%    \usetikzlibrary{positioning,calc,arrows.meta}
+%    \input{tikz_waveform.tex}
+%
+%  Inline usage inside thesis:
+%    \begin{figure}[H]
+%      \centering
+%      \resizebox{\textwidth}{!}{\input{figures/tikz_waveform.tex}}
+%      \caption{...}
+%    \end{figure}
+% ==========================================================================
+
+% ── Dimensions & helpers ─────────────────────────────────────────────────────
+% X-axis: 1 unit = 1 time slot (each clock cycle = 0.7 cm)
+% Y-axis: each signal row is 0.8 cm tall, rows separated by 0.3 cm gap
+
+\newlength{\wSlot}   \setlength{\wSlot}{0.70cm}   % width of one time slot
+\newlength{\wHigh}   \setlength{\wHigh}{0.55cm}   % signal high level height
+\newlength{\wRow}    \setlength{\wRow} {1.20cm}   % row pitch (high+gap)
+\newlength{\wLabel}  \setlength{\wLabel}{2.8cm}   % left label column width
+\newlength{\wSlope}  \setlength{\wSlope}{0.08cm}  % bus transition slope
+
+% Colour definitions (reuse thesis palette where possible)
+\colorlet{clkcolor} {blue!70!black}
+\colorlet{highcolor}{black}
+\colorlet{buscolor} {black}
+\colorlet{xcolor}   {black!40}
+\colorlet{gridcol}  {black!12}
+\colorlet{annotcol} {red!70!black}
+
+% ── Waveform drawing macros ──────────────────────────────────────────────────
+
+% \wfClock{row}{start}{cycles}
+%   Draws a clock waveform: row = 0-based row index (0=top),
+%   start = start slot, cycles = number of full cycles
+\newcommand{\wfClock}[3]{%
+  \pgfmathsetmacro{\ybase}{-#1*\wRow/1cm}%
+  \pgfmathsetmacro{\xstart}{#2*\wSlot/1cm}%
+  \begin{scope}[shift={(\xstart cm, \ybase cm)}, clkcolor, thick]
+    \foreach \k in {0,...,\the\numexpr#3-1\relax}{%
+      \pgfmathsetmacro{\x}{\k*\wSlot/1cm}%
+      \draw (\x cm,0)
+        -- ++(0,\wHigh)
+        -- ++(\wSlot/2,0)
+        -- ++(0,-\wHigh)
+        -- ++(\wSlot/2,0);
+    }%
+  \end{scope}%
+}
+
+% \wfHigh{row}{start}{len}  – logic HIGH for len slots
+\newcommand{\wfHigh}[3]{%
+  \pgfmathsetmacro{\ybase}{-#1*\wRow/1cm}%
+  \pgfmathsetmacro{\xs}{#2*\wSlot/1cm}%
+  \pgfmathsetmacro{\xl}{#3*\wSlot/1cm}%
+  \draw[highcolor,thick]
+    (\xs cm,\ybase cm)
+    -- ++(0,\wHigh)
+    -- ++(\xl cm,0)
+    -- ++(0,-\wHigh);
+}
+
+% \wfLow{row}{start}{len}  – logic LOW for len slots (flat line)
+\newcommand{\wfLow}[3]{%
+  \pgfmathsetmacro{\ybase}{-#1*\wRow/1cm}%
+  \pgfmathsetmacro{\xs}{#2*\wSlot/1cm}%
+  \pgfmathsetmacro{\xl}{#3*\wSlot/1cm}%
+  \draw[highcolor,thick]
+    (\xs cm,\ybase cm) -- ++(\xl cm,0);
+}
+
+% \wfBus{row}{start}{len}{label}  – named bus (trapezoid shape)
+\newcommand{\wfBus}[4]{%
+  \pgfmathsetmacro{\ybase}{-#1*\wRow/1cm}%
+  \pgfmathsetmacro{\xs}{#2*\wSlot/1cm}%
+  \pgfmathsetmacro{\xl}{#3*\wSlot/1cm}%
+  \pgfmathsetmacro{\sl}{\wSlope/1cm}%
+  \draw[buscolor,thick,fill=blue!8]
+    (\xs cm,\ybase cm)
+    -- ++(\sl cm, \wHigh)
+    -- ++(\xl cm - 2*\sl cm, 0)
+    -- ++(\sl cm,-\wHigh)
+    -- ++(-\xl cm,0)
+    -- cycle;
+  \node[font=\tiny\sffamily, anchor=mid]
+    at (\xs cm + \xl cm/2, \ybase cm + \wHigh/2) {#4};
+}
+
+% \wfUnknown{row}{start}{len}  – undefined / unknown state (hatched)
+\newcommand{\wfUnknown}[3]{%
+  \pgfmathsetmacro{\ybase}{-#1*\wRow/1cm}%
+  \pgfmathsetmacro{\xs}{#2*\wSlot/1cm}%
+  \pgfmathsetmacro{\xl}{#3*\wSlot/1cm}%
+  \pgfmathsetmacro{\sl}{\wSlope/1cm}%
+  \draw[xcolor,thick,fill=black!10]
+    (\xs cm,\ybase cm)
+    -- ++(\sl cm, \wHigh)
+    -- ++(\xl cm - 2*\sl cm, 0)
+    -- ++(\sl cm,-\wHigh)
+    -- ++(-\xl cm,0)
+    -- cycle;
+  \node[font=\tiny\sffamily\itshape, anchor=mid, text=xcolor]
+    at (\xs cm + \xl cm/2, \ybase cm + \wHigh/2) {?};
+}
+
+% \wfTrans{row}{slot}  – vertical transition marker (dashed)
+\newcommand{\wfTrans}[2]{%
+  \pgfmathsetmacro{\ybase}{-#1*\wRow/1cm}%
+  \pgfmathsetmacro{\xs}{#2*\wSlot/1cm}%
+  \draw[annotcol, dashed, thin]
+    (\xs cm, \ybase cm - 0.15cm)
+    -- (\xs cm, \ybase cm + \wHigh + 0.15cm);
+}
+
+% Total number of time slots (edit here to widen/narrow the diagram)
+\def\TotalSlots{20}
+
+% ── Signal row definitions ───────────────────────────────────────────────────
+% Row 0 : CLK (100 kHz reference, shown as short cycles)
+% Row 1 : UART_TX (STM32 → ESP32)  FRAME signal
+% Row 2 : CMD byte on UART bus
+% Row 3 : ESP32 BUSY flag
+% Row 4 : FACE_OK / result
+% Row 5 : RELAY (door lock)
+% Row 6 : LED_STATUS
+
+\begin{tikzpicture}[x=1cm, y=1cm]
+
+% ── Background grid ──────────────────────────────────────────────────────────
+\foreach \s in {0,...,\TotalSlots}{%
+  \pgfmathsetmacro{\gx}{\s*\wSlot/1cm}%
+  \draw[gridcol] (\gx cm, 0.3) -- (\gx cm, -6*\wRow/1cm - 0.1);
+}
+
+% ── Time-slot tick labels ─────────────────────────────────────────────────────
+\foreach \s in {0,2,...,\TotalSlots}{%
+  \pgfmathsetmacro{\gx}{\s*\wSlot/1cm}%
+  \node[font=\tiny\sffamily, above] at (\gx cm, 0.25) {\s};
+}
+
+% ── Row 0 : CLK ──────────────────────────────────────────────────────────────
+\node[font=\small\sffamily, anchor=east] at (0, 0) {CLK};
+\wfClock{0}{0}{20}
+
+% ── Row 1 : UART\_TX (STM32→ESP32) – FRAME signal ────────────────────────────
+\node[font=\small\sffamily, anchor=east] at (0, {-1*\wRow/1cm}) {UART\_TX};
+% idle (LOW=space) 0–1
+\wfLow{1}{0}{2}
+% start pulse HIGH slot 2–3
+\wfHigh{1}{2}{1}
+% LOW 3–4
+\wfLow{1}{3}{1}
+% FRAME active HIGH 4–7
+\wfHigh{1}{4}{3}
+% LOW 7–8
+\wfLow{1}{7}{1}
+% another burst 10–12
+\wfLow{1}{8}{2}
+\wfHigh{1}{10}{2}
+\wfLow{1}{12}{8}
+
+% ── Row 2 : CMD byte (bus) ────────────────────────────────────────────────────
+\node[font=\small\sffamily, anchor=east] at (0, {-2*\wRow/1cm}) {CMD[7:0]};
+\wfUnknown{2}{0}{2}
+\wfBus{2}{2}{5}{0xA1 ENROLL}
+\wfUnknown{2}{7}{3}
+\wfBus{2}{10}{4}{0xA2 RECOG}
+\wfUnknown{2}{14}{6}
+
+% ── Row 3 : ESP32 BUSY ────────────────────────────────────────────────────────
+\node[font=\small\sffamily, anchor=east] at (0, {-3*\wRow/1cm}) {ESP\_BUSY};
+\wfLow{3}{0}{3}
+\wfHigh{3}{3}{6}   % busy during enroll
+\wfLow{3}{9}{1}
+\wfHigh{3}{10}{5}  % busy during recognition
+\wfLow{3}{15}{5}
+
+% ── Row 4 : FACE\_OK result ───────────────────────────────────────────────────
+\node[font=\small\sffamily, anchor=east] at (0, {-4*\wRow/1cm}) {FACE\_OK};
+\wfLow{4}{0}{14}
+\wfHigh{4}{14}{3}  % face matched
+\wfLow{4}{17}{3}
+
+% ── Row 5 : RELAY (door lock) ────────────────────────────────────────────────
+\node[font=\small\sffamily, anchor=east] at (0, {-5*\wRow/1cm}) {RELAY};
+\wfLow{5}{0}{15}
+\wfHigh{5}{15}{3}  % door unlocked
+\wfLow{5}{18}{2}
+
+% ── Row 6 : LED STATUS ────────────────────────────────────────────────────────
+\node[font=\small\sffamily, anchor=east] at (0, {-6*\wRow/1cm}) {LED\_RED};
+\wfHigh{6}{0}{14}  % red = waiting / locked
+\wfLow{6}{14}{6}
+
+% ── Annotation arrows ─────────────────────────────────────────────────────────
+% "Enroll CMD" annotation
+\node[font=\tiny\sffamily, text=annotcol, above]
+  at ({2*\wSlot/1cm + 1.5*\wSlot/1cm}, 0.28)
+  {Enroll};
+\draw[-{Stealth[length=4pt]}, annotcol, thin]
+  ({2*\wSlot/1cm + 1.5*\wSlot/1cm}, 0.26)
+  -- ({2*\wSlot/1cm + 1.5*\wSlot/1cm}, 0.05);
+
+% "Recog CMD" annotation
+\node[font=\tiny\sffamily, text=annotcol, above]
+  at ({10*\wSlot/1cm + 2*\wSlot/1cm}, 0.28)
+  {Recognise};
+\draw[-{Stealth[length=4pt]}, annotcol, thin]
+  ({10*\wSlot/1cm + 2*\wSlot/1cm}, 0.26)
+  -- ({10*\wSlot/1cm + 2*\wSlot/1cm}, 0.05);
+
+% "Unlock" annotation
+\node[font=\tiny\sffamily, text=annotcol, above]
+  at ({15*\wSlot/1cm + 1.5*\wSlot/1cm}, 0.28)
+  {Unlock};
+\draw[-{Stealth[length=4pt]}, annotcol, thin]
+  ({15*\wSlot/1cm + 1.5*\wSlot/1cm}, 0.26)
+  -- ({15*\wSlot/1cm + 1.5*\wSlot/1cm}, 0.05);
+
+% ── Vertical dashed phase markers ─────────────────────────────────────────────
+\foreach \sv in {2, 10, 14, 15}{%
+  \pgfmathsetmacro{\gx}{\sv*\wSlot/1cm}%
+  \draw[annotcol, densely dashed, very thin]
+    (\gx cm, 0.05) -- (\gx cm, {-6*\wRow/1cm - 0.05});
+}
+
+% ── Phase labels at bottom ───────────────────────────────────────────────────
+\node[font=\tiny\sffamily\bfseries, text=blkbord, anchor=north]
+  at ({1*\wSlot/1cm},   {-6*\wRow/1cm - 0.12}) {Idle};
+\node[font=\tiny\sffamily\bfseries, text=blkbord, anchor=north]
+  at ({6*\wSlot/1cm},   {-6*\wRow/1cm - 0.12}) {Enrolment};
+\node[font=\tiny\sffamily\bfseries, text=blkbord, anchor=north]
+  at ({12*\wSlot/1cm},  {-6*\wRow/1cm - 0.12}) {Recognition};
+\node[font=\tiny\sffamily\bfseries, text=annotcol, anchor=north]
+  at ({16.5*\wSlot/1cm},{-6*\wRow/1cm - 0.12}) {Unlock};
+
+% ── Axis arrows ───────────────────────────────────────────────────────────────
+\draw[-{Stealth[length=5pt]}, black!60, thin]
+  (0, {-6*\wRow/1cm - 0.25})
+  -- ({(\TotalSlots+0.5)*\wSlot/1cm}, {-6*\wRow/1cm - 0.25})
+  node[right, font=\tiny\sffamily] {t (slots)};
+
+\end{tikzpicture}
