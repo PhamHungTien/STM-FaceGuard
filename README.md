@@ -107,7 +107,7 @@ Dự án đồ án môn học xây dựng hệ thống khóa cửa thông minh s
 | 5 | **Nút ENROLL** | PA0 (Input Pull-up, polling debounce) | Kích hoạt chế độ đăng ký khuôn mặt mới |
 | 6 | **Nút DELETE** | PA1 (Input Pull-up, polling debounce) | Giữ 3 giây để xóa toàn bộ khuôn mặt |
 
-> PC13 là chân nối với nút người dùng tự lắp, kéo lên 3.3V nội bộ (Pull-up).
+> Cả 3 nút `EXIT`, `ENROLL`, `DELETE` trong cấu hình hiện tại đều là **nút rời bên ngoài**, đấu trực tiếp từ chân GPIO xuống GND và dùng pull-up nội của STM32.
 
 ### III. Phản hồi & Hiển thị
 
@@ -328,16 +328,14 @@ Trong firmware hiện tại: `PC13` dùng EXTI, còn `PA0/PA1` đọc theo polli
 ```
 3.3V (pull-up nội bộ trong STM32)
   │
-  ├── PA0  (BTN_ENROLL) ──[KEY onboard]── GND   ← nút KEY có sẵn trên board
-  ├── PA1  (BTN_DELETE) ──[Nút ngoài] ── GND   ← đấu nút ngoài PA1 → GND
-  └── PC13 (BTN_EXIT)   ──[Nút ngoài] ── GND   ← đấu nút ngoài PC13 → GND
+  ├── PA0  (BTN_ENROLL) ──[Nút ngoài]── GND
+  ├── PA1  (BTN_DELETE) ──[Nút ngoài]── GND
+  └── PC13 (BTN_EXIT)   ──[Nút ngoài]── GND
 ```
 
-> **PA0:** Board Black Pill có sẵn nút **KEY** nối PA0 → GND — dùng làm BTN_ENROLL, không cần đấu dây ngoài.
+> Cách đấu chuẩn cho cả 3 nút là: một chân nút nối vào GPIO, chân còn lại nối GND. Không cần điện trở kéo ngoài nếu giữ nguyên cấu hình pull-up nội như firmware hiện tại.
 >
-> **PC13:** Chân này có **LED BLUE onboard** (active-LOW). Khi nhấn nút BTN_EXIT nối PC13 → GND, LED xanh sẽ sáng lên — đây là hành vi bình thường.
->
-> Code đã cấu hình **PULLUP + FALLING edge** cho `PC13`, `PA0`, `PA1` trong `MX_GPIO_Init()`.
+> Firmware đã cấu hình `PC13`, `PA0`, `PA1` ở chế độ input pull-up; vì vậy có thể dùng ngay 3 nút rời mà không phải sửa code nếu vẫn giữ đúng các chân này.
 
 ---
 
@@ -357,9 +355,9 @@ Trong firmware hiện tại: `PC13` dùng EXTI, còn `PA0/PA1` đọc theo polli
 | **PB7** | 43 | I2C1 SDA | OLED **SDA** |
 | **PB0** | 18 | GPIO OUT | **IN1** của relay module 1 kênh 5V |
 | **PA5** | 15 | GPIO OUT | LED ngoài (tùy chọn) |
-| **PC13** | 2 | EXTI13 | Nút **BTN_EXIT** → GND *(LED BLUE onboard sáng khi nhấn)* |
-| **PA0** | 10 | GPIO input | Nút **BTN_ENROLL** *(KEY onboard — không cần dây ngoài)* |
-| **PA1** | 11 | GPIO input | Nút **BTN_DELETE** → GND |
+| **PC13** | 2 | EXTI13 | Nút **BTN_EXIT** ngoài → GND |
+| **PA0** | 10 | GPIO input | Nút **BTN_ENROLL** ngoài → GND |
+| **PA1** | 11 | GPIO input | Nút **BTN_DELETE** ngoài → GND |
 
 ---
 
@@ -498,7 +496,7 @@ ESP32-S3 liên tục quét khuôn mặt:
 
 ### Mở cửa từ bên trong (EXIT)
 
-1. Nhấn nút **EXIT** (PC13 — Blue Button Nucleo)
+1. Nhấn nút **EXIT** ngoài (PC13)
 2. STM32 kích relay **ngay lập tức**, không qua ESP32
 3. SM1373 mở chốt trong **3 giây**, OLED hiện `"UNLOCKED — (Exit button)"`
 4. Nhấn lại EXIT trong lúc đang mở → reset đếm ngược 3 giây
