@@ -11,7 +11,7 @@ Tiểu luận đã trình bày toàn bộ quá trình thiết kế và hiện th
 
 \begin{enumerate}[label=\arabic*.]
   \item \textbf{Kiến trúc Dual-MCU hợp lý}: Phân tách rõ ràng tầng xử lý AI (ESP32-S3) và tầng điều khiển ngoại vi (STM32F411CEU6) giúp mỗi vi điều khiển tập trung vào thế mạnh của mình, đồng thời tăng tính mô-đun và khả năng bảo trì của hệ thống.
-  \item \textbf{Giao thức UART nội bộ gọn nhẹ}: Thiết kế giao thức văn bản ASCII đơn giản giữa hai MCU cho phép debug dễ dàng và mở rộng lệnh trong tương lai mà không cần thay đổi cấu trúc phần cứng.
+  \item \textbf{Giao thức UART nội bộ có tự phục hồi}: Thiết kế UART hai lớp giữa hai MCU giữ được khả năng debug ở bước bootstrap, đồng thời bổ sung xác thực gói, heartbeat và supervisor để tăng độ tin cậy vận hành thực tế.
   \item \textbf{Trải nghiệm người dùng đa kênh}: Tích hợp phản hồi qua OLED, âm thanh và LED tạo ra trải nghiệm rõ ràng, trực quan cho người dùng ở mọi điều kiện môi trường.
   \item \textbf{Vận hành độc lập, không cần internet}: Toàn bộ thuật toán nhận diện và cơ sở dữ liệu khuôn mặt được lưu trữ và xử lý trực tiếp trên thiết bị, đảm bảo tính riêng tư và hoạt động liên tục kể cả khi mất kết nối mạng.
 \end{enumerate}
@@ -32,9 +32,9 @@ Bên cạnh những kết quả đạt được, hệ thống hiện tại còn 
   
   \item \textbf{Voting quá tối giản (\texttt{REQUIRED\_MATCHES = 1})}: Chỉ cần 1 frame khớp là mở cửa ngay, dễ xảy ra False Positive với ánh sáng phức tạp. Nếu tăng voting lên 2--3 frames, độ tin cậy tăng nhưng latency cũng tăng.
   
-  \item \textbf{Giao tiếp UART không mã hóa}: Lệnh giữa STM32 và ESP32-S3 truyền dưới dạng văn bản thuần túy. Trong môi trường có nguy cơ tấn công vật lý (không dây, kẹp tín hiệu UART thực tế), đây là điểm yếu bảo mật.
+  \item \textbf{Bảo vệ UART mới dừng ở mức nhẹ}: Firmware hiện đã có bắt tay, sequence counter, auth tag và cơ chế che payload trên UART. Tuy vậy, khóa bí mật vẫn nằm trong flash firmware của hai MCU; nếu đối tượng tấn công có toàn quyền truy cập vật lý và trích xuất firmware, mức bảo vệ này chưa thể so sánh với secure element hoặc secure boot hoàn chỉnh.
   
-  \item \textbf{Không có cơ chế khôi phục toàn tự động cho lỗi ESP32}: Nếu ESP32-S3 gặp sự cố camera (CAM\_FAIL) và ngừng gửi READY, STM32 sẽ chuyển sang OFFLINE. Tuy vậy, không có cơ chế tự động reset ESP32 từ STM32 nếu mất kết nối quá lâu.
+  \item \textbf{Phục hồi ESP32 chưa xử lý được mọi nguyên nhân gốc}: Hiện tại STM32 đã có thể thử \texttt{STATUS}, gửi \texttt{REBOOT} và kéo reset cứng qua \texttt{PB1 -> EN/RESET}. Dù vậy, nếu nguyên nhân đến từ sụt áp nguồn 5~V, tiếp xúc GND kém hoặc lỗi camera phần cứng lặp lại, việc reset vẫn chỉ giải quyết triệu chứng chứ không loại bỏ hoàn toàn nguyên nhân nền.
   
   \item \textbf{Dữ liệu khuôn mặt không được backup}: Cơ sở dữ liệu 7 khuôn mặt được lưu trong NVS Flash của ESP32-S3. Nếu flash bị lỗi hoặc bị xóa tình cờ, toàn bộ dữ liệu khuôn mặt sẽ mất mà không có cách phục hồi (không có backup on-cloud hay on-device ngoài).
 \end{enumerate}
@@ -59,11 +59,11 @@ Từ những hạn chế trên, nhóm đề xuất các hướng phát triển t
 \subsection{Ưu tiên trung (Medium Priority)}
 
 \begin{enumerate}[label=\arabic*.]
-  \item \textbf{Bảo vệ giao tiếp UART}: Thêm CRC-16 hoặc HMAC đơn giản vào mỗi gói tin để xác thực tính toàn vẹn. Chuẩn SLIP + CRC-16 có thể sử dụng.
+  \item \textbf{Nâng cấp bảo vệ khoá bí mật UART}: Kết hợp Secure Boot / Flash Encryption của ESP32-S3 và RDP của STM32 để bảo vệ khóa bí mật hiện đang lưu trong firmware.
   
   \item \textbf{Backup \& restore khuôn mặt}: Triển khai cơ chế xuất/nhập dữ liệu khuôn mặt qua UART hoặc USB, cho phép backup lên máy tính hoặc SD card bên ngoài.
   
-  \item \textbf{Cơ chế watchdog 2 chiều}: STM32 gửi heartbeat `PING` định kỳ cho ESP32, ESP32 phản hồi `PONG`. Nếu mất PONG quá 60 giây, STM32 tự động reset ESP32 qua GPIO.
+  \item \textbf{Supervisor thông minh hơn}: Bổ sung ghi log nguyên nhân reset, đếm số lần phục hồi liên tiếp và phân loại lỗi brownout / camera / UART để tránh reset lặp vô ích.
   
   \item \textbf{Tích hợp NTP + Timestamping}: Sử dụng Wi-Fi của ESP32 để đồng bộ giờ từ NTP server, ghi timestamp vào log truy cập.
 \end{enumerate}

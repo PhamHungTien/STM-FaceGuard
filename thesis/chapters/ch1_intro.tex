@@ -19,7 +19,7 @@ Tiểu luận này đặt ra các mục tiêu cụ thể sau:
 \begin{enumerate}[label=\arabic*.]
   \item Thiết kế và xây dựng hoàn chỉnh hệ thống khóa thông minh tích hợp nhận diện khuôn mặt theo thời gian thực trên phần cứng nhúng.
   \item Đề xuất và hiện thực kiến trúc Dual-MCU phân tách tầng xử lý AI (ESP32-S3) khỏi tầng điều khiển ngoại vi (STM32F411CEU6), đảm bảo tính mô-đun và dễ bảo trì.
-  \item Xây dựng giao thức truyền thông nội bộ đơn giản, tin cậy giữa hai vi điều khiển qua UART.
+  \item Xây dựng giao thức truyền thông nội bộ tin cậy giữa hai vi điều khiển qua UART, hỗ trợ đồng bộ trạng thái, tự phục hồi liên kết và xác thực gói tin ở mức firmware.
   \item Tích hợp phản hồi đa kênh (màn hình OLED, âm thanh, LED) để nâng cao trải nghiệm người dùng.
   \item Hỗ trợ đăng ký và quản lý khuôn mặt trực tiếp trên thiết bị mà không cần máy tính hỗ trợ.
 \end{enumerate}
@@ -37,9 +37,9 @@ Tiểu luận này đặt ra các mục tiêu cụ thể sau:
   \item \textbf{Phần mềm:}
     \begin{itemize}
       \item STM32: STM32CubeIDE, thư viện HAL, không dùng RTOS
-      \item ESP32-S3: Arduino IDE / Arduino core for ESP32, thư viện ESP-WHO, \texttt{esp\_camera} và UART văn bản với STM32
+      \item ESP32-S3: Arduino IDE / Arduino core for ESP32, thư viện ESP-WHO, \texttt{esp\_camera} và UART có bắt tay tương thích ngược với STM32
     \end{itemize}
-  \item \textbf{Giao thức:} UART (115200 baud), I2C Fast-mode (400~kHz)
+  \item \textbf{Giao thức:} UART 115200~baud (có heartbeat, recovery và gói tin bảo vệ ở firmware hiện tại), I2C Fast-mode (400~kHz)
   \item \textbf{Ngoài phạm vi:} Kết nối internet, lưu trữ đám mây, ứng dụng di động
 \end{itemize}
 

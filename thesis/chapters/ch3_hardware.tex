@@ -185,6 +185,7 @@ Toàn bộ chân GPIO, UART và I2C của STM32F411CEU6 được phân công the
     PC13 & BTN\_EXIT   & EXTI13, Pull-up nội      & Nút EXIT ngoài \\
     PA5  & LD2         & GPIO Output, Push-Pull   & LED ngoài (tùy chọn) \\
     PB0  & RELAY       & GPIO Output, Push-Pull   & Chân \texttt{IN1} của module relay 5~V \\
+    PB1  & ESP32\_RST  & GPIO Output, Push-Pull   & Chân \texttt{EN/RESET} của ESP32-S3 \\
     PA9  & USART1\_TX  & AF7, 115200~baud         & $\to$ ESP32-S3 RXD \\
     PA10 & USART1\_RX  & AF7, 115200~baud, \textbf{DMA} & $\leftarrow$ ESP32-S3 TXD \\
     PA2  & USART2\_TX  & AF7, 38400~baud          & ST-Link Virtual COM (debug) \\
@@ -212,6 +213,7 @@ ESP32-S3 chịu trách nhiệm giao tiếp với camera qua giao diện song son
     \midrule
     GPIO19 & UART1\_TX & $\to$ STM32 USART1\_RX (PA10) \\
     GPIO20 & UART1\_RX & $\leftarrow$ STM32 USART1\_TX (PA9) \\
+    RESET / EN & CHIP\_EN & $\leftarrow$ STM32 PB1 (reset cứng ESP32) \\
     GPIO11, 9, 8, 10,\newline 12, 18, 17, 16 & CAM\_DATA[0:7] & OV3660 Data Bus \\
     GPIO15 & CAM\_XCLK  & OV3660 XCLK (clock ra camera) \\
     GPIO13 & CAM\_PCLK  & OV3660 PCLK \\
@@ -224,7 +226,7 @@ ESP32-S3 chịu trách nhiệm giao tiếp với camera qua giao diện song son
   \end{tabularx}
 \end{table}
 
-\noindent Trên biến thể board đang dùng, cặp chân \texttt{TX/RX} ở header ngoài được giữ lại cho nạp chương trình và Serial Monitor. Vì vậy, UART làm việc với STM32 được chuyển sang cặp \texttt{GPIO19/GPIO20} theo đúng firmware hiện hành.
+\noindent Trên biến thể board đang dùng, cặp chân \texttt{TX/RX} ở header ngoài được giữ lại cho nạp chương trình và Serial Monitor. Vì vậy, UART làm việc với STM32 được chuyển sang cặp \texttt{GPIO19/GPIO20} theo đúng firmware hiện hành. Ngoài ra, chân \texttt{RESET} trên header của board ESP32-S3-CAM thực chất là đường \texttt{EN/CHIP\_EN}; trong cấu hình hiện tại, chân này đã được nối tới \texttt{PB1} của STM32 để phục vụ cơ chế reset cứng tự động khi ESP32 mất kết nối kéo dài.
 
 \section{Thiết kế nguồn điện}
 \label{sec:power}

@@ -19,7 +19,9 @@ và có thể tham khảo tại kho lưu trữ GitHub của nhóm:
 // Xem day du tai: STM32/Core/Src/main.c
 static void Parse_ESP32_Msg(const char *msg)
 {
-    if (strncmp(msg, "OPEN:", 5) == 0)
+    if (strcmp(msg, "SECURE_READY") == 0)
+        UART_EnableSecure();
+    else if (strncmp(msg, "OPEN:", 5) == 0)
         Enter_Unlocked((uint8_t)atoi(msg + 5), 0);
     else if (strcmp(msg, "DENIED")   == 0)  Enter_Denied();
     else if (strcmp(msg, "READY")    == 0)  Mark_ESP32_Alive();
@@ -42,11 +44,11 @@ if (res.id >= 0 && res.similarity >= RECOGNITION_THRESHOLD) {
     if (res.id == lastMatchId) matchCount++;
     else { matchCount = 1; lastMatchId = res.id; }
     if (matchCount >= REQUIRED_MATCHES) {
-        Serial1.printf("OPEN:%d\n", res.id);
+        linkSendf("OPEN:%d", res.id);
     }
 } else {
     if (++noMatchCount >= REQUIRED_NO_MATCHES)
-        Serial1.println("DENIED");
+        linkSend("DENIED");
 }
 \end{lstlisting}
 
@@ -56,7 +58,7 @@ if (res.id >= 0 && res.similarity >= RECOGNITION_THRESHOLD) {
   caption={Khởi tạo UART1 DMA theo chế độ Receive-to-Idle (STM32F411CEU6)},
   label={lst:uart_dma_init}]
 // STM32/Core/Src/main.c - App_Init()
-#define ESP32_DMA_RX_SIZE 64U
+#define ESP32_DMA_RX_SIZE 256U
 static uint8_t esp32_dma_rx_buf[ESP32_DMA_RX_SIZE];
 
 static void App_Init(void)
@@ -119,6 +121,7 @@ static void App_Loop(void)
 {
     uint32_t now = HAL_GetTick();
     char uart1_msg[UART1_BUF_SIZE];
+    char decoded_msg[UART1_BUF_SIZE];
 
     Button_PollPress(&btn_exit_armed, &btn_exit_flag, &btn_exit_tick,
                      BTN_EXIT_GPIO_Port, BTN_EXIT_Pin, now);
@@ -128,11 +131,14 @@ static void App_Loop(void)
                      BTN_DELETE_GPIO_Port, BTN_DELETE_Pin, now);
 
     while (UART1_DequeueLine(uart1_msg)) {
-        Parse_ESP32_Msg(uart1_msg);
+        if (UART_DecodeLine(uart1_msg, decoded_msg, sizeof(decoded_msg))) {
+            Parse_ESP32_Msg(decoded_msg);
+        }
     }
 
     if (!esp32_ready) {
         ESP32_RequestStatus(0);
+        ESP32_TryRecover(now);
     }
 
     switch (sys_state) {
@@ -187,6 +193,7 @@ void setup() {
 
 void loop() {
     esp_task_wdt_reset();
+    /* process_cmd() co the nhan STATUS / REBOOT / SECURE_HELLO */
     process_frame();
 }
 \end{lstlisting}

@@ -24,13 +24,20 @@
  *   "DEL_ALL\n"  – xoá toàn bộ khuôn mặt khỏi flash
  *   "CANCEL\n"   – huỷ đăng ký đang diễn ra
  *   "STATUS\n"   – yêu cầu ESP32 gửi lại READY/FACES để đồng bộ trạng thái
+ *   "REBOOT\n"   – yêu cầu ESP32 tự khởi động lại bằng phần mềm
+ *   "SECURE_HELLO\n" / "SECURE_READY\n"
+ *                – bootstrap tương thích ngược trước khi bật secure UART
  *
  * ── Giao thức ESP32 → STM32 ──────────────────────────────────────────────────
  *   "READY\n"          – khởi động xong
+ *   "BOOTING\n"        – ESP32 đang khởi động lại / mới boot
  *   "OPEN:<id>\n"      – nhận ra khuôn mặt id
  *   "DENIED\n"         – không nhận ra
  *   "ENROLLED:<id>\n"  – đăng ký thành công, ID mới = id
  *   "DELETED\n"        – đã xoá toàn bộ
+ *   "CAM_FAIL:<err>\n" – camera init/runtime lỗi, STM32 có thể kích recovery
+ *   Khi cả hai bên đều hỗ trợ, payload UART sẽ được đóng gói dạng
+ *   !SEQ:CIPHERTEXT:TAG thay vì chuỗi văn bản trần.
  *   "ENROLL_FRONT\n"   – bước 1/5: nhìn thẳng
  *   "ENROLL_LEFT\n"    – bước 2/5: quay trái
  *   "ENROLL_RIGHT\n"   – bước 3/5: quay phải
@@ -50,6 +57,8 @@
 #include "esp_task_wdt.h"
 #include "esp_heap_caps.h"
 #include "esp_wifi.h"
+#include <stdarg.h>
+#include <string.h>
 #include <WebServer.h>
 #include <WiFi.h>
 
@@ -120,8 +129,10 @@
 #define ENROLL_STEP_DELAY_MS      2500   // ms tối thiểu giữ mỗi tư thế (bước 2–N, không dùng khi ENROLL_TOTAL_STEPS=1)
 #define ENROLL_TOTAL_STEPS           1   // 1 = chỉ chụp mặt thẳng, xong ngay; tăng lên 5 để yêu cầu đa góc độ
 #define MAX_ENROLLED_FACES           7   // giới hạn thư viện ESP32 face recognition
-#define RX_BUF_MAX_LEN              32   // bảo vệ rxBuf khỏi overflow
+#define RX_BUF_MAX_LEN              96   // đủ chỗ cho packet UART có xác thực
 #define AUTO_STATUS_BEACON_MS     2000   // phát READY/FACES định kỳ khi rảnh
+#define LINK_PACKET_MAX_LEN        96
+#define LINK_CRYPT_MAX_LEN         32
 
 // ── Ngưỡng nhận diện ──────────────────────────────────────────────────────────
 // 0.45: nhạy hơn cho in-door, single-pose DB. Tăng lên 0.55+ nếu bị false positive.
@@ -176,6 +187,10 @@ static uint32_t lastDeniedMs    = 0;   // cooldown sau DENIED
 static uint32_t lastStatusTxMs  = 0;   // chống spam READY/FACES khi host hỏi dồn
 static uint32_t lastBeaconTxMs  = 0;   // heartbeat để STM32 tự bắt lại đồng bộ
 static String   rxBuf;                 // bộ đệm dòng UART từ STM32
+static bool     linkSecureActive = false;
+static uint8_t  linkTxSeq = 1;
+static uint8_t  linkRxSeq = 0;
+static bool     linkRxSynced = false;
 static WebServer previewServer(80);
 static bool     previewServerStarted = false;
 static wl_status_t previewLastStaStatus = WL_IDLE_STATUS;
@@ -248,6 +263,289 @@ static const char *wifi_status_name(wl_status_t status)
         case WL_DISCONNECTED: return "DISCONNECTED";
         default: return "UNKNOWN";
     }
+}
+
+static const uint32_t linkKeyEnc[4] = {
+    0x81B4D3A7UL, 0x6F128C5EUL, 0x27E9B041UL, 0xC35A719DUL
+};
+
+static const uint32_t linkKeyMac[4] = {
+    0x14C2A96BUL, 0x8D37F050UL, 0x53AE1C84UL, 0xF60B4271UL
+};
+
+static uint32_t linkReadBE32(const uint8_t *src)
+{
+    return ((uint32_t)src[0] << 24) |
+           ((uint32_t)src[1] << 16) |
+           ((uint32_t)src[2] << 8) |
+           (uint32_t)src[3];
+}
+
+static void linkWriteBE32(uint8_t *dst, uint32_t value)
+{
+    dst[0] = (uint8_t)(value >> 24);
+    dst[1] = (uint8_t)(value >> 16);
+    dst[2] = (uint8_t)(value >> 8);
+    dst[3] = (uint8_t)value;
+}
+
+static char linkHexDigit(uint8_t value)
+{
+    value &= 0x0FU;
+    return (value < 10U) ? (char)('0' + value) : (char)('A' + (value - 10U));
+}
+
+static int8_t linkParseHex(char c)
+{
+    if (c >= '0' && c <= '9') return (int8_t)(c - '0');
+    if (c >= 'A' && c <= 'F') return (int8_t)(c - 'A' + 10);
+    if (c >= 'a' && c <= 'f') return (int8_t)(c - 'a' + 10);
+    return -1;
+}
+
+static void linkBytesToHex(const uint8_t *src, size_t len, char *dst)
+{
+    for (size_t i = 0; i < len; ++i) {
+        dst[i * 2U] = linkHexDigit((uint8_t)(src[i] >> 4));
+        dst[i * 2U + 1U] = linkHexDigit(src[i]);
+    }
+    dst[len * 2U] = '\0';
+}
+
+static bool linkHexToBytes(const char *src, size_t hexLen, uint8_t *dst)
+{
+    if (hexLen == 0U || (hexLen & 1U) != 0U) return false;
+
+    for (size_t i = 0; i < hexLen; i += 2U) {
+        int8_t hi = linkParseHex(src[i]);
+        int8_t lo = linkParseHex(src[i + 1U]);
+
+        if (hi < 0 || lo < 0) return false;
+        dst[i / 2U] = (uint8_t)(((uint8_t)hi << 4) | (uint8_t)lo);
+    }
+
+    return true;
+}
+
+static void linkXteaEncrypt(uint32_t *v0, uint32_t *v1, const uint32_t key[4])
+{
+    uint32_t a = *v0;
+    uint32_t b = *v1;
+    uint32_t sum = 0U;
+
+    for (uint8_t round = 0U; round < 32U; ++round) {
+        a += (((b << 4) ^ (b >> 5)) + b) ^ (sum + key[sum & 3U]);
+        sum += 0x9E3779B9UL;
+        b += (((a << 4) ^ (a >> 5)) + a) ^ (sum + key[(sum >> 11) & 3U]);
+    }
+
+    *v0 = a;
+    *v1 = b;
+}
+
+static void linkCrypt(uint8_t seq, const uint8_t *in, size_t len, uint8_t *out)
+{
+    size_t offset = 0U;
+    uint8_t block = 0U;
+
+    while (offset < len) {
+        uint32_t v0 = 0x53544647UL ^ ((uint32_t)seq << 24) ^ block;
+        uint32_t v1 = 0x4C4E4B31UL ^ ((uint32_t)len << 16) ^ 0x9E3779B9UL;
+        uint8_t keystream[8];
+        size_t chunk = len - offset;
+
+        if (chunk > 8U) chunk = 8U;
+
+        linkXteaEncrypt(&v0, &v1, linkKeyEnc);
+        linkWriteBE32(&keystream[0], v0);
+        linkWriteBE32(&keystream[4], v1);
+
+        for (size_t i = 0; i < chunk; ++i) {
+            out[offset + i] = (uint8_t)(in[offset + i] ^ keystream[i]);
+        }
+
+        offset += chunk;
+        ++block;
+    }
+}
+
+static uint64_t linkMac(uint8_t seq, const uint8_t *data, size_t len)
+{
+    uint32_t v0 = 0x4D414331UL ^ (uint32_t)seq;
+    uint32_t v1 = 0x53544647UL ^ (uint32_t)len;
+    size_t offset = 0U;
+
+    linkXteaEncrypt(&v0, &v1, linkKeyMac);
+
+    while (offset < len) {
+        uint8_t block[8] = {0};
+        size_t chunk = len - offset;
+
+        if (chunk > 8U) chunk = 8U;
+        memcpy(block, data + offset, chunk);
+        v0 ^= linkReadBE32(&block[0]);
+        v1 ^= linkReadBE32(&block[4]);
+        linkXteaEncrypt(&v0, &v1, linkKeyMac);
+        offset += chunk;
+    }
+
+    return (((uint64_t)v0) << 32) | (uint64_t)v1;
+}
+
+static bool linkShouldResync(uint8_t seq, const char *plain)
+{
+    if (seq != 1U) return false;
+
+    return (strcmp(plain, "STATUS") == 0) ||
+           (strcmp(plain, "SECURE_HELLO") == 0) ||
+           (strcmp(plain, "SECURE_READY") == 0);
+}
+
+static bool linkAcceptSeq(uint8_t seq, const char *plain)
+{
+    if (!linkRxSynced) {
+        linkRxSynced = true;
+        linkRxSeq = seq;
+        return true;
+    }
+
+    if (seq == linkRxSeq) {
+        if (linkShouldResync(seq, plain)) {
+            linkRxSeq = seq;
+            return true;
+        }
+        return false;
+    }
+
+    if (linkShouldResync(seq, plain)) {
+        linkRxSeq = seq;
+        return true;
+    }
+
+    if ((uint8_t)(seq - linkRxSeq) <= 128U) {
+        linkRxSeq = seq;
+        return true;
+    }
+
+    return false;
+}
+
+static void linkSendPlain(const char *msg)
+{
+    Serial1.print(msg);
+    Serial1.write('\n');
+}
+
+static void linkEnableSecure()
+{
+    linkSecureActive = true;
+}
+
+static void linkSend(const char *msg)
+{
+    size_t plainLen = strlen(msg);
+
+    if (plainLen == 0U) return;
+
+    if (linkSecureActive) {
+        char packet[LINK_PACKET_MAX_LEN];
+        uint8_t cipher[LINK_CRYPT_MAX_LEN];
+        char cipherHex[(LINK_CRYPT_MAX_LEN * 2U) + 1U];
+        uint8_t seq = linkTxSeq;
+        uint64_t tag;
+        int written;
+
+        if (plainLen > LINK_CRYPT_MAX_LEN) {
+            Serial.printf("[UART] Plaintext too long for secure packet: %u\n", (unsigned)plainLen);
+            return;
+        }
+
+        if (seq == 0U) seq = 1U;
+        linkTxSeq = (uint8_t)(seq + 1U);
+        if (linkTxSeq == 0U) linkTxSeq = 1U;
+
+        linkCrypt(seq, (const uint8_t *)msg, plainLen, cipher);
+        linkBytesToHex(cipher, plainLen, cipherHex);
+        tag = linkMac(seq, cipher, plainLen);
+
+        written = snprintf(packet, sizeof(packet),
+                           "!%02X:%s:%08lX%08lX\n",
+                           seq,
+                           cipherHex,
+                           (unsigned long)(tag >> 32),
+                           (unsigned long)(tag & 0xFFFFFFFFUL));
+        if (written > 0 && (size_t)written < sizeof(packet)) {
+            Serial1.print(packet);
+            return;
+        }
+        Serial.println("[UART] Secure packet build failed, falling back to plaintext");
+    }
+
+    linkSendPlain(msg);
+}
+
+static void linkSendf(const char *fmt, ...)
+{
+    char plain[LINK_CRYPT_MAX_LEN + 1U];
+    va_list ap;
+
+    va_start(ap, fmt);
+    vsnprintf(plain, sizeof(plain), fmt, ap);
+    va_end(ap);
+    linkSend(plain);
+}
+
+static bool linkDecodeLine(const String &line, char *out, size_t outSize)
+{
+    size_t lineLen = (size_t)line.length();
+
+    if (lineLen == 0U || outSize == 0U) return false;
+
+    if (line[0] != '!') {
+        size_t copyLen = (lineLen < (outSize - 1U)) ? lineLen : (outSize - 1U);
+        memcpy(out, line.c_str(), copyLen);
+        out[copyLen] = '\0';
+        return true;
+    }
+
+    if (lineLen < 22U || line[3] != ':') return false;
+
+    int8_t hi = linkParseHex(line[1]);
+    int8_t lo = linkParseHex(line[2]);
+    int tagSep = line.lastIndexOf(':');
+    uint8_t seq;
+    size_t cipherHexLen;
+    size_t cipherLen;
+    uint8_t cipher[LINK_CRYPT_MAX_LEN];
+    uint8_t plain[LINK_CRYPT_MAX_LEN + 1U];
+    uint64_t rxTag = 0U;
+
+    if (hi < 0 || lo < 0 || tagSep < 4) return false;
+    if ((lineLen - (size_t)tagSep - 1U) != 16U) return false;
+
+    seq = (uint8_t)(((uint8_t)hi << 4) | (uint8_t)lo);
+    cipherHexLen = (size_t)tagSep - 4U;
+    cipherLen = cipherHexLen / 2U;
+
+    if (cipherLen == 0U || cipherLen >= outSize || cipherLen > LINK_CRYPT_MAX_LEN) return false;
+    if (!linkHexToBytes(line.c_str() + 4, cipherHexLen, cipher)) return false;
+
+    for (size_t i = 0; i < 16U; ++i) {
+        int8_t nibble = linkParseHex(line[(size_t)tagSep + 1U + i]);
+        if (nibble < 0) return false;
+        rxTag = (rxTag << 4) | (uint64_t)(uint8_t)nibble;
+    }
+
+    if (linkMac(seq, cipher, cipherLen) != rxTag) return false;
+
+    linkCrypt(seq, cipher, cipherLen, plain);
+    plain[cipherLen] = '\0';
+
+    if (!linkAcceptSeq(seq, (const char *)plain)) return false;
+
+    memcpy(out, plain, cipherLen + 1U);
+    linkEnableSecure();
+    return true;
 }
 
 static bool ensure_rgb_frame_buf(size_t width, size_t height)
@@ -773,10 +1071,10 @@ static bool camera_init()
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-static void send_status()
+static void send_status(bool includeConfig)
 {
     if (!cameraReady) {
-        Serial1.printf("CAM_FAIL:%d\n", (int)cameraInitErr);
+        linkSendf("CAM_FAIL:%d", (int)cameraInitErr);
         return;
     }
 
@@ -788,16 +1086,18 @@ static void send_status()
     lastStatusTxMs = now;
 
     if (appState == STATE_ENROLLING) {
-        Serial1.printf("%s\n", ENROLL_STEPS[enrollStep]);
+        linkSend(ENROLL_STEPS[enrollStep]);
         return;
     }
 
-    Serial1.println("READY");
-    Serial1.printf("FACES:%d\n", recognizer.get_enrolled_id_num());
-    Serial1.printf("ENROLL_CFG:%d\n", ENROLL_TOTAL_STEPS);
+    linkSend("READY");
+    linkSendf("FACES:%d", recognizer.get_enrolled_id_num());
+    if (includeConfig) {
+        linkSendf("ENROLL_CFG:%d", ENROLL_TOTAL_STEPS);
+    }
 
     if (lockoutUntilMs > now) {
-        Serial1.println("LOCKOUT");
+        linkSend("LOCKOUT");
     }
 
 }
@@ -824,9 +1124,23 @@ static void process_cmd(const String &cmd)
 {
     Serial.printf("[CMD] «%s»\n", cmd.c_str());
 
-    if (cmd == "ENROLL") {
+    if (cmd == "SECURE_HELLO") {
+        linkEnableSecure();
+        linkSendPlain("SECURE_READY");
+        Serial.println("[UART] Secure mode enabled by host");
+    }
+    else if (cmd == "SECURE_READY") {
+        linkEnableSecure();
+    }
+    else if (cmd == "REBOOT") {
+        linkSend("BOOTING");
+        Serial.println("[SYS] REBOOT requested by STM32");
+        delay(50);
+        ESP.restart();
+    }
+    else if (cmd == "ENROLL") {
         if (recognizer.get_enrolled_id_num() >= MAX_ENROLLED_FACES) {
-            Serial1.println("DB_FULL");
+            linkSend("DB_FULL");
             Serial.println("[ENROLL] DB full → DB_FULL sent");
             return;
         }
@@ -840,8 +1154,8 @@ static void process_cmd(const String &cmd)
         matchCount   = 0;
         noMatchCount = 0;
         lastMatchId  = -1;
-        Serial1.printf("ENROLL_CFG:%d\n", ENROLL_TOTAL_STEPS);
-        Serial1.printf("%s\n", ENROLL_STEPS[0]);
+        linkSendf("ENROLL_CFG:%d", ENROLL_TOTAL_STEPS);
+        linkSend(ENROLL_STEPS[0]);
         Serial.printf("[ENROLL] Step 1/%d → %s\n", ENROLL_TOTAL_STEPS, ENROLL_STEPS[0]);
     }
     else if (cmd == "DEL_ALL") {
@@ -851,7 +1165,7 @@ static void process_cmd(const String &cmd)
         enrolledId   = -1;
         failureCount = 0;      // clear failure counter after admin delete
         lockoutUntilMs = 0;    // also clear any active lockout
-        Serial1.println("DELETED");
+        linkSend("DELETED");
         record_event("DELETED");
         Serial.println("[SYS] Face DB cleared");
     }
@@ -860,11 +1174,11 @@ static void process_cmd(const String &cmd)
         Serial.println("[ENROLL] Cancelled by STM32");
     }
     else if (cmd == "STATUS") {
-        send_status();
+        send_status(true);
     }
     else {
         Serial.printf("[CMD] Unknown command: %s\n", cmd.c_str());
-        Serial1.printf("ERROR:UNKNOWN_CMD\n");
+        linkSend("ERROR:UNKNOWN_CMD");
     }
 }
 
@@ -915,7 +1229,7 @@ static void process_frame()
             if ((millis() - stepStartMs) >= ENROLL_FACE_TIMEOUT_MS) {
                 // Hết giờ chờ, nhắc lại bước hiện tại
                 stepStartMs = millis();
-                Serial1.printf("%s\n", ENROLL_STEPS[enrollStep]);
+                linkSend(ENROLL_STEPS[enrollStep]);
                 Serial.printf("[ENROLL] Timeout, re-prompt step %d\n", enrollStep + 1);
             }
         }
@@ -978,7 +1292,7 @@ static void process_frame()
                 }
                 Serial.printf("[ENROLL] Done! ID=%d  total=%d  flash=%d\n",
                               enrolledId, recognizer.get_enrolled_id_num(), persisted);
-                Serial1.printf("ENROLLED:%d\n", enrolledId);
+                linkSendf("ENROLLED:%d", enrolledId);
                 record_event("ENROLLED", enrolledId);
                 appState     = STATE_IDLE;
                 enrollStep   = 0;
@@ -992,7 +1306,7 @@ static void process_frame()
 
             enrollStep++;
             stepStartMs = millis();
-            Serial1.printf("%s\n", ENROLL_STEPS[enrollStep]);
+            linkSend(ENROLL_STEPS[enrollStep]);
             Serial.printf("[ENROLL] Step 2/%d → %s\n", ENROLL_TOTAL_STEPS, ENROLL_STEPS[enrollStep]);
         }
         else {
@@ -1011,7 +1325,7 @@ static void process_frame()
                 }
                 Serial.printf("[ENROLL] Done! ID=%d  total=%d  flash=%d\n",
                               enrolledId, recognizer.get_enrolled_id_num(), persisted);
-                Serial1.printf("ENROLLED:%d\n", enrolledId);
+                linkSendf("ENROLLED:%d", enrolledId);
                 record_event("ENROLLED", enrolledId);
                 appState     = STATE_IDLE;
                 enrollStep   = 0;
@@ -1023,7 +1337,7 @@ static void process_frame()
             else {
                 enrollStep++;
                 stepStartMs = millis();
-                Serial1.printf("%s\n", ENROLL_STEPS[enrollStep]);
+                linkSend(ENROLL_STEPS[enrollStep]);
                 Serial.printf("[ENROLL] Step %d/%d → %s\n",
                               enrollStep + 1, ENROLL_TOTAL_STEPS, ENROLL_STEPS[enrollStep]);
             }
@@ -1085,7 +1399,7 @@ static void process_frame()
                 matchCount   = 0;
                 lastMatchId  = -1;
                 lastOpenMs   = now;
-                Serial1.printf("OPEN:%d\n", res.id);
+                linkSendf("OPEN:%d", res.id);
                 record_event("OPEN", res.id, res.similarity);
                 Serial.printf("[RECOG] CONFIRMED  id=%d  sim=%.3f\n",
                               res.id, res.similarity);
@@ -1114,14 +1428,14 @@ static void process_frame()
             if (failureCount >= MAX_FAILURES) {
                 failureCount   = 0;
                 lockoutUntilMs = now + LOCKOUT_DURATION_MS;
-                Serial1.printf("LOCKOUT:%lu\n", LOCKOUT_DURATION_MS);
+                linkSendf("LOCKOUT:%lu", LOCKOUT_DURATION_MS);
                 record_event("LOCKOUT", -1, res.similarity);
                 Serial.printf("[SECURITY] LOCKOUT for %lu ms\n", LOCKOUT_DURATION_MS);
 
                 // Gửi LOCKOUT_CLEAR sau khi hết thời gian (dùng một lần trigger)
                 // — được xử lý bởi lockout_check() trong loop()
             } else {
-                Serial1.println("DENIED");
+                linkSend("DENIED");
                 record_event("DENIED", -1, res.similarity);
             }
         }
@@ -1147,8 +1461,12 @@ void setup()
 
     // UART tới STM32
     Serial1.begin(STM32_BAUD, SERIAL_8N1, STM32_RX_PIN, STM32_TX_PIN);
-    rxBuf.reserve(32);
-    Serial1.println("BOOTING");
+    rxBuf.reserve(RX_BUF_MAX_LEN);
+    linkSecureActive = false;
+    linkTxSeq = 1U;
+    linkRxSeq = 0U;
+    linkRxSynced = false;
+    linkSendPlain("BOOTING");
 
     // Khởi tạo camera
     cameraReady = camera_init();
@@ -1174,7 +1492,7 @@ void setup()
 
     delay(300);
     if (cameraReady) {
-        send_status();
+        send_status(true);
     }
 }
 
@@ -1188,7 +1506,7 @@ void loop()
         failureCount   = 0;
         matchCount     = 0;
         lastMatchId    = -1;
-        Serial1.println("LOCKOUT_CLEAR");
+        linkSend("LOCKOUT_CLEAR");
         Serial.println("[SECURITY] Lockout cleared");
     }
 
@@ -1196,8 +1514,11 @@ void loop()
     while (Serial1.available()) {
         char c = (char)Serial1.read();
         if (c == '\n') {
+            char decoded[LINK_CRYPT_MAX_LEN + 1U];
             rxBuf.trim();
-            if (rxBuf.length() > 0) process_cmd(rxBuf);
+            if (rxBuf.length() > 0 && linkDecodeLine(rxBuf, decoded, sizeof(decoded))) {
+                process_cmd(String(decoded));
+            }
             rxBuf = "";
         } else if (rxBuf.length() >= RX_BUF_MAX_LEN) {
             /* Command too long — discard and log */
@@ -1217,7 +1538,7 @@ void loop()
     if (!cameraReady) {
         if ((millis() - lastCamFailTxMs) >= 1000U) {
             lastCamFailTxMs = millis();
-            Serial1.printf("CAM_FAIL:%d\n", (int)cameraInitErr);
+            linkSendf("CAM_FAIL:%d", (int)cameraInitErr);
         }
         delay(10);
         return;
@@ -1226,7 +1547,7 @@ void loop()
     if (appState == STATE_IDLE &&
         (millis() - lastBeaconTxMs) >= AUTO_STATUS_BEACON_MS) {
         lastBeaconTxMs = millis();
-        send_status();
+        send_status(false);
     }
 
     /* Periodic health telemetry every 60 s — helps diagnose field issues */

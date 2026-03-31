@@ -86,6 +86,8 @@ void Error_Handler(void);
 #define TCK_GPIO_Port GPIOA
 #define RELAY_Pin GPIO_PIN_0
 #define RELAY_GPIO_Port GPIOB
+#define ESP32_RST_Pin GPIO_PIN_1
+#define ESP32_RST_GPIO_Port GPIOB
 #define OLED_SCL_Pin GPIO_PIN_6
 #define OLED_SCL_GPIO_Port GPIOB
 #define OLED_SDA_Pin GPIO_PIN_7
