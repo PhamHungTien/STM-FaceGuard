@@ -101,12 +101,12 @@
 \begin{singlespace}
 
 \begin{center}
-  {\large\bfseries Biểu đồ Gantt --- Kế hoạch thực hiện dự án}\\[0.2cm]
+  {\normalsize\bfseries Biểu đồ Gantt --- Kế hoạch thực hiện dự án}\\[0.15cm]
   {\normalsize\itshape Thời gian: 21/03/2026 -- 03/04/2026 \quad|\quad
   Ngày thuyết trình: 03/04/2026}
 \end{center}
 
-\vspace{0.5cm}
+\vspace{0.1cm}
 
 % slot 1--7  = Tuần 1: 21/03 -- 27/03/2026
 % slot 8--14 = Tuần 2: 28/03 -- 03/04/2026
@@ -116,25 +116,26 @@
     hgrid,
     vgrid,
     bar/.append style       = {fill=blue!35, rounded corners=2pt},
-    bar label font          = \small,
+    bar label font          = \scriptsize,
     group/.append style     = {fill=blue!65, rounded corners=2pt},
-    group label font        = \small\bfseries,
+    group label font        = \scriptsize\bfseries,
     milestone/.append style = {fill=red!70, shape=diamond, inner sep=3pt},
-    milestone label font    = \small\bfseries,
+    milestone label font    = \scriptsize\bfseries,
     title/.append style     = {fill=gray!15},
-    title label font        = \small\bfseries,
-    x unit          = 1.28cm,
-    y unit title    = 0.70cm,
-    y unit chart    = 0.75cm,
-    bar height      = 0.55,
-    group height    = 0.4,
-    bar label node/.append style = {align=left, text width=4.5cm},
+    title label font        = \scriptsize\bfseries,
+    x unit          = 1.18cm,
+    y unit title    = 0.64cm,
+    y unit chart    = 0.80cm,
+    bar height      = 0.46,
+    group height    = 0.40,
+    bar label node/.append style = {align=left, text width=5.2cm},
+    group label node/.append style = {align=left, text width=5.2cm},
     canvas/.append style    = {draw=gray!40}
 ]{1}{14}
 
   %% Tiêu đề tuần
-  \gantttitle{Tuan 1: 21.03--27.03}{7}
-  \gantttitle{Tuan 2: 28.03--03.04}{7} \\
+  \gantttitle{Tuần 1: 21.03--27.03}{7}
+  \gantttitle{Tuần 2: 28.03--03.04}{7} \\
   %% Tiêu đề ngày (T2--CN × 2 tuần)
   \gantttitle{T2}{1}\gantttitle{T3}{1}\gantttitle{T4}{1}\gantttitle{T5}{1}%
   \gantttitle{T6}{1}\gantttitle{T7}{1}\gantttitle{CN}{1}%
@@ -142,36 +143,36 @@
   \gantttitle{T6}{1}\gantttitle{T7}{1}\gantttitle{CN}{1} \\
 
   %% ── Giai đoạn 1 ─────────────────────────────────────────
-  \ganttgroup{1. Nghiên cứu va Lên kế hoạch}{1}{2} \\
-  \ganttbar{Doc tai lieu / datasheet MCU}{1}{1} \\
-  \ganttbar{Xac dinh kien truc Dual-MCU}{2}{2} \\
+  \ganttgroup{1. Nghiên cứu và Lên kế hoạch}{1}{2} \\
+  \ganttbar{Đọc tài liệu / datasheet MCU}{1}{1} \\
+  \ganttbar{Xác định kiến trúc Dual-MCU}{2}{2} \\
 
   %% ── Giai đoạn 2 ─────────────────────────────────────────
-  \ganttgroup{2. Thiet ke phan cung}{2}{4} \\
-  \ganttbar{Ve so do ket noi (schematic)}{2}{3} \\
-  \ganttbar{Lap rap va kiem tra mach}{3}{4} \\
+  \ganttgroup{2. Thiết kế phần cứng}{2}{4} \\
+  \ganttbar{Vẽ sơ đồ kết nối (schematic)}{2}{3} \\
+  \ganttbar{Lắp ráp và kiểm tra mạch}{3}{4} \\
 
   %% ── Giai đoạn 3 ─────────────────────────────────────────
-  \ganttgroup{3. Lap trinh phan mem}{3}{9} \\
-  \ganttbar{Firmware STM32 va ngoai vi}{3}{6} \\
-  \ganttbar{Firmware ESP32-S3 va FR}{5}{8} \\
-  \ganttbar{Tich hop Dual-MCU va debug}{8}{9} \\
+  \ganttgroup{3. Lập trình phần mềm}{3}{9} \\
+  \ganttbar{Firmware STM32 và ngoại vi}{3}{6} \\
+  \ganttbar{Firmware ESP32-S3 và nhận diện}{5}{8} \\
+  \ganttbar{Tích hợp Dual-MCU và debug}{8}{9} \\
 
   %% ── Giai đoạn 4 ─────────────────────────────────────────
-  \ganttgroup{4. Kiem thu va Thuc nghiem}{9}{11} \\
-  \ganttbar{Do do chinh xac nhan dien}{9}{10} \\
-  \ganttbar{Kiem thu thoi gian phan hoi}{10}{11} \\
+  \ganttgroup{4. Kiểm thử và Thực nghiệm}{9}{11} \\
+  \ganttbar{Đo độ chính xác nhận diện}{9}{10} \\
+  \ganttbar{Kiểm thử thời gian phản hồi}{10}{11} \\
 
   %% ── Giai đoạn 5 ─────────────────────────────────────────
-  \ganttgroup{5. Hoan thien tai lieu}{10}{14} \\
-  \ganttbar{Viet tieu luan (cac chuong)}{10}{12} \\
-  \ganttbar{Hoan thien -- chuan bi slide}{12}{13} \\
-  \ganttbar{Review va nop bai}{13}{14} \\
+  \ganttgroup{5. Hoàn thiện tài liệu}{10}{14} \\
+  \ganttbar{Viết tiểu luận (các chương)}{10}{12} \\
+  \ganttbar{Hoàn thiện và chuẩn bị slide}{12}{13} \\
+  \ganttbar{Rà soát và nộp bài}{13}{14} \\
 
   %% ── Milestone ────────────────────────────────────────────
   \ganttmilestone[
-    milestone label node/.append style={right=8pt}
-  ]{Thuyet trinh 03.04.2026}{14}
+    milestone label node/.append style={right=8pt, align=left, text width=3.2cm}
+  ]{Thuyết trình 03.04.2026}{14}
 
 \end{ganttchart}
 \end{figure}

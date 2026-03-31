@@ -137,7 +137,7 @@ Giao tiếp giữa STM32 và ESP32-S3 sử dụng protocol UART tối giản. M�
           node[midway, below, font=\scriptsize] {8 data bits};
     \draw[<->, thin] (0.8,-1.1) -- ({1.6+8*0.9+0.9},-1.1)
           node[midway, below, font=\scriptsize]
-          {1 frame = 10 bit-times @ 115\,200 baud, xap xi 87 us/byte};
+          {1 frame = 10 bit-times @ 115\,200 baud, xấp xỉ 87 us/byte};
   \end{tikzpicture}}
   \caption{UART Bit Timing Diagram (ví dụ byte \texttt{0x4F} = ký tự `O'). Idle Line Detection kích hoạt khi đường truyền giữ mức HIGH liên tục sau bit STOP, đánh dấu kết thúc một gói tin hoàn chỉnh.}
   \label{fig:uart_timing}
