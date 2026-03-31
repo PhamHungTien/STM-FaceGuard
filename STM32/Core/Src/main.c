@@ -58,7 +58,8 @@ typedef enum {
 #define ESP32_SYNC_RETRY_MS   1000U  /* Periodic STATUS sync while link unknown  */
 
 #define UART1_BUF_SIZE          64U  /* ESP32 message receive buffer            */
-#define UART1_QUEUE_LEN          4U  /* Small queue for back-to-back UART lines */
+#define UART1_QUEUE_LEN          8U  /* Queue multiple ESP32 lines per DMA burst */
+#define MAX_ENROLL_STEPS         5U
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -105,6 +106,7 @@ static uint8_t       esp32_ready     = 0;
 /* --- Enrolled face count (updated from ESP32 FACES/ENROLLED/DELETED msgs) --- */
 static uint8_t       enrolled_faces  = 0;
 static uint8_t       enroll_retry_count = 0;
+static uint8_t       enroll_total_steps = 1U;
 
 /* --- DELETE hold state (non-blocking) --- */
 static uint8_t       delete_hold_active = 0;
@@ -153,7 +155,9 @@ static void Note_ESP32_Traffic(void);
 static void Mark_ESP32_Alive(void);
 static void Mark_ESP32_Offline(void);
 static void ESP32_RequestStatus(uint8_t force);
+static void UART1_EnqueueLine(const char *line, uint16_t len);
 static uint8_t UART1_DequeueLine(char *out);
+static uint8_t Enroll_TotalForDisplay(uint8_t step);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -165,29 +169,23 @@ static uint8_t UART1_DequeueLine(char *out);
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
     if (huart->Instance == USART1) {
-        if (Size < ESP32_DMA_RX_SIZE) {
-            esp32_dma_rx_buf[Size] = '\0';
-        } else {
-            esp32_dma_rx_buf[ESP32_DMA_RX_SIZE - 1] = '\0';
-        }
-
+        uint16_t rx_len = (Size < ESP32_DMA_RX_SIZE) ? Size : (ESP32_DMA_RX_SIZE - 1U);
         char *ptr = (char *)esp32_dma_rx_buf;
-        for (uint16_t i = 0; i < Size; i++) {
+        uint16_t line_start = 0U;
+
+        ptr[rx_len] = '\0';
+
+        for (uint16_t i = 0; i < rx_len; i++) {
             if (ptr[i] == '\r' || ptr[i] == '\n') {
-                ptr[i] = '\0';
-                break;
+                if (i > line_start) {
+                    UART1_EnqueueLine(&ptr[line_start], (uint16_t)(i - line_start));
+                }
+                line_start = (uint16_t)(i + 1U);
             }
         }
 
-        if (strlen(ptr) > 0) {
-            uint8_t next_tail = (uint8_t)((uart1_queue_tail + 1U) % UART1_QUEUE_LEN);
-            if (next_tail != uart1_queue_head) {
-                strncpy(uart1_queue[uart1_queue_tail], ptr, UART1_BUF_SIZE - 1);
-                uart1_queue[uart1_queue_tail][UART1_BUF_SIZE - 1] = '\0';
-                uart1_queue_tail = next_tail;
-            } else {
-                uart1_queue_drops++;
-            }
+        if (rx_len > line_start) {
+            UART1_EnqueueLine(&ptr[line_start], (uint16_t)(rx_len - line_start));
         }
 
         HAL_UARTEx_ReceiveToIdle_DMA(&huart1, esp32_dma_rx_buf, ESP32_DMA_RX_SIZE);
@@ -362,6 +360,25 @@ static void ESP32_RequestStatus(uint8_t force)
     HAL_UART_Transmit(&huart1, (uint8_t *)"STATUS\n", 7, 100);
 }
 
+static void UART1_EnqueueLine(const char *line, uint16_t len)
+{
+    uint8_t next_tail;
+    uint16_t copy_len;
+
+    if (len == 0U) return;
+
+    next_tail = (uint8_t)((uart1_queue_tail + 1U) % UART1_QUEUE_LEN);
+    if (next_tail == uart1_queue_head) {
+        uart1_queue_drops++;
+        return;
+    }
+
+    copy_len = (len < (UART1_BUF_SIZE - 1U)) ? len : (UART1_BUF_SIZE - 1U);
+    memcpy(uart1_queue[uart1_queue_tail], line, copy_len);
+    uart1_queue[uart1_queue_tail][copy_len] = '\0';
+    uart1_queue_tail = next_tail;
+}
+
 static uint8_t UART1_DequeueLine(char *out)
 {
     uint8_t has_line = 0;
@@ -373,6 +390,17 @@ static uint8_t UART1_DequeueLine(char *out)
     }
     __enable_irq();
     return has_line;
+}
+
+static uint8_t Enroll_TotalForDisplay(uint8_t step)
+{
+    uint8_t total = enroll_total_steps;
+
+    if (total < 1U) total = 1U;
+    if (total > MAX_ENROLL_STEPS) total = MAX_ENROLL_STEPS;
+    if (step > total) total = step;
+
+    return total;
 }
 
 /* -----------------------------------------------------------------------
@@ -429,6 +457,13 @@ static void Parse_ESP32_Msg(const char *msg)
         }
         if (sys_state == SYS_IDLE) Show_Ready();
 
+    } else if (strncmp(msg, "ENROLL_CFG:", 11) == 0) {
+        Mark_ESP32_Alive();
+        uint8_t steps = (uint8_t)atoi(msg + 11);
+        if (steps < 1U) steps = 1U;
+        if (steps > MAX_ENROLL_STEPS) steps = MAX_ENROLL_STEPS;
+        enroll_total_steps = steps;
+
     } else if (strcmp(msg, "DB_FULL") == 0) {
         Mark_ESP32_Alive();
         sys_state = SYS_RESULT; state_tick = HAL_GetTick();
@@ -436,23 +471,33 @@ static void Parse_ESP32_Msg(const char *msg)
 
     } else if (strcmp(msg, "ENROLL_FRONT") == 0) {
         Mark_ESP32_Alive(); enroll_retry_count = 0; sys_state = SYS_ENROLLING;
-        state_tick = HAL_GetTick(); SSD1306_ShowEnrollStep(1, 5); DFPlayer_Play(DFP_TRACK_ENROLL_FRONT);
+        state_tick = HAL_GetTick();
+        SSD1306_ShowEnrollStep(1, Enroll_TotalForDisplay(1U));
+        DFPlayer_Play(DFP_TRACK_ENROLL_FRONT);
 
     } else if (strcmp(msg, "ENROLL_LEFT") == 0) {
         Mark_ESP32_Alive(); enroll_retry_count = 0; sys_state = SYS_ENROLLING;
-        state_tick = HAL_GetTick(); SSD1306_ShowEnrollStep(2, 5); DFPlayer_Play(DFP_TRACK_ENROLL_LEFT);
+        state_tick = HAL_GetTick();
+        SSD1306_ShowEnrollStep(2, Enroll_TotalForDisplay(2U));
+        DFPlayer_Play(DFP_TRACK_ENROLL_LEFT);
 
     } else if (strcmp(msg, "ENROLL_RIGHT") == 0) {
         Mark_ESP32_Alive(); enroll_retry_count = 0; sys_state = SYS_ENROLLING;
-        state_tick = HAL_GetTick(); SSD1306_ShowEnrollStep(3, 5); DFPlayer_Play(DFP_TRACK_ENROLL_RIGHT);
+        state_tick = HAL_GetTick();
+        SSD1306_ShowEnrollStep(3, Enroll_TotalForDisplay(3U));
+        DFPlayer_Play(DFP_TRACK_ENROLL_RIGHT);
 
     } else if (strcmp(msg, "ENROLL_UP") == 0) {
         Mark_ESP32_Alive(); enroll_retry_count = 0; sys_state = SYS_ENROLLING;
-        state_tick = HAL_GetTick(); SSD1306_ShowEnrollStep(4, 5); DFPlayer_Play(DFP_TRACK_ENROLL_UP);
+        state_tick = HAL_GetTick();
+        SSD1306_ShowEnrollStep(4, Enroll_TotalForDisplay(4U));
+        DFPlayer_Play(DFP_TRACK_ENROLL_UP);
 
     } else if (strcmp(msg, "ENROLL_DOWN") == 0) {
         Mark_ESP32_Alive(); enroll_retry_count = 0; sys_state = SYS_ENROLLING;
-        state_tick = HAL_GetTick(); SSD1306_ShowEnrollStep(5, 5); DFPlayer_Play(DFP_TRACK_ENROLL_DOWN);
+        state_tick = HAL_GetTick();
+        SSD1306_ShowEnrollStep(5, Enroll_TotalForDisplay(5U));
+        DFPlayer_Play(DFP_TRACK_ENROLL_DOWN);
 
     } else if (strncmp(msg, "LOCKOUT:", 8) == 0 || strcmp(msg, "LOCKOUT") == 0) {
         Mark_ESP32_Alive();
@@ -523,6 +568,8 @@ static void App_Loop(void)
         now = HAL_GetTick();
     }
 
+    Button_PollPress(&btn_exit_armed, &btn_exit_flag, &btn_exit_tick,
+                     BTN_EXIT_GPIO_Port, BTN_EXIT_Pin, now);
     Button_PollPress(&btn_enroll_armed, &btn_enroll_flag, &btn_enroll_tick,
                      BTN_ENROLL_GPIO_Port, BTN_ENROLL_Pin, now);
     Button_PollPress(&btn_delete_armed, &btn_delete_flag, &btn_delete_tick,

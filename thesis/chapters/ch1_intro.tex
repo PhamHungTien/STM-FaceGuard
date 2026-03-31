@@ -31,13 +31,13 @@ Tiểu luận này đặt ra các mục tiêu cụ thể sau:
   \item \textbf{Phần cứng:}
     \begin{itemize}
       \item Vi điều khiển: STM32F411CEU6 (Black Pill), ESP32-S3-N16R8
-      \item Ngoại vi: Camera OV3660, màn hình OLED SSD1306 (128$\times$64 px), relay 5~V, solenoid 12~V, module DFPlayer Mini, loa 8~$\Omega$
-      \item Nút nhấn: 3 nút (Enroll, Delete, Exit)
+      \item Ngoại vi: Camera OV3660, màn hình OLED SSD1306 (128$\times$64 px), module relay 1 kênh 5~V, khóa SM1373 12~V, module DFPlayer Mini, loa 8~$\Omega$
+      \item Nút nhấn: 3 nút rời (Enroll, Delete, Exit)
     \end{itemize}
   \item \textbf{Phần mềm:}
     \begin{itemize}
       \item STM32: STM32CubeIDE, thư viện HAL, không dùng RTOS
-      \item ESP32-S3: ESP-IDF (FreeRTOS), thư viện ESP-WHO cho nhận diện khuôn mặt
+      \item ESP32-S3: Arduino IDE / Arduino core for ESP32, thư viện ESP-WHO, \texttt{esp\_camera} và UART văn bản với STM32
     \end{itemize}
   \item \textbf{Giao thức:} UART (115200 baud), I2C Fast-mode (400~kHz)
   \item \textbf{Ngoài phạm vi:} Kết nối internet, lưu trữ đám mây, ứng dụng di động

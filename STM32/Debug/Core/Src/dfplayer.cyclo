@@ -1,6 +1,7 @@
-../Core/Src/dfplayer.c:7:17:dfp_checksum	2
-../Core/Src/dfplayer.c:14:13:dfp_send	1
-../Core/Src/dfplayer.c:33:6:DFPlayer_Init	1
-../Core/Src/dfplayer.c:42:6:DFPlayer_Play	1
-../Core/Src/dfplayer.c:47:6:DFPlayer_Stop	1
-../Core/Src/dfplayer.c:52:6:DFPlayer_SetVolume	2
+../Core/Src/dfplayer.c:15:17:dfp_checksum	2
+../Core/Src/dfplayer.c:27:13:dfp_wait_gap	3
+../Core/Src/dfplayer.c:41:26:dfp_send	2
+../Core/Src/dfplayer.c:68:6:DFPlayer_Init	1
+../Core/Src/dfplayer.c:86:6:DFPlayer_Play	6
+../Core/Src/dfplayer.c:105:6:DFPlayer_Stop	2
+../Core/Src/dfplayer.c:112:6:DFPlayer_SetVolume	3

@@ -17,7 +17,7 @@ Luồng hoạt động cơ bản như sau:
   \item ESP32-S3 xử lý ảnh, phát hiện và nhận diện khuôn mặt.
   \item Kết quả nhận diện được gửi sang STM32F411CEU6 qua UART.
   \item STM32F411CEU6 điều khiển relay mở khóa, cập nhật OLED và phát âm thanh phản hồi.
-  \item Người dùng tương tác qua 3 nút nhấn để đăng ký hoặc xóa khuôn mặt.
+  \item Người dùng tương tác qua 3 nút nhấn rời bên ngoài để đăng ký, xóa dữ liệu hoặc mở cửa từ bên trong.
 \end{enumerate}
 
 \section{Danh sách linh kiện}
@@ -39,10 +39,10 @@ Luồng hoạt động cơ bản như sau:
     4 & Màn hình OLED        & SSD1306, 128$\times$64~px & Hiển thị trạng thái, thông báo \\
     5 & Module âm thanh      & DFPlayer Mini             & Phát file MP3 từ thẻ micro-SD \\
     6 & Loa                  & 8~$\Omega$, 3~W           & Phát thông báo âm thanh \\
-    7 & Khóa solenoid        & 12~V DC                   & Đóng/mở khóa \\
-    8 & Module relay         & 5~V, 1 kênh               & Đệm công suất cho solenoid \\
-    9 & Nút nhấn             & Tact switch (3 cái)       & Enroll, Delete, Exit \\
-    10 & Nguồn                & 12~V/2~A adapter          & Cấp điện toàn hệ thống \\
+    7 & Khóa cửa điện tử     & SM1373 V3, 12~V DC        & Đóng/mở khóa cửa \\
+    8 & Module relay         & 5~V, 1 kênh, 6 chân (\texttt{DC+}, \texttt{DC-}, \texttt{IN1} / \texttt{NO}, \texttt{COM}, \texttt{NC}) & Nhận tín hiệu từ STM32 và đóng/ngắt đường 12~V ngoài cấp cho khóa \\
+    9 & Nút nhấn rời         & Tact switch (3 cái)       & Enroll, Delete, Exit \\
+    10 & Nguồn cấp            & Rail 5~V + nguồn 12~V ngoài & 5~V cấp khối điều khiển; 12~V chỉ cấp riêng cho khóa \\
     \bottomrule
   \end{tabularx}
 \end{table}
@@ -66,7 +66,7 @@ Mặc dù nhiều các lựa chọn thay thế tồn tại đối với mỗi th
 
 \textbf{Lựa chọn thay thế đã xem xét:}
 \begin{itemize}
-  \item \textit{STM32L476}: Chỉ có 3 kênh UART trong khi dự án cần 3 kênh UART riêng biệt (ESP32-S3, ST-Link, DFPlayer Mini) với tốc độ baud khác nhau; ngoài ra tối ưu tiêu thụ pin không phù hợp vì hệ thống dùng nguồn adapter cố định 12~V/2~A.
+  \item \textit{STM32L476}: Chỉ có 3 kênh UART trong khi dự án cần 3 kênh UART riêng biệt (ESP32-S3, ST-Link, DFPlayer Mini) với tốc độ baud khác nhau; ngoài ra tối ưu tiêu thụ pin không phải là ưu tiên chính vì hệ thống dùng rail 5~V cố định cho khối điều khiển và nguồn 12~V riêng cho khóa.
   \item \textit{STM32H743}: Quá mạnh (480 MHz dual-core), chi phí cao, phức tạp - chỉ cần 100 MHz.
   \item \textit{PIC32MX}: Ít tương thích với công cụ phát triển hiện đại, cộng đồng nhỏ hơn.
   \item \textit{Raspberry Pi Pico (RP2040)}: Không đủ UART, không có I2C đủ số lượng, thiếu tính ứng dụng.
@@ -78,10 +78,10 @@ Mặc dù nhiều các lựa chọn thay thế tồn tại đối với mỗi th
 \begin{itemize}
   \item \textbf{Dual-core CPU}: 2 lõi 240 MHz cung cấp sức mạnh tính toán đủ cho TensorFlow Lite Micro inference (MSR01 + MNP01 models $\approx$ 100 MFLOPS).
   \item \textbf{Camera tích hợp}: Hỗ trợ giao diện DVP (Digital Video Port) song song, loại bỏ nhu cầu cầu nối camera riêng. OV3660 chạy trên 8 chân dữ liệu + 4 chân điều khiển không cần UART/SPI overhead.
-  \item \textbf{Bộ nhớ}: 16 MB flash + 8 MB PSRAM cung cấp không gian cho 2 model hóa khuôn mặt (tổng $\approx$ 3 MB) + bộ nhớ đệm frame (QVGA 320×240×3 = 230 KB).
-  \item \textbf{Tính năng}: UART, I2C, GPIO đầy đủ; WiFi6 tích hợp (khả năng mở rộng cho cloud logging).
+  \item \textbf{Bộ nhớ}: 16 MB flash + 8 MB OPI PSRAM cung cấp không gian cho firmware nhận diện, cơ sở dữ liệu khuôn mặt trong NVS flash và bộ đệm ảnh RGB888 240$\times$240$\times$3 $\approx$ 173 KB.
+  \item \textbf{Tính năng}: UART, I2C, GPIO đầy đủ; Wi-Fi 2.4 GHz tích hợp (khả năng mở rộng cho preview hoặc logging nội bộ).
   \item \textbf{Hỗ trợ TensorFlow}: esp-who framework, TensorFlow Lite Micro, công cụ chuyên dụng cho nhận diện khuôn mặt.
-  \item \textbf{Kiến trúc phân phối tác vụ}: FreeRTOS cho phép tách biệt việc nhận lệnh từ STM32 (Task UART), xử lý camera (Task Camera), chạy inference (Task ML), cập nhật hiển thị (Task I2C) trên các nhân độc lập.
+  \item \textbf{Phù hợp với firmware hiện tại}: Board được nạp theo cấu hình Arduino ``ESP32S3 Dev Module'' với Flash 16 MB, Partition ``Huge APP'', PSRAM OPI và UART riêng GPIO19/GPIO20 tới STM32; không cần tạo thêm các task ứng dụng thủ công để đạt yêu cầu đồ án.
 \end{itemize}
 
 \textbf{Lựa chọn thay thế đã xem xét:}
@@ -97,7 +97,7 @@ Mặc dù nhiều các lựa chọn thay thế tồn tại đối với mỗi th
 \textbf{Lý do chọn OV3660:}
 \begin{itemize}
   \item \textbf{Giao diện DVP}: 8 chân dữ liệu song song + 4 chân điều khiển (PCLK, HSYNC, VSYNC, XCLK) - không gây cạn kiệt GPIO của ESP32.
-  \item \textbf{Độ phân giải}: 3 MP (2048×1536) có thể downscale thành QVGA (320×240) để giảm tải tính toán khi vẫn giữ được độ chi tiết khuôn mặt.
+  \item \textbf{Độ phân giải}: 3 MP (2048×1536) cho phép firmware chọn mức xử lý 240$\times$240 để tối ưu hóa nhận diện khuôn mặt theo thời gian thực mà vẫn giữ đủ chi tiết vùng mặt.
   \item \textbf{Chi phí}: Tương đương OV2640 nhưng độ phân giải cao hơn, tương thích với esp-idf camera driver.
   \item \textbf{OV-SCCB protocol}: Cấu hình camera qua I2C (shared với SSD1306) - cùng bus logic.
   \item \textbf{Tuổi thọ module}: Phổ biến, sẵn có supplier, hình ảnh debug tốt trên diễn đàn cộng đồng.
@@ -168,7 +168,7 @@ Thay vì lựa chọn một vi điều khiển ``super-MCU'' chứa cả AI lẫ
 
 \subsection{STM32F411CEU6 (Black Pill)}
 
-Toàn bộ chân GPIO, UART và I2C của STM32F411CEU6 được phân công theo \cref{tab:pinout_stm32}. Các nút nhấn được cấu hình \textit{active-low}: tín hiệu mức cao khi không nhấn (pull-up nội), mức thấp khi nhấn, ngắt kích hoạt ở cạnh xuống (falling edge).
+Toàn bộ chân GPIO, UART và I2C của STM32F411CEU6 được phân công theo \cref{tab:pinout_stm32}. Ba nút nhấn rời bên ngoài được cấu hình \textit{active-low}: tín hiệu mức cao khi không nhấn (pull-up nội), mức thấp khi nhấn, ngắt kích hoạt ở cạnh xuống (falling edge).
 
 \begin{table}[H]
   \centering
@@ -178,11 +178,11 @@ Toàn bộ chân GPIO, UART và I2C của STM32F411CEU6 được phân công the
     \toprule
     \textbf{Chân MCU} & \textbf{Tín hiệu} & \textbf{Cấu hình} & \textbf{Kết nối đến} \\
     \midrule
-    PA0  & BTN\_ENROLL & EXTI0, Pull-up nội       & Nút đăng ký khuôn mặt \\
-    PA1  & BTN\_DELETE & EXTI1, Pull-up nội       & Nút xóa tất cả \\
-    PC13 & BTN\_EXIT   & EXTI13, Pull-up nội      & Nút KEY trên Black Pill (Mở cửa) \\
+    PA0  & BTN\_ENROLL & EXTI0, Pull-up nội       & Nút ENROLL ngoài \\
+    PA1  & BTN\_DELETE & EXTI1, Pull-up nội       & Nút DELETE ngoài \\
+    PC13 & BTN\_EXIT   & EXTI13, Pull-up nội      & Nút EXIT ngoài \\
     PA5  & LD2         & GPIO Output, Push-Pull   & LED ngoài (tùy chọn) \\
-    PB0  & RELAY       & GPIO Output, Push-Pull   & Relay $\to$ Solenoid 12~V \\
+    PB0  & RELAY       & GPIO Output, Push-Pull   & Chân \texttt{IN1} của module relay 5~V \\
     PA9  & USART1\_TX  & AF7, 115200~baud         & $\to$ ESP32-S3 RXD \\
     PA10 & USART1\_RX  & AF7, 115200~baud, \textbf{DMA} & $\leftarrow$ ESP32-S3 TXD \\
     PA2  & USART2\_TX  & AF7, 38400~baud          & ST-Link Virtual COM (debug) \\
@@ -209,31 +209,35 @@ ESP32-S3 chịu trách nhiệm giao tiếp với camera qua giao diện song son
     \midrule
     GPIO19 & UART1\_TX & $\to$ STM32 USART1\_RX (PA10) \\
     GPIO20 & UART1\_RX & $\leftarrow$ STM32 USART1\_TX (PA9) \\
-    GPIO4--GPIO11 & CAM\_DATA[7:0] & OV3660 Data Bus \\
-    GPIO15 & CAM\_PCLK  & OV3660 PCLK \\
-    GPIO16 & CAM\_VSYNC & OV3660 VSYNC \\
-    GPIO14 & CAM\_HREF  & OV3660 HREF \\
-    GPIO13 & CAM\_XCLK  & OV3660 XCLK (clock ra camera) \\
-    GPIO1  & CAM\_SDA   & OV3660 SCCB SDA \\
-    GPIO2  & CAM\_SCL   & OV3660 SCCB SCL \\
+    GPIO11, 9, 8, 10, 12, 18, 17, 16 & CAM\_DATA[0:7] & OV3660 Data Bus \\
+    GPIO15 & CAM\_XCLK  & OV3660 XCLK (clock ra camera) \\
+    GPIO13 & CAM\_PCLK  & OV3660 PCLK \\
+    GPIO6  & CAM\_VSYNC & OV3660 VSYNC \\
+    GPIO7  & CAM\_HREF  & OV3660 HREF \\
+    GPIO4  & CAM\_SDA   & OV3660 SCCB SDA \\
+    GPIO5  & CAM\_SCL   & OV3660 SCCB SCL \\
+    GPIO47 & FACE\_LIGHT & LED trợ sáng khuôn mặt \\
     \bottomrule
   \end{tabular}
 \end{table}
 
+\noindent Trên biến thể board đang dùng, cặp chân \texttt{TX/RX} ở header ngoài được giữ lại cho nạp chương trình và Serial Monitor. Vì vậy, UART làm việc với STM32 được chuyển sang cặp \texttt{GPIO19/GPIO20} theo đúng firmware hiện hành.
+
 \section{Thiết kế nguồn điện}
 \label{sec:power}
 
-Hệ thống sử dụng một nguồn adapter 12~V/2~A duy nhất và phân phối điện nội bộ theo ba mức điện áp:
+Hệ thống hiện tại sử dụng hai đường cấp nguồn tách biệt: một rail 5~V chung cho khối điều khiển và một nguồn 12~V ngoài riêng cho khóa. Cách bố trí này phản ánh đúng cấu hình nối dây thực tế của mô hình.
 
 \begin{itemize}
-  \item \textbf{12~V DC}: Cấp trực tiếp cho cuộn dây solenoid qua tiếp điểm NO của relay. Dòng định mức solenoid khoảng 0,5~A.
-  \item \textbf{5~V DC}: Tạo ra bằng module hạ áp DC-DC từ 12~V. Cấp cho cuộn relay (kích relay qua transistor BJT điều khiển bởi GPIO STM32) và module DFPlayer Mini.
-  \item \textbf{3{,}3~V DC}: LDO tích hợp trên Black Pill tạo ra từ 5~V (qua chân 5V), cấp cho STM32F411CEU6 và OLED SSD1306. ESP32-S3 có LDO riêng trên module dev board.
+  \item \textbf{Rail 5~V DC chung}: Cấp vào chân 5V của Black Pill, chân 5V của ESP32-S3, VCC của OLED SSD1306, VCC của DFPlayer Mini và chân \texttt{DC+} của module relay. Thẻ micro-SD được cấp nguồn gián tiếp qua DFPlayer Mini nên không cần dây nguồn riêng.
+  \item \textbf{GND 5~V chung}: Tất cả phần tử của khối điều khiển (STM32, ESP32-S3, OLED, DFPlayer, relay module) sử dụng cùng một điểm tham chiếu mass để bảo đảm giao tiếp UART/I2C ổn định.
+  \item \textbf{Nguồn 12~V ngoài}: Chỉ cấp riêng cho khóa SM1373 thông qua tiếp điểm \texttt{COM}--\texttt{NO} của module relay. Cực âm 12~V nối trực tiếp về dây âm của khóa.
+  \item \textbf{Mức logic 3{,}3~V}: Chỉ tồn tại ở tầng tín hiệu nội bộ của STM32 và ESP32-S3; các đường UART và I2C vẫn hoạt động ở mức logic 3{,}3~V dù nhiều module được cấp VCC 5~V.
 \end{itemize}
 
 Bảng phân phối và tiêu thụ công suất chi tiết từng module được trình bày trong \cref{tab:power_usage} (xem \cref{app:schematic}).
 
-Diode bảo vệ ngược chiều được lắp song song với cuộn solenoid để hấp thụ xung điện áp ngược (flyback diode) khi relay ngắt, bảo vệ các linh kiện khác trên mạch.
+Do relay module loại 6 chân đã tích hợp sẵn mạch kích và diode bảo vệ nội bộ, phần mạch ngoài chỉ cần bổ sung diode mắc song song với khóa SM1373 để hấp thụ xung điện áp ngược khi ngắt điện.
 
 \section{Sơ đồ nguyên lý}
 \label{sec:schematic}

@@ -63,8 +63,8 @@ all: main-build
 main-build: STM-FaceGuard.elf secondary-outputs
 
 # Tool invocations
-STM-FaceGuard.elf STM-FaceGuard.map: $(OBJS) $(USER_OBJS) /Users/phamhungtien/Documents/STM-FaceGuard/STM-FaceGuard/STM32/STM32F411CEUX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "STM-FaceGuard.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"/Users/phamhungtien/Documents/STM-FaceGuard/STM-FaceGuard/STM32/STM32F411CEUX_FLASH.ld" --specs=nosys.specs -Wl,-Map="STM-FaceGuard.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+STM-FaceGuard.elf STM-FaceGuard.map: $(OBJS) $(USER_OBJS) /Users/phamhungtien/Documents/STM-FaceGuard/STM32/STM32F411CEUX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "STM-FaceGuard.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"/Users/phamhungtien/Documents/STM-FaceGuard/STM32/STM32F411CEUX_FLASH.ld" --specs=nosys.specs -Wl,-Map="STM-FaceGuard.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 

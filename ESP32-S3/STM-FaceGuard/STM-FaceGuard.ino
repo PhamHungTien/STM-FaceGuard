@@ -137,9 +137,14 @@
 // ── Lockout: khoá sau N lần thất bại liên tiếp ────────────────────────────────
 #define MAX_FAILURES                 5
 #define LOCKOUT_DURATION_MS  (5UL * 60UL * 1000UL)   // 5 phút
+#define ENROLL_PROMPT_COUNT          5
+
+#if (ENROLL_TOTAL_STEPS < 1) || (ENROLL_TOTAL_STEPS > ENROLL_PROMPT_COUNT)
+#error "ENROLL_TOTAL_STEPS must be between 1 and 5"
+#endif
 
 // ── Chuỗi prompt gửi STM32 khi đăng ký ───────────────────────────────────────
-static const char * const ENROLL_STEPS[ENROLL_TOTAL_STEPS] = {
+static const char * const ENROLL_STEPS[ENROLL_PROMPT_COUNT] = {
     "ENROLL_FRONT",   // bước 1: nhìn thẳng
     "ENROLL_LEFT",    // bước 2: quay trái
     "ENROLL_RIGHT",   // bước 3: quay phải
@@ -789,6 +794,7 @@ static void send_status()
 
     Serial1.println("READY");
     Serial1.printf("FACES:%d\n", recognizer.get_enrolled_id_num());
+    Serial1.printf("ENROLL_CFG:%d\n", ENROLL_TOTAL_STEPS);
 
     if (lockoutUntilMs > now) {
         Serial1.println("LOCKOUT");
@@ -834,6 +840,7 @@ static void process_cmd(const String &cmd)
         matchCount   = 0;
         noMatchCount = 0;
         lastMatchId  = -1;
+        Serial1.printf("ENROLL_CFG:%d\n", ENROLL_TOTAL_STEPS);
         Serial1.printf("%s\n", ENROLL_STEPS[0]);
         Serial.printf("[ENROLL] Step 1/%d → %s\n", ENROLL_TOTAL_STEPS, ENROLL_STEPS[0]);
     }

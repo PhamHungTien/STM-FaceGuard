@@ -25,6 +25,8 @@ static void Parse_ESP32_Msg(const char *msg)
     else if (strcmp(msg, "READY")    == 0)  Mark_ESP32_Alive();
     else if (strncmp(msg, "FACES:", 6) == 0)
         enrolled_faces = (uint8_t)atoi(msg + 6);
+    else if (strncmp(msg, "ENROLL_CFG:", 11) == 0)
+        enroll_total_steps = (uint8_t)atoi(msg + 11);
     /* ... (xem them trong repository) */
 }
 \end{lstlisting}
@@ -51,37 +53,21 @@ if (res.id >= 0 && res.similarity >= RECOGNITION_THRESHOLD) {
 \section*{B.3 \quad Cấu hình UART DMA với Idle Line Detection --- STM32}
 
 \begin{lstlisting}[style=cstyle,
-  caption={Khởi tạo UART1 DMA và ngắt Idle Line (STM32F411CEU6)},
+  caption={Khởi tạo UART1 DMA theo chế độ Receive-to-Idle (STM32F411CEU6)},
   label={lst:uart_dma_init}]
-// STM32/Core/Src/main.c - init_uart_dma()
-#define UART1_DMA_BUF_SIZE 64
-static char uart1_dma_rx_buf[UART1_DMA_BUF_SIZE] = {0};
+// STM32/Core/Src/main.c - App_Init()
+#define ESP32_DMA_RX_SIZE 64U
+static uint8_t esp32_dma_rx_buf[ESP32_DMA_RX_SIZE];
 
-void init_uart_dma(void)
+static void App_Init(void)
 {
-    // Enable clock for DMA1
-    __HAL_RCC_DMA1_CLK_ENABLE();
+    HAL_NVIC_SetPriority(USART1_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(USART1_IRQn);
 
-    // Configure DMA handle for USART1 RX
-    DMA_HandleTypeDef hdma;
-    hdma.Instance = DMA1_Stream2;
-    hdma.Init.Channel = DMA_CHANNEL_0;
-    hdma.Init.Direction = DMA_PERIPH_TO_MEMORY;
-    hdma.Init.PeriphInc = DMA_PINC_DISABLE;
-    hdma.Init.MemInc = DMA_MINC_ENABLE;
-    hdma.Init.Mode = DMA_CIRCULAR;  // circular buffer
-    hdma.Init.Priority = DMA_PRIORITY_HIGH;
-    HAL_DMA_Init(&hdma);
-
-    // Link DMA to USART1
-    __HAL_LINKDMA(&huart1, hdmarx, hdma);
-
-    // Start DMA reception into rx buffer
-    HAL_UART_Receive_DMA(&huart1, (uint8_t *)uart1_dma_rx_buf,
-                         UART1_DMA_BUF_SIZE);
-
-    // Enable Idle Line interrupt
-    __HAL_UART_ENABLE_IT(&huart1, UART_IT_IDLE);
+    HAL_UARTEx_ReceiveToIdle_DMA(&huart1,
+                                 esp32_dma_rx_buf,
+                                 ESP32_DMA_RX_SIZE);
+    __HAL_DMA_DISABLE_IT(huart1.hdmarx, DMA_IT_HT);
 }
 \end{lstlisting}
 
@@ -95,16 +81,30 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart,
                                 uint16_t Size)
 {
     if (huart->Instance == USART1) {
-        // Size = bytes received (probed via DMA counter)
-        if (Size > 0 && Size < UART1_DMA_BUF_SIZE) {
-            // Copy DMA buffer into message queue
-            uart1_dma_rx_buf[Size] = '\0';  // null-terminate
-            enqueue_message(uart1_dma_rx_buf);  // push to queue
+        uint16_t rx_len = (Size < ESP32_DMA_RX_SIZE)
+                        ? Size : (ESP32_DMA_RX_SIZE - 1U);
+        char *ptr = (char *)esp32_dma_rx_buf;
+        uint16_t line_start = 0U;
 
-            // Restart DMA for next packet
-            HAL_UART_Receive_DMA(&huart1, (uint8_t *)uart1_dma_rx_buf,
-                                 UART1_DMA_BUF_SIZE);
+        ptr[rx_len] = '\0';
+        for (uint16_t i = 0; i < rx_len; i++) {
+            if (ptr[i] == '\r' || ptr[i] == '\n') {
+                if (i > line_start) {
+                    UART1_EnqueueLine(&ptr[line_start],
+                                      (uint16_t)(i - line_start));
+                }
+                line_start = (uint16_t)(i + 1U);
+            }
         }
+        if (rx_len > line_start) {
+            UART1_EnqueueLine(&ptr[line_start],
+                              (uint16_t)(rx_len - line_start));
+        }
+
+        HAL_UARTEx_ReceiveToIdle_DMA(&huart1,
+                                     esp32_dma_rx_buf,
+                                     ESP32_DMA_RX_SIZE);
+        __HAL_DMA_DISABLE_IT(huart1.hdmarx, DMA_IT_HT);
     }
 }
 \end{lstlisting}
@@ -114,56 +114,39 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart,
 \begin{lstlisting}[style=cstyle,
   caption={Main loop FSM xử lý sự kiện không chặn},
   label={lst:fsm_main_loop}]
-// STM32/Core/Src/main.c - main loop
-void main_loop(void)
+// STM32/Core/Src/main.c - App_Loop()
+static void App_Loop(void)
 {
-    uint32_t last_tick = 0;
-    while (1) {
-        uint32_t now = HAL_GetTick();
-        if (now - last_tick >= 50)  // tick FSM every 50 ms
-        {
-            // Process pending UART messages
-            if (!is_queue_empty(&uart1_queue)) {
-                char *msg = dequeue_message(&uart1_queue);
-                Parse_ESP32_Msg(msg);
-            }
+    uint32_t now = HAL_GetTick();
+    char uart1_msg[UART1_BUF_SIZE];
 
-            // Update state machine
-            fsm_update(&sys_state);
+    Button_PollPress(&btn_exit_armed, &btn_exit_flag, &btn_exit_tick,
+                     BTN_EXIT_GPIO_Port, BTN_EXIT_Pin, now);
+    Button_PollPress(&btn_enroll_armed, &btn_enroll_flag, &btn_enroll_tick,
+                     BTN_ENROLL_GPIO_Port, BTN_ENROLL_Pin, now);
+    Button_PollPress(&btn_delete_armed, &btn_delete_flag, &btn_delete_tick,
+                     BTN_DELETE_GPIO_Port, BTN_DELETE_Pin, now);
 
-            // Refresh OLED display (non-blocking)
-            update_oled(&sys_state);
-
-            // Update lockout countdown if locked
-            if (sys_state == SYS_LOCKED)
-                update_lockout_timer();
-            
-            last_tick = now;
-        }
+    while (UART1_DequeueLine(uart1_msg)) {
+        Parse_ESP32_Msg(uart1_msg);
     }
-}
 
-// FSM core function
-void fsm_update(SystemState_t *state)
-{
-    switch (*state) {
-        case SYS_IDLE:
-            if (button_enroll_pressed())
-                *state = SYS_ENROLLING;
-            break;
-        case SYS_ENROLLING:
-            if (enroll_timeout_expired())
-                *state = SYS_DENIED;
-            break;
+    if (!esp32_ready) {
+        ESP32_RequestStatus(0);
+    }
+
+    switch (sys_state) {
         case SYS_UNLOCKING:
-            if (relay_timeout_expired())  // 3-second relay hold
-                *state = SYS_IDLE;
+            if ((now - relay_open_tick) >= RELAY_OPEN_MS) {
+                Relay_Close();
+                Restore_LinkAwareIdle();
+            }
             break;
         case SYS_LOCKED:
-            if (lockout_expired())
-                *state = SYS_IDLE;
+            /* cap nhat dem nguoc OLED */
             break;
-        // ... (other states)
+        default:
+            break;
     }
 }
 \end{lstlisting}
@@ -174,21 +157,15 @@ void fsm_update(SystemState_t *state)
   caption={Independent Watchdog (IWDG) STM32F411 - ~5s timeout},
   label={lst:iwdg_config}]
 // STM32/Core/Src/main.c
-static void init_watchdog(void)
-{
-    // IWDG: LSI ~32 kHz, prescaler=32,
-    // reload=5000 -> timeout = (32000/32)*5000 ~ 5 seconds
-    hiwdg.Instance = IWDG;
-    hiwdg.Init.Prescaler = IWDG_PRESCALER_32;
-    hiwdg.Init.Reload = 5000;
-    HAL_IWDG_Init(&hiwdg);
-}
+IWDG->KR  = 0xCCCCU;      // Enable IWDG
+IWDG->KR  = 0x5555U;      // Unlock PR / RLR
+IWDG->PR  = IWDG_PR_PR_2; // Prescaler = 64
+IWDG->RLR = 2499U;        // ~5.0 s timeout with LSI ~32 kHz
+while (IWDG->SR != 0U) {}
+IWDG->KR  = 0xAAAAU;      // Reload counter
 
-// Call periodically in main loop
-void feed_watchdog(void)
-{
-    HAL_IWDG_Refresh(&hiwdg);  // feed / reset counter
-}
+// Trong App_Loop():
+IWDG->KR = 0xAAAAU;       // Feed watchdog moi vong lap
 \end{lstlisting}
 
 \begin{lstlisting}[style=cstyle,
@@ -197,21 +174,19 @@ void feed_watchdog(void)
 // ESP32-S3/STM-FaceGuard/STM-FaceGuard.ino - setup()
 void setup() {
     Serial.begin(115200);
-    Serial1.begin(115200, SERIAL_8N1, 20, 19);  // RX, TX
+    Serial1.begin(STM32_BAUD, SERIAL_8N1, STM32_RX_PIN, STM32_TX_PIN);
     
-    // Initialize camera module
-    if (!camera.init(config)) {
-        Serial.println("Camera init failed!");
-        // Do not reset; STM32 detects OFFLINE via READY timeout
+    cameraReady = camera_init();
+    if (!cameraReady) {
+        Serial.printf("Camera init failed: %d\n", (int)cameraInitErr);
     }
 
-    // Configure Task Watchdog Timer
     esp_task_wdt_init(30, true);  // 30 s timeout, panic on expire
-    esp_task_wdt_add(NULL);  // register current task
+    esp_task_wdt_add(NULL);       // register current task
 }
 
 void loop() {
-    // Face recognition pipeline
-    esp_task_wdt_reset();  // feed watchdog each iteration
+    esp_task_wdt_reset();
+    process_frame();
 }
 \end{lstlisting}
