@@ -69,7 +69,7 @@ Dự án đồ án môn học xây dựng hệ thống khóa cửa thông minh s
          ▼                     ▼                       ▼
 ┌──────────────────┐  ┌─────────────────────┐  ┌────────────────┐
 │ BC547 → LY2N     │  │   DFPlayer Mini     │  │  OLED SSD1306  │
-│ 12VDC Relay      │  │   + Loa 3070 3W     │  │  128×64 px     │
+│ 5VDC Relay       │  │   + Loa 3070 3W     │  │  128×64 px     │
 │      │           │  └─────────────────────┘  └────────────────┘
 │ SM1373 12V Lock  │
 └──────────────────┘
@@ -122,23 +122,22 @@ Dự án đồ án môn học xây dựng hệ thống khóa cửa thông minh s
 
 | STT | Linh kiện | Thông số | Vai trò |
 |-----|----------|----------|---------|
-| 11 | **Khóa SM1373 V3** | 12 V DC, Fail-Secure, ~0.5 A | Cơ cấu chốt khóa cửa |
-| 12 | **Relay LY2N 12VDC** | Cuộn hút 12 V, tiếp điểm 10 A | Đóng/ngắt 12 V cho SM1373 |
+| 11 | **Khóa SM1373 V3** | 12 V DC, Fail-Secure, ~0.5 A | Cơ cấu chốt khóa cửa, dùng nguồn 12V ngoài riêng |
+| 12 | **Relay LY2N 5VDC** | Cuộn hút 5 V, tiếp điểm 10 A | Đóng/ngắt đường 12 V ngoài cấp cho SM1373 |
 | 13 | **Đế relay PTF08A** | 8 chân, socket kiểu Finder | Gắn relay LY2N dễ tháo lắp |
-| 14 | **Transistor BC547** | NPN, 100 mA, 45 V | Kích relay LY2N từ GPIO 3.3 V của STM32 |
-| 15 | **Nguồn 3.3 V** | Ổn định, ≥ 500 mA | Nuôi STM32 (Nucleo 3.3V pin) + OLED |
-| 16 | **Nguồn 5 V** | Ổn định, ≥ 1 A | Nuôi ESP32-S3 + DFPlayer Mini |
-| 17 | **Nguồn 12 V** | Ổn định, ≥ 1 A | Nuôi cuộn relay LY2N + khóa SM1373 |
+| 14 | **Transistor BC547** | NPN, 100 mA, 45 V | Kích relay LY2N 5 V từ GPIO 3.3 V của STM32 |
+| 15 | **Nguồn 5 V** | Ổn định, ≥ 1.5 A | Cấp vào chân 5V của Black Pill; từ rail này nuôi ESP32-S3, OLED, DFPlayer Mini và thẻ MicroSD qua DFPlayer |
+| 16 | **Nguồn 12 V ngoài** | Ổn định, ≥ 1 A | Chỉ cấp riêng cho khóa SM1373 qua tiếp điểm relay |
 
 ### V. Phụ kiện
 
 | STT | Linh kiện | Vai trò |
 |-----|----------|---------|
-| 18 | **Điện trở 4.7 kΩ** (×2) | Pull-up cho SDA và SCL của I2C (bắt buộc nếu module không có sẵn) |
-| 19 | **Điện trở 1 kΩ** | Hạn dòng Base của BC547 và bảo vệ DFPlayer RX |
-| 20 | **Diode 1N4007** (×2) | Chống dòng ngược (1 cái cho relay, 1 cái cho SM1373) |
-| 21 | **Dây Jumper** | Kết nối tín hiệu giữa các module |
-| 22 | **Breadboard** | Mạch thử nghiệm |
+| 17 | **Điện trở 4.7 kΩ** (×2) | Pull-up cho SDA và SCL của I2C khi module OLED không có sẵn |
+| 18 | **Điện trở 1 kΩ** | Hạn dòng Base của BC547 và bảo vệ DFPlayer RX |
+| 19 | **Diode 1N4007** (×2) | Chống dòng ngược (1 cái cho cuộn relay 5V, 1 cái cho SM1373 12V) |
+| 20 | **Dây Jumper** | Kết nối tín hiệu giữa các module |
+| 21 | **Breadboard** | Mạch thử nghiệm |
 
 ---
 
@@ -150,36 +149,42 @@ Dự án đồ án môn học xây dựng hệ thống khóa cửa thông minh s
 
 ### 1. Sơ đồ nguồn điện tổng thể
 
-Hệ thống sử dụng **3 mức điện áp riêng biệt** từ nguồn cấp sẵn:
+README này phản ánh đúng cách cấp nguồn thực tế đang dùng:
+
+- **Rail 5V chung** đi vào chân `5V` của Black Pill và được chia cho toàn bộ khối điều khiển/hiển thị/âm thanh
+- **Nguồn 12V ngoài riêng** chỉ dùng cho khóa SM1373 qua tiếp điểm relay
+- Mức **3.3V** chỉ còn là mức logic nội bộ do Black Pill và ESP32-S3 tự tạo trên board
 
 ```
-Nguồn 3.3V ──► OLED VCC
-           ──► Black Pill 3V3 pin (pin 24)   ← cấp thẳng, bỏ qua LDO nội bộ
+Rail 5V chung ──► Black Pill 5V pin
+              ├──► ESP32-S3 5V pin
+              ├──► OLED VCC
+              ├──► DFPlayer Mini VCC
+              └──► LY2N Coil A1 (+)  [A2 được kéo xuống GND qua BC547, xem mục 5]
 
-Nguồn 5V   ──► ESP32-S3 5V pin
-           ──► DFPlayer Mini VCC
-
-Nguồn 12V  ──► LY2N Coil A1 (+)  [qua BC547, xem mục 5]
-           ──► LY2N COM           [tiếp điểm cấp 12V cho SM1373]
+Nguồn 12V ngoài (+) ──► LY2N COM
+LY2N NO            ──► SM1373 dây ĐỎ (+)
+Nguồn 12V ngoài (-) ─► SM1373 dây ĐEN (-)
 ```
 
-#### Điểm nối đất chung (GND) — bắt buộc
+> **Lưu ý quan trọng:** thẻ **MicroSD không cấp nguồn riêng bằng dây ngoài**. Thẻ chỉ cần cắm vào **DFPlayer Mini**; module DFPlayer sẽ tự cấp nguồn cho thẻ khi DFPlayer nhận `5V`.
 
-Tất cả các dây GND sau đây phải nối về **cùng một điểm**:
+#### Điểm nối đất (GND)
+
+Các thiết bị ở **rail 5V chung** phải nối chung GND:
 
 | Thiết bị | Chân GND cần nối |
 |----------|-----------------|
-| Nguồn 3.3V | GND (–) |
 | Nguồn 5V | GND (–) |
-| Nguồn 12V | GND (–) |
 | STM32F411CEU6 Black Pill | GND pin |
 | ESP32-S3 | GND pin |
 | OLED SSD1306 | GND pin |
 | DFPlayer Mini | GND pin |
 | BC547 | Emitter (chân E) |
-| SM1373 | Dây ĐEN (–) |
 
 > **Lý do:** UART giữa STM32 và ESP32-S3 cần GND chung làm điện áp tham chiếu. Nếu thiếu → tín hiệu UART nhiễu hoặc mất hoàn toàn → hệ thống không hoạt động.
+>
+> **Riêng phần khóa 12V ngoài:** với cách đấu qua **tiếp điểm relay cơ** như README này, nguồn `12V` cho SM1373 có thể đi **độc lập** với khối `5V`; chỉ cần đấu đúng cặp `(+/-)` của nguồn 12V vào relay và khóa.
 
 ---
 
@@ -197,8 +202,8 @@ Tất cả các dây GND sau đây phải nối về **cùng một điểm**:
 ```
 ESP32-S3          STM32F411CEU6 (Black Pill)     Nguồn
 ─────────         ──────────────────────────    ──────
-5V            ◄──  (không nối STM32)         ◄── Nguồn 5V
-GND           ───  GND                       ─── GND chung
+5V            ◄──  Rail 5V chung            ◄── Chân 5V Black Pill / nguồn 5V
+GND           ───  GND                       ─── GND 5V chung
 GPIO19 (TX)   ──►  PA10  (USART1 RX)   [pin 31]
 GPIO20 (RX)   ◄──  PA9   (USART1 TX)   [pin 30]
 ```
@@ -216,17 +221,19 @@ GPIO20 (RX)   ◄──  PA9   (USART1 TX)   [pin 30]
 ![OLED SSD1306 Pinout](docs/oled-ssd1306_pinout.png)
 
 ```
-OLED SSD1306      STM32F411CEU6 (Black Pill)     Nguồn ngoài
+OLED SSD1306      STM32F411CEU6 (Black Pill)     Nguồn 5V chung
 ────────────      ──────────────────────────    ────────────
-VCC          ◄──────────────────────────────── Nguồn 3.3V
-GND          ──────────────────────────────── GND chung
+VCC          ◄──────────────────────────────── Rail 5V chung
+GND          ──────────────────────────────── GND 5V chung
 SCL          ──►  PB6  (I2C1 SCL)
 SDA          ──►  PB7  (I2C1 SDA)
 ```
 
 > Địa chỉ I2C: **0x3C**. I2C chạy ở **100 kHz Standard Mode** (timing 0x10420F13) — ổn định trên breadboard, không cần Fast Mode.
 >
-> **Nếu OLED lúc nhận lúc không:** thêm 2 điện trở **4.7 kΩ** từ SDA→3.3V và SCL→3.3V (bắt buộc nếu module không có pull-up sẵn).
+> README này phản ánh cấu hình thực tế đang dùng: **module OLED nhận VCC 5V từ rail chung**. Tín hiệu I2C vẫn đi trực tiếp từ STM32 ở mức logic 3.3V.
+>
+> **Nếu OLED lúc nhận lúc không:** thêm 2 điện trở **4.7 kΩ** từ **SDA→3.3V** và **SCL→3.3V** (không kéo lên 5V). Nếu module OLED của bạn là loại chỉ hỗ trợ **3.3V VCC**, không được cấp `5V` vào chân `VCC`.
 
 ---
 
@@ -237,8 +244,8 @@ SDA          ──►  PB7  (I2C1 SDA)
 ```
 DFPlayer Mini     STM32F411CEU6 (Black Pill)     Nguồn
 ─────────────     ──────────────────────────   ──────
-VCC          ◄──  (không nối STM32)        ◄── Nguồn 5V
-GND          ───  GND                      ─── GND chung
+VCC          ◄──  Rail 5V chung            ◄── Chân 5V Black Pill / nguồn 5V
+GND          ───  GND                      ─── GND 5V chung
 RX           ◄──  [1 kΩ] ── PA11  (USART6 TX)  ← bắt buộc có điện trở 1kΩ
 TX           ──►  PA12  (USART6 RX)
 SPK+         ──►  Loa 3070 chân (+)
@@ -246,12 +253,14 @@ SPK–         ──►  Loa 3070 chân (–)
 ```
 
 > **Bắt buộc** đặt điện trở **1 kΩ** nối tiếp trên dây PA11 → DFPlayer RX để bảo vệ chip DFPlayer khỏi mức điện áp cao.
+>
+> **Thẻ MicroSD** chỉ cần cắm trực tiếp vào DFPlayer Mini; không cần kéo thêm dây nguồn riêng từ STM32 ra thẻ.
 
 ---
 
-### 5. Mạch kích Relay LY2N 12VDC (BC547 + STM32 PB0)
+### 5. Mạch kích Relay LY2N 5VDC (BC547 + STM32 PB0)
 
-Relay LY2N có cuộn hút **12V / ~40mA** — không thể kích trực tiếp từ GPIO 3.3V. Cần transistor BC547 làm công tắc.
+Relay LY2N trong cấu hình hiện tại dùng cuộn hút **5V / ~40mA** — vẫn không thể kích trực tiếp từ GPIO 3.3V. Cần transistor BC547 làm công tắc.
 
 #### Sơ đồ mạch BC547:
 
@@ -263,9 +272,9 @@ STM32 PB0 (3.3V)
       ├──► BC547 Base  (chân B)
              │
       BC547 Collector (chân C) ──► LY2N A2 (cuộn âm, chân 12 đế PTF08A)
-      BC547 Emitter   (chân E) ──► GND chung
+      BC547 Emitter   (chân E) ──► GND 5V chung
 
-Nguồn 12V ────────────────────► LY2N A1 (cuộn dương, chân 11 đế PTF08A)
+Rail 5V chung ────────────────► LY2N A1 (cuộn dương, chân 11 đế PTF08A)
 
 1N4007 (flyback): Anode → A2, Cathode → A1  [bảo vệ BC547 khỏi xung cảm ứng]
 ```
@@ -278,12 +287,12 @@ Nguồn 12V ────────────────────► LY2N
 ```
 
 #### Nguyên lý:
-- PB0 = **HIGH (3.3V)** → BC547 dẫn → Relay LY2N có điện (12V) → Tiếp điểm NO đóng → SM1373 mở khóa
+- PB0 = **HIGH (3.3V)** → BC547 dẫn → Relay LY2N có điện (5V) → Tiếp điểm NO đóng → cấp `12V ngoài` cho SM1373 → mở khóa
 - PB0 = **LOW (0V)**  → BC547 tắt → Relay nhả → Tiếp điểm NO mở → SM1373 khóa
 
 ---
 
-### 6. Relay LY2N + Đế PTF08A ↔ Khóa SM1373
+### 6. Relay LY2N + Đế PTF08A ↔ Nguồn 12V ngoài ↔ Khóa SM1373
 
 #### Sơ đồ chân PTF08A (nhìn từ phía cắm dây):
 
@@ -298,22 +307,24 @@ Nguồn 12V ────────────────────► LY2N
 
 | Chân PTF08A | Nối tới | Ghi chú |
 |------------|---------|---------|
-| A1 (cuộn +) | 12V | Nguồn cuộn hút |
-| A2 (cuộn –) | BC547 Collector | Qua BC547 xuống GND |
-| COM (chân 12) | 12V | Cấp nguồn qua tiếp điểm |
+| A1 (cuộn +) | 5V | Nguồn cuộn hút relay |
+| A2 (cuộn –) | BC547 Collector | Qua BC547 xuống GND 5V chung |
+| COM (chân 12) | 12V ngoài (+) | Nguồn dương đi qua tiếp điểm |
 | NO  (chân 11) | SM1373 dây ĐỎ (+) | Normally Open — đóng khi relay có điện |
 
 ```
 Kết nối SM1373:
-Nguồn 12V ──► LY2N COM (chân 12 PTF08A)
-               LY2N NO  (chân 11 PTF08A) ──► SM1373 dây ĐỎ  (+)
-GND chung ──────────────────────────────── SM1373 dây ĐEN (–)
+Nguồn 12V ngoài (+) ──► LY2N COM (chân 12 PTF08A)
+                        LY2N NO  (chân 11 PTF08A) ──► SM1373 dây ĐỎ  (+)
+Nguồn 12V ngoài (–) ─────────────────────────────── SM1373 dây ĐEN (–)
 
 1N4007 (bảo vệ SM1373): Anode → dây ĐEN, Cathode → dây ĐỎ
 (mắc song song với SM1373, chống xung ngược khi ngắt điện)
 ```
 
 > **SM1373 V3 — Fail-Secure:** Mất điện = khóa cứng. Có điện = mở chốt.
+>
+> **Quan trọng:** nguồn `12V ngoài` này chỉ phục vụ cho khóa. Không cấp `12V` vào STM32, ESP32-S3, OLED hay DFPlayer.
 
 ---
 
@@ -386,7 +397,7 @@ Trong firmware hiện tại: `PC13` dùng EXTI, còn `PA0/PA1` đọc theo polli
 | GPIO16–18 | Camera D7–D5 | Tích hợp sẵn trên board |
 | GPIO47 | Đèn trợ sáng trắng chính | Tự bật ngắn khi phát hiện khuôn mặt |
 | GPIO48 | RGB/NeoPixel phụ | Mặc định tắt trong firmware hiện tại |
-| **5V** | Nguồn | Nguồn 5V ngoài |
+| **5V** | Nguồn | Rail 5V chung (lấy tại chân 5V Black Pill) |
 | **GND** | Đất | GND chung |
 
 ---
@@ -761,6 +772,6 @@ STM-FaceGuard/                      # Firmware STM32F411CEU6 (STM32CubeIDE)
 | Watchdog STM32 (IWDG) | ~5.0 giây (LSI ~32kHz, prescaler 64, reload 2499) |
 | Watchdog ESP32 (Task WDT) | 30 giây |
 | I2C OLED | Standard Mode 100 kHz (timing 0x10420F13) |
-| Relay | LY2N 12VDC, tiếp điểm 10 A |
+| Relay | LY2N 5VDC, tiếp điểm 10 A |
 | Điện áp khóa SM1373 | 12 V DC |
-| Nguồn cấp khuyến nghị | Adapter 12 V – 2 A |
+| Nguồn cấp khuyến nghị | Rail 5V ổn định ≥ 1.5 A cho khối điều khiển + nguồn 12V ngoài ≥ 1 A cho SM1373 |
