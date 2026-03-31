@@ -36,18 +36,19 @@ Hệ thống được kiểm thử với ma trận điều kiện hoàn toàn ki
 
 \begin{table}[H]
   \centering
+  \small
   \caption{Ma trận điều kiện thực nghiệm}
   \label{tab:test_matrix}
-  \begin{tabularx}{\textwidth}{c l l X}
+  \begin{tabularx}{\textwidth}{c >{\raggedright\arraybackslash}p{3.2cm} >{\raggedright\arraybackslash}p{2.4cm} Y}
     \toprule
     \textbf{STT} & \textbf{Ánh sáng (lux)} & \textbf{Khoảng cách} & \textbf{Ghi chú} \\
     \midrule
-    1 & \SI{>300}{} (đèn phòng) & \SIrange{40}{60}{cm} & Chính diện, tốt nhất \\
-    2 & \SI{>300}{} (đèn phòng) & \SIrange{80}{120}{cm} & Chính diện, hơi xa \\
-    3 & \SI{100}{-}\SI{300}{} (tự nhiên) & \SIrange{40}{60}{cm} & Ánh sáng trung bình \\
-    4 & \SIrange{50}{100}{} (buổi tối) & \SIrange{40}{60}{cm} & Ánh sáng yếu \\
-    5 & \SIrange{20}{50}{} (tối) & \SIrange{40}{60}{cm} & Rất yếu (cam hạn chế) \\
-    6 & \SI{>300}{} (đèn) + góc $\pm 30°$ & \SIrange{40}{60}{cm} & Quay đầu trái/phải \\
+    1 & $>300$ lux (đèn phòng) & 40--60 cm & Chính diện, tốt nhất \\
+    2 & $>300$ lux (đèn phòng) & 80--120 cm & Chính diện, hơi xa \\
+    3 & 100--300 lux (tự nhiên) & 40--60 cm & Ánh sáng trung bình \\
+    4 & 50--100 lux (buổi tối) & 40--60 cm & Ánh sáng yếu \\
+    5 & 20--50 lux (tối) & 40--60 cm & Rất yếu (cam hạn chế) \\
+    6 & $>300$ lux, góc $\pm 30^\circ$ & 40--60 cm & Quay đầu trái/phải \\
     \bottomrule
   \end{tabularx}
 \end{table}
@@ -61,9 +62,10 @@ Hệ thống được kiểm thử với ma trận điều kiện hoàn toàn ki
 
 \begin{table}[H]
   \centering
+  \small
   \caption{Kết quả nhận diện khuôn mặt chi tiết theo điều kiện}
   \label{tab:fr_results_detailed}
-  \begin{tabularx}{0.95\textwidth}{l c c c c c}
+  \begin{tabularx}{0.95\textwidth}{Y c c c c c}
     \toprule
     \textbf{Điều kiện} & \textbf{Thử} & \textbf{Đúng (TP)} & \textbf{Sai (FP+FN)} & \textbf{TPR (\%)} & \textbf{FAR (\%)} \\
     \midrule
@@ -121,9 +123,10 @@ Hệ thống STM-FaceGuard sử dụng \textbf{1-frame voting} có nghĩa là ch
 
 \begin{table}[H]
   \centering
+  \small
   \caption{So sánh hiệu suất theo số lượng frame voting}
   \label{tab:voting_comparison}
-  \begin{tabularx}{0.95\textwidth}{l c c c X}
+  \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{3.0cm} c c c Y}
     \toprule
     \textbf{Chỉ số} & \textbf{1-frame} & \textbf{2-frame} & \textbf{3-frame} & \textbf{Ghi chú} \\
     \midrule

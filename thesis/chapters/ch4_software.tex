@@ -34,9 +34,10 @@ Giao tiếp giữa STM32 và ESP32-S3 là xương sống của hệ thống. Tha
 
 \begin{table}[H]
   \centering
+  \small
   \caption{Các trạng thái của máy trạng thái hệ thống STM32}
   \label{tab:fsm_states}
-  \begin{tabularx}{\textwidth}{l l X}
+  \begin{tabularx}{\textwidth}{>{\ttfamily\arraybackslash}p{3.6cm} >{\raggedright\arraybackslash}p{2.0cm} Y}
     \toprule
     \textbf{Trạng thái} & \textbf{Tên} & \textbf{Mô tả} \\
     \midrule
@@ -57,9 +58,9 @@ Giao tiếp giữa STM32 và ESP32-S3 là xương sống của hệ thống. Tha
 
 Hình \cref{fig:stm32_fsm} trình bày trực quan các chuyển đổi trạng thái chính của STM32 dựa trên sự kiện (event) từ người dùng hoặc giao tiếp UART từ ESP32-S3:
 
-\begin{figure}[H]
+\begin{figure}[!htbp]
   \centering
-  \resizebox{0.95\textwidth}{!}{%
+  \resizebox{0.88\textwidth}{!}{%
   \begin{tikzpicture}[x=1cm, y=1cm, >=Stealth, font=\small,
     st/.style  = {draw, circle, minimum size=3.0cm, align=center,
                   fill=blue!8, draw=blue!50!black, line width=0.8pt},
@@ -110,15 +111,12 @@ Hình \cref{fig:stm32_fsm} trình bày trực quan các chuyển đổi trạng 
 
     %% IDLE ↔ LOCKED (diagonal, two arcs)
     \draw[->, bend right=18] (idle)  to
-      node[lbl, left, pos=0.4]{Failed 5$\times$}   (locked);
+      node[lbl, left, pos=0.4]{5 failures}         (locked);
     \draw[->, bend right=18] (locked)to
       node[lbl, right, pos=0.6]{5 min elapsed}    (idle);
 
   \end{tikzpicture}}
-  \caption{State Machine Diagram của STM32F411CEU6. Các trạng thái chính được điều khiển bởi sự kiện từ:
-           (1) Nút nhấn người dùng (BTN\_ENROLL, BTN\_DELETE, BTN\_EXIT),
-           (2) Lệnh từ ESP32-S3 qua UART (OPEN, DENIED, READY, ENROLLED, LOCKOUT),
-           (3) Bộ đếm thời gian không chặn (non-blocking timers) dùng HAL\_GetTick().}
+  \caption[Sơ đồ trạng thái hệ thống STM32F411CEU6]{Sơ đồ trạng thái STM32F411CEU6. Chuyển trạng thái được kích bởi nút nhấn, bản tin UART từ ESP32-S3 và các bộ định thời không chặn dựa trên \texttt{HAL\_GetTick()}.}
   \label{fig:stm32_fsm}
 \end{figure}
 
@@ -254,9 +252,10 @@ DFPlayer Mini là module phát âm thanh MP3 tích hợp DAC, giao tiếp qua US
 
 \begin{table}[H]
   \centering
+  \small
   \caption{Danh sách file âm thanh tiêu biểu}
   \label{tab:audio_tracks}
-  \begin{tabularx}{\textwidth}{c X l}
+  \begin{tabularx}{\textwidth}{c >{\raggedright\arraybackslash}p{4.4cm} Y}
     \toprule
     \textbf{Track} & \textbf{Nội dung} & \textbf{Sự kiện kích hoạt} \\
     \midrule
@@ -265,7 +264,7 @@ DFPlayer Mini là module phát âm thanh MP3 tích hợp DAC, giao tiếp qua US
     4 & ``Đăng ký khuôn mặt thành công'' & Phản hồi \texttt{ENROLLED} \\
     5 & ``Đã xóa toàn bộ dữ liệu''   & Phản hồi \texttt{DELETED} \\
     6 & ``Mời nhìn thẳng vào camera'' & Bước enroll hiện hành (FRONT, 1 bước) \\
-    7--10 & Dự phòng cho LEFT/RIGHT/UP/DOWN & Chỉ dùng khi nâng \texttt{ENROLL\_TOTAL\_STEPS} lên 5 \\
+    7--10 & Dự phòng cho các tư thế bổ sung & Chỉ dùng khi nâng \texttt{ENROLL\_TOTAL\_STEPS} lên 5 \\
     \bottomrule
   \end{tabularx}
 \end{table}
@@ -286,7 +285,7 @@ Bất kỳ hệ thống nhận diện khuôn mặt nào cũng phải cân nhắc
   \item \textbf{Ảnh đầu vào ổn định}: Firmware sử dụng frame 240$\times$240 RGB565 cùng detector hai giai đoạn (MSR01 + MNP01), giúp loại bớt nhiều trường hợp ảnh giả chất lượng thấp hoặc khung hình bị nhòe nặng.
   \item \textbf{Enrollment verification}: Khuôn mặt được đăng ký dưới sự giám sát (enrollment on-device). Không hỗ trợ import vector từ bên ngoài.
   \item \textbf{Rate limiting}: Khi nhận diện sai lặp lại nhiều lần, cơ chế \texttt{LOCKOUT} sẽ làm chậm đáng kể các phép thử liên tiếp bằng ảnh hoặc video.
-  \item \textbf{Giới hạn}: STM-FaceGuard \textbf{không} sử dụng liveness detection chuyên dụng (challenge-response, infrared, 3D depth). Vì vậy, hệ thống chỉ phù hợp cho mức bảo vệ cơ bản trong mô hình hộ gia đình hoặc phòng thí nghiệm.
+  \item \textbf{Giới hạn}: STM-FaceGuard chưa có liveness detection chuyên dụng (challenge-response, IR, 3D depth), nên phù hợp hơn với mức bảo vệ cơ bản cho hộ gia đình hoặc phòng thí nghiệm.
   \item \textbf{Cách khắc phục}: Có thể nâng cấp bằng cách:
     - Tích hợp Passive Liveness (PL) detection qua MSR01 model variant.
     - Yêu cầu người dùng blink/nod (active challenge), nhưng làm tăng latency.
@@ -335,18 +334,19 @@ Bất kỳ hệ thống nhận diện khuôn mặt nào cũng phải cân nhắc
 
 \begin{table}[H]
   \centering
+  \footnotesize
   \caption{So sánh các cơ chế bảo mật giữa STM-FaceGuard và các hệ thống tương tự}
   \label{tab:security_comparison}
-  \begin{tabularx}{0.95\textwidth}{l c c c X}
+  \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{2.8cm} >{\centering\arraybackslash}p{1.9cm} >{\centering\arraybackslash}p{2.0cm} >{\centering\arraybackslash}p{1.9cm} Y}
     \toprule
     \textbf{Cơ chế bảo mật} & \textbf{STM-FaceGuard} & \textbf{Windows Hello} & \textbf{Apple FaceID} & \textbf{Khóa cửa thông minh} \\
     \midrule
-    Liveness detection & Bị động (1-frame) & Chủ động (IR patterns) & 3D depth-based & Bị động hoặc không \\
+    Liveness detection & Bị động (1-frame) & Chủ động (IR patterns) & 3D depth-based & Bị động / không có \\
     Anti-spoofing & Đơn giản & Cao (TrueDepth) & Rất cao & Trung bình \\
     Rate limiting & 5 lần/5 phút & Không giới hạn & Exp.\ backoff & 5--10 lần/30 phút \\
-    Lockout duration & 5 phút & Cơ chế ít rõ & 5 phút tăng dần & 30 phút - vĩnh viễn \\
+    Lockout duration & 5 phút & Cơ chế ít rõ & 5 phút tăng dần & 30 phút đến vĩnh viễn \\
     Encryption level & Không & TPM + Win Vault & Secure Enclave & Thường không \\
-    Logging/Reporting & Không & \checkmark~Win Log & \checkmark~iCloud & Tùy thiết bị \\
+    Ghi log & Không & \checkmark~Win Log & \checkmark~iCloud & Tùy thiết bị \\
     \bottomrule
   \end{tabularx}
 \end{table}

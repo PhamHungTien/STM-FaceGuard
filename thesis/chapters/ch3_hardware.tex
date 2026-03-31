@@ -27,9 +27,10 @@ Luồng hoạt động cơ bản như sau:
 
 \begin{table}[H]
   \centering
+  \footnotesize
   \caption{Danh sách linh kiện chính (Bill of Materials)}
   \label{tab:bom}
-  \begin{tabularx}{\textwidth}{c >{\bfseries}p{3.2cm} p{3.5cm} X}
+  \begin{tabularx}{\textwidth}{c >{\bfseries\raggedright\arraybackslash}p{3.0cm} >{\raggedright\arraybackslash}p{3.3cm} Y}
     \toprule
     \textbf{STT} & \textbf{Tên linh kiện} & \textbf{Model / Thông số} & \textbf{Chức năng} \\
     \midrule
@@ -172,9 +173,10 @@ Toàn bộ chân GPIO, UART và I2C của STM32F411CEU6 được phân công the
 
 \begin{table}[H]
   \centering
+  \small
   \caption{Bảng phân công chân STM32F411CEU6}
   \label{tab:pinout_stm32}
-  \begin{tabular}{l l l l}
+  \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{1.5cm} >{\raggedright\arraybackslash}p{2.8cm} >{\raggedright\arraybackslash}p{3.7cm} Y}
     \toprule
     \textbf{Chân MCU} & \textbf{Tín hiệu} & \textbf{Cấu hình} & \textbf{Kết nối đến} \\
     \midrule
@@ -192,7 +194,7 @@ Toàn bộ chân GPIO, UART và I2C của STM32F411CEU6 được phân công the
     PB6  & I2C1\_SCL   & AF4, Fast-mode 400~kHz & OLED SSD1306 SCL \\
     PB7  & I2C1\_SDA   & AF4, Fast-mode 400~kHz & OLED SSD1306 SDA \\
     \bottomrule
-  \end{tabular}
+  \end{tabularx}
 \end{table}
 
 \subsection{ESP32-S3-N16R8}
@@ -201,15 +203,16 @@ ESP32-S3 chịu trách nhiệm giao tiếp với camera qua giao diện song son
 
 \begin{table}[H]
   \centering
+  \footnotesize
   \caption{Bảng phân công chân ESP32-S3-N16R8 (các chân chính)}
   \label{tab:pinout_esp32}
-  \begin{tabular}{l l l}
+  \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{4.0cm} >{\raggedright\arraybackslash}p{2.9cm} Y}
     \toprule
     \textbf{Chân ESP32-S3} & \textbf{Tín hiệu} & \textbf{Kết nối đến} \\
     \midrule
     GPIO19 & UART1\_TX & $\to$ STM32 USART1\_RX (PA10) \\
     GPIO20 & UART1\_RX & $\leftarrow$ STM32 USART1\_TX (PA9) \\
-    GPIO11, 9, 8, 10, 12, 18, 17, 16 & CAM\_DATA[0:7] & OV3660 Data Bus \\
+    GPIO11, 9, 8, 10,\newline 12, 18, 17, 16 & CAM\_DATA[0:7] & OV3660 Data Bus \\
     GPIO15 & CAM\_XCLK  & OV3660 XCLK (clock ra camera) \\
     GPIO13 & CAM\_PCLK  & OV3660 PCLK \\
     GPIO6  & CAM\_VSYNC & OV3660 VSYNC \\
@@ -218,7 +221,7 @@ ESP32-S3 chịu trách nhiệm giao tiếp với camera qua giao diện song son
     GPIO5  & CAM\_SCL   & OV3660 SCCB SCL \\
     GPIO47 & FACE\_LIGHT & LED trợ sáng khuôn mặt \\
     \bottomrule
-  \end{tabular}
+  \end{tabularx}
 \end{table}
 
 \noindent Trên biến thể board đang dùng, cặp chân \texttt{TX/RX} ở header ngoài được giữ lại cho nạp chương trình và Serial Monitor. Vì vậy, UART làm việc với STM32 được chuyển sang cặp \texttt{GPIO19/GPIO20} theo đúng firmware hiện hành.

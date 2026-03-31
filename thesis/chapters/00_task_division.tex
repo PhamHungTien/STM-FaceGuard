@@ -16,6 +16,8 @@
 \begin{table}[H]
 \centering
 \caption*{\textbf{Bảng phân công nhiệm vụ các thành viên}}
+\small
+\setlength{\tabcolsep}{4pt}
 \setlength{\extrarowheight}{4pt}
 \begin{tabular}{c p{3.2cm} c p{7.0cm} c}
   \toprule
@@ -73,7 +75,7 @@
   \midrule
 
   5 &
-  Lê Quang Bảo Trung &
+  Lê Quang\newline Bảo Trung &
   24207111 &
   \vspace{-10pt}\begin{itemize}[leftmargin=1em, topsep=0pt, itemsep=1pt, parsep=0pt]
     \item Tổng hợp tài liệu tham khảo
@@ -112,7 +114,7 @@
 \centering
 \begin{ganttchart}[
     hgrid,
-    vgrid = {*6{dotted}, dashed},
+    vgrid,
     bar/.append style       = {fill=blue!35, rounded corners=2pt},
     bar label font          = \small,
     group/.append style     = {fill=blue!65, rounded corners=2pt},
@@ -131,8 +133,8 @@
 ]{1}{14}
 
   %% Tiêu đề tuần
-  \gantttitle{Tuan 1 \ 21.03--27.03}{7}
-  \gantttitle{Tuan 2 \ 28.03--03.04}{7} \\
+  \gantttitle{Tuan 1: 21.03--27.03}{7}
+  \gantttitle{Tuan 2: 28.03--03.04}{7} \\
   %% Tiêu đề ngày (T2--CN × 2 tuần)
   \gantttitle{T2}{1}\gantttitle{T3}{1}\gantttitle{T4}{1}\gantttitle{T5}{1}%
   \gantttitle{T6}{1}\gantttitle{T7}{1}\gantttitle{CN}{1}%
@@ -140,7 +142,7 @@
   \gantttitle{T6}{1}\gantttitle{T7}{1}\gantttitle{CN}{1} \\
 
   %% ── Giai đoạn 1 ─────────────────────────────────────────
-  \ganttgroup{1. Nghiên cứu \& Lên kế hoạch}{1}{2} \\
+  \ganttgroup{1. Nghiên cứu va Lên kế hoạch}{1}{2} \\
   \ganttbar{Doc tai lieu / datasheet MCU}{1}{1} \\
   \ganttbar{Xac dinh kien truc Dual-MCU}{2}{2} \\
 
@@ -151,12 +153,12 @@
 
   %% ── Giai đoạn 3 ─────────────────────────────────────────
   \ganttgroup{3. Lap trinh phan mem}{3}{9} \\
-  \ganttbar{Firmware STM32 (HAL/FSM/UART/OLED)}{3}{6} \\
-  \ganttbar{Firmware ESP32-S3 (cam/FR pipeline)}{5}{8} \\
-  \ganttbar{Tich hop Dual-MCU \& debug}{8}{9} \\
+  \ganttbar{Firmware STM32 va ngoai vi}{3}{6} \\
+  \ganttbar{Firmware ESP32-S3 va FR}{5}{8} \\
+  \ganttbar{Tich hop Dual-MCU va debug}{8}{9} \\
 
   %% ── Giai đoạn 4 ─────────────────────────────────────────
-  \ganttgroup{4. Kiem thu \& Thuc nghiem}{9}{11} \\
+  \ganttgroup{4. Kiem thu va Thuc nghiem}{9}{11} \\
   \ganttbar{Do do chinh xac nhan dien}{9}{10} \\
   \ganttbar{Kiem thu thoi gian phan hoi}{10}{11} \\
 
@@ -164,7 +166,7 @@
   \ganttgroup{5. Hoan thien tai lieu}{10}{14} \\
   \ganttbar{Viet tieu luan (cac chuong)}{10}{12} \\
   \ganttbar{Hoan thien -- chuan bi slide}{12}{13} \\
-  \ganttbar{Review \& nop bai}{13}{14} \\
+  \ganttbar{Review va nop bai}{13}{14} \\
 
   %% ── Milestone ────────────────────────────────────────────
   \ganttmilestone[

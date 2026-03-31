@@ -3,7 +3,7 @@
 %  Engine: XeLaTeX  |  Bibliography: Biber
 %  Build:  make  (hoặc xelatex → biber → xelatex × 2)
 % ============================================================
-\documentclass[13pt, a4paper, twoside, openright]{report}
+\documentclass[12pt, a4paper, twoside, openright]{report}
 
 % ── Encoding & Font ─────────────────────────────────────────
 \usepackage{fontspec}
@@ -24,6 +24,8 @@
 
 % ── Line Spacing ────────────────────────────────────────────
 \usepackage{setspace}
+\usepackage{scrextend}
+\changefontsizes{13pt}
 \onehalfspacing
 
 % ── Headers & Footers ───────────────────────────────────────
@@ -103,6 +105,7 @@
 \usepackage{array}
 \usepackage{colortbl}
 \usepackage{xcolor}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
 \definecolor{tableheader}{RGB}{220,230,242}
 \definecolor{codeframe}{RGB}{200,200,200}
 \definecolor{codebg}{RGB}{248,248,248}
@@ -202,8 +205,11 @@
   backend  = biber,
   style    = ieee,
   sorting  = none,
-  maxnames = 5
+  maxnames = 5,
+  language = english,
+  autolang = other
 ]{biblatex}
+\DeclareLanguageMapping{vietnamese}{english}
 \addbibresource{references.bib}
 
 % ── Miscellaneous ───────────────────────────────────────────
