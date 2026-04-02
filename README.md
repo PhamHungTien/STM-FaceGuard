@@ -1,8 +1,8 @@
 # STM-FaceGuard
 
-**Hệ thống Khóa cửa thông minh nhận diện khuôn mặt — Dual-MCU**
+**Hệ thống Khóa thông minh nhận diện khuôn mặt — Dual-MCU**
 
-Dự án đồ án môn học xây dựng hệ thống khóa cửa thông minh sử dụng kiến trúc Dual-MCU: **STM32F411CEU6** đảm nhận vai trò điều khiển trung tâm, **ESP32-S3 N16R8 CAM** (tích hợp camera OV3660 3MP) chạy thuật toán AI nhận diện khuôn mặt thời gian thực. Hệ thống hỗ trợ phản hồi âm thanh tiếng Việt qua DFPlayer Mini và hiển thị trạng thái trên màn hình OLED SSD1306.
+Dự án đồ án môn học xây dựng hệ thống khóa thông minh sử dụng kiến trúc Dual-MCU: **STM32F411CEU6** đảm nhận vai trò điều khiển trung tâm, **ESP32-S3 N16R8 CAM** (tích hợp camera OV3660 3MP) chạy thuật toán AI nhận diện khuôn mặt thời gian thực. Hệ thống hỗ trợ phản hồi âm thanh tiếng Việt qua DFPlayer Mini và hiển thị trạng thái trên màn hình OLED SSD1306.
 
 > **Lưu ý nhận dạng board:** module dùng trong project là loại **ESP32-S3-CAM / ESP32-S3 N16R8 CAM** với camera **OV3660**. Ở biến thể board đang dùng, cặp chân `TX/RX` trên header được giữ lại cho nạp code và Serial Monitor; UART sang STM32 dùng **GPIO19 (TX)** và **GPIO20 (RX)** theo firmware hiện tại.
 
@@ -125,7 +125,7 @@ Dự án đồ án môn học xây dựng hệ thống khóa cửa thông minh s
 
 | STT | Linh kiện | Thông số | Vai trò |
 |-----|----------|----------|---------|
-| 11 | **Khóa SM1373 V3** | 12 V DC, Fail-Secure, ~0.5 A | Cơ cấu chốt khóa cửa, dùng nguồn 12V ngoài riêng |
+| 11 | **Khóa SM1373 V3** | 12 V DC, Fail-Secure, ~0.5 A | Cơ cấu chốt khóa, dùng nguồn 12V ngoài riêng |
 | 12 | **Relay Module 1 kênh 5V** | 6 chân: `DC+`, `DC-`, `IN1` / `NO`, `COM`, `NC`, có mạch kích on-board | Nhận tín hiệu PB0 từ STM32 và đóng/ngắt đường 12V ngoài cấp cho SM1373 |
 | 13 | **Nguồn 5 V** | Ổn định, ≥ 1.5 A | Cấp vào chân 5V của Black Pill; từ rail này nuôi ESP32-S3, OLED, DFPlayer Mini, thẻ MicroSD qua DFPlayer và module relay |
 | 14 | **Nguồn 12 V ngoài** | Ổn định, ≥ 1 A | Chỉ cấp riêng cho khóa SM1373 qua tiếp điểm relay |
