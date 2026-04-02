@@ -124,7 +124,12 @@ static void OLED_Data(const uint8_t *data, uint16_t len)
     if (len > 128) len = 128;
     buf[0] = 0x40;
     memcpy(&buf[1], data, len);
-    HAL_I2C_Master_Transmit(&hi2c1, SSD1306_I2C_ADDR, buf, len + 1, 50);
+    if (HAL_I2C_Master_Transmit(&hi2c1, SSD1306_I2C_ADDR, buf, len + 1, 50) != HAL_OK) {
+        HAL_I2C_DeInit(&hi2c1);
+        HAL_Delay(2);
+        HAL_I2C_Init(&hi2c1);
+        HAL_I2C_Master_Transmit(&hi2c1, SSD1306_I2C_ADDR, buf, len + 1, 50);
+    }
 }
 
 static void OLED_SetCursor(uint8_t col, uint8_t page)
@@ -141,11 +146,11 @@ void SSD1306_Init(void)
     HAL_Delay(200); /* Wait for OLED power-up */
 
     /* Diagnostic: if OLED does not ACK on I2C, blink LD2 (green LED, PA5)
-     * 10 times rapidly then return.  No blinking = I2C OK. */
+     * 6 times rapidly then return.  No blinking = I2C OK. */
     if (HAL_I2C_IsDeviceReady(&hi2c1, SSD1306_I2C_ADDR, 3, 100) != HAL_OK) {
-        for (uint8_t i = 0; i < 20; i++) {
+        for (uint8_t i = 0; i < 6; i++) {
             HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
-            HAL_Delay(100);
+            HAL_Delay(80);
         }
         HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
         return; /* I2C not working – skip init */

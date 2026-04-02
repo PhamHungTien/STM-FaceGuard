@@ -48,6 +48,15 @@ Luồng hoạt động cơ bản như sau:
   \end{tabularx}
 \end{table}
 
+Để bổ sung góc nhìn trực quan cho bảng linh kiện, \cref{fig:breadboard_actual} cho thấy mô hình thử nghiệm thực tế của hệ thống trên breadboard với đầy đủ hai bo mạch điều khiển, OLED, DFPlayer Mini và ba nút nhấn rời.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.92\textwidth]{breadboard_actual}
+  \caption{Mô hình thử nghiệm STM-FaceGuard trên breadboard}
+  \label{fig:breadboard_actual}
+\end{figure}
+
 \section{Lý do lựa chọn thiết kế (Design Rationale)}
 \label{sec:design_rationale}
 
@@ -73,6 +82,13 @@ Mặc dù nhiều các lựa chọn thay thế tồn tại đối với mỗi th
   \item \textit{Raspberry Pi Pico (RP2040)}: Không đủ UART, không có I2C đủ số lượng, thiếu tính ứng dụng.
 \end{itemize}
 
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.9\textwidth]{stm32f411ceu6_blackpill_pinout}
+  \caption{Sơ đồ pinout tham chiếu của STM32F411CEU6 Black Pill}
+  \label{fig:blackpill_pinout}
+\end{figure}
+
 \subsection{Module ESP32-S3-N16R8 cho nhận diện khuôn mặt}
 
 \textbf{Lý do chọn ESP32-S3-N16R8:}
@@ -92,6 +108,13 @@ Mặc dù nhiều các lựa chọn thay thế tồn tại đối với mỗi th
   \item \textit{Sipeed M1 (RISC-V)}: Khám phá được nhưng sinh thái từng phần (ONNX support hạn chế), dù rẻ hơn ESP32-S3 nhưng khó debug.
   \item \textit{Arduino Nano 33 BLE Sense}: Quá yếu (64 MHz Cortex-M4), không có camera tích hợp.
 \end{itemize}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.78\textwidth]{esp32-s3-cam_pinout}
+  \caption{Pinout thực tế của board ESP32-S3-CAM dùng trong đề tài}
+  \label{fig:esp32s3cam_pinout}
+\end{figure}
 
 \subsection{Camera OV3660 cho thu nhận ảnh}
 
@@ -139,6 +162,25 @@ Mặc dù nhiều các lựa chọn thay thế tồn tại đối với mỗi th
   \item \textit{Buzzer piezoelectric}: Chỉ phát âm bip đơn, không phát file MP3 tùy chỉnh.
 \end{itemize}
 
+\begin{figure}[htbp]
+  \centering
+  \begin{subfigure}[t]{0.43\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{oled-ssd1306_pinout}
+    \caption{Pinout module OLED SSD1306}
+    \label{fig:oled_pinout}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[t]{0.53\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{dfplayer-mini_pinout}
+    \caption{Pinout module DFPlayer Mini}
+    \label{fig:dfplayer_pinout}
+  \end{subfigure}
+  \caption{Các ngoại vi hiển thị và âm thanh sử dụng trong hệ thống}
+  \label{fig:peripheral_pinouts}
+\end{figure}
+
 \subsection{Kiến trúc hai vi điều khiển (Dual-MCU Architecture)}
 
 Thay vì lựa chọn một vi điều khiển ``super-MCU'' chứa cả AI lẫn điều khiển, các hệ thống được thiết kế với \textbf{hai MCU độc lập}:
@@ -169,7 +211,7 @@ Thay vì lựa chọn một vi điều khiển ``super-MCU'' chứa cả AI lẫ
 
 \subsection{STM32F411CEU6 (Black Pill)}
 
-Toàn bộ chân GPIO, UART và I2C của STM32F411CEU6 được phân công theo \cref{tab:pinout_stm32}. Ba nút nhấn rời bên ngoài được cấu hình \textit{active-low}: tín hiệu mức cao khi không nhấn (pull-up nội), mức thấp khi nhấn, ngắt kích hoạt ở cạnh xuống (falling edge).
+Toàn bộ chân GPIO, UART và I2C của STM32F411CEU6 được phân công theo \cref{tab:pinout_stm32}. Ba nút nhấn rời bên ngoài được cấu hình \textit{active-low}: tín hiệu mức cao khi không nhấn (pull-up nội), mức thấp khi nhấn, ngắt kích hoạt ở cạnh xuống (falling edge). \Cref{fig:blackpill_pinout} được dùng như hình tham chiếu trực quan khi đối chiếu bảng chân với bo mạch thật.
 
 \begin{table}[H]
   \centering
@@ -200,7 +242,7 @@ Toàn bộ chân GPIO, UART và I2C của STM32F411CEU6 được phân công the
 
 \subsection{ESP32-S3-N16R8}
 
-ESP32-S3 chịu trách nhiệm giao tiếp với camera qua giao diện song song DVP và trao đổi lệnh với STM32 qua UART. \cref{tab:pinout_esp32} mô tả các chân chính.
+ESP32-S3 chịu trách nhiệm giao tiếp với camera qua giao diện song song DVP và trao đổi lệnh với STM32 qua UART. \cref{tab:pinout_esp32} mô tả các chân chính; \cref{fig:esp32s3cam_pinout} hỗ trợ định vị nhanh các chân header thật trên board ESP32-S3-CAM đang dùng.
 
 \begin{table}[H]
   \centering

@@ -1497,6 +1497,8 @@ void setup()
 
     // UART tới STM32
     Serial1.begin(STM32_BAUD, SERIAL_8N1, STM32_RX_PIN, STM32_TX_PIN);
+    delay(10);
+    while (Serial1.available()) Serial1.read();  // flush garbage bytes từ STM32 lúc ESP32 power-up
     rxBuf.reserve(RX_BUF_MAX_LEN);
     linkSecureActive = false;
     linkTxSeq = 1U;
