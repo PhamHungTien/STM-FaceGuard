@@ -119,6 +119,19 @@ SET_LOOP_TASK_STACK_SIZE(16 * 1024);
 #define VISION_TASK_PRIORITY            2
 #define VISION_TASK_CORE               0
 #define VISION_TASK_IDLE_MS            1
+#define PREVIEW_CAPTURE_LIGHT_ENABLE    1
+#define PREVIEW_CAPTURE_LIGHT_WARMUP_MS 35
+#define PREVIEW_CAPTURE_LIGHT_HOLD_MS  180
+
+// -- Low-light tuning ----------------------------------------------------------
+#define CAMERA_LOW_LIGHT_PRESET_ENABLE  1
+#define CAMERA_BRIGHTNESS_LEVEL         2
+#define CAMERA_CONTRAST_LEVEL           1
+#define CAMERA_SATURATION_LEVEL        -1
+#define CAMERA_SHARPNESS_LEVEL          2
+#define CAMERA_DENOISE_LEVEL            2
+#define CAMERA_AE_LEVEL                 2
+#define CAMERA_GAINCEILING_LEVEL   GAINCEILING_32X
 
 // -- Den tro sang khuon mat ---------------------------------------------------
 // Nhieu board ESP32-S3-CAM kieu nay co ca:
@@ -933,6 +946,11 @@ static void preview_handle_capture()
         return;
     }
 
+#if PREVIEW_CAPTURE_LIGHT_ENABLE
+    face_light_touch(PREVIEW_CAPTURE_LIGHT_HOLD_MS);
+    delay(PREVIEW_CAPTURE_LIGHT_WARMUP_MS);
+#endif
+
     camera_fb_t *fb = esp_camera_fb_get();
     if (!fb) {
         camera_unlock();
@@ -1216,12 +1234,23 @@ static bool camera_init()
         s->set_exposure_ctrl(s, 1); // auto exposure
         s->set_aec2(s, 1);          // AEC algorithm 2 (better in low light)
         s->set_gain_ctrl(s, 1);     // auto gain
-        s->set_agc_gain(s, 0);      // bat dau voi gain thap, de AEC tu dieu chinh
-        s->set_brightness(s, 1);    // +1 cho in-door demo (tranh overexpose khi co den manh)
-        s->set_contrast(s, 1);      // slightly higher contrast (+1)
-        s->set_saturation(s, 0);    // neutral saturation
-        s->set_sharpness(s, 2);     // ro net hon cho face detail (+2)
-        s->set_denoise(s, 1);       // giam nhieu - tot cho moi truong toi
+        s->set_brightness(s, CAMERA_BRIGHTNESS_LEVEL);
+        s->set_contrast(s, CAMERA_CONTRAST_LEVEL);
+        s->set_saturation(s, CAMERA_SATURATION_LEVEL);
+        s->set_sharpness(s, CAMERA_SHARPNESS_LEVEL);
+        s->set_denoise(s, CAMERA_DENOISE_LEVEL);
+#if CAMERA_LOW_LIGHT_PRESET_ENABLE
+        s->set_gainceiling(s, CAMERA_GAINCEILING_LEVEL);
+        s->set_ae_level(s, CAMERA_AE_LEVEL);
+#endif
+        Serial.printf("[SYS] Camera tune: brightness=%d contrast=%d saturation=%d sharpness=%d denoise=%d ae_level=%d gainceiling=%d\n",
+                      CAMERA_BRIGHTNESS_LEVEL,
+                      CAMERA_CONTRAST_LEVEL,
+                      CAMERA_SATURATION_LEVEL,
+                      CAMERA_SHARPNESS_LEVEL,
+                      CAMERA_DENOISE_LEVEL,
+                      CAMERA_AE_LEVEL,
+                      (int)CAMERA_GAINCEILING_LEVEL);
     }
 
     camera_fb_t *fb = esp_camera_fb_get();
