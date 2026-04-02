@@ -4,7 +4,7 @@
 #include "main.h"
 
 /* MP3 track numbers on MicroSD
- * File naming: 0001.mp3 … 0010.mp3 at SD card root (FAT32) */
+ * File naming: 0001.mp3 ... 0010.mp3 at SD card root (FAT32) */
 
 /* --- System events --- */
 #define DFP_TRACK_OPEN_DOOR     1   /* "Xin chao, cua da mo"               */
@@ -25,6 +25,6 @@ extern UART_HandleTypeDef huart6;
 void DFPlayer_Init(void);
 void DFPlayer_Play(uint8_t track);
 void DFPlayer_Stop(void);             /* Stop current playback */
-void DFPlayer_SetVolume(uint8_t vol); /* 0 – 30 */
+void DFPlayer_SetVolume(uint8_t vol); /* 0 - 30 */
 
 #endif /* __DFPLAYER_H */

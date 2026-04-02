@@ -121,7 +121,7 @@
 \lstset{
   basicstyle=\ttfamily\small\setstretch{1.0},
   keywordstyle=\color{kwcolor}\bfseries,
-  commentstyle=\color{cmtcolor}\itshape,
+  commentstyle=\color{cmtcolor},
   stringstyle=\color{strcolor},
   numberstyle=\tiny\color{gray},
   numbers=left,
@@ -134,6 +134,9 @@
   breaklines=true,
   breakatwhitespace=true,
   showstringspaces=false,
+  keepspaces=true,
+  columns=fullflexible,
+  upquote=true,
   tabsize=4,
   captionpos=b,
   xleftmargin=1.5em,
@@ -234,14 +237,6 @@
 
 \cleardoublepage
 \pagenumbering{roman}
-
-% ── Lời cam đoan ────────────────────────────────────────────
-\input{chapters/00_declaration}
-\cleardoublepage
-
-% ── Lời cảm ơn ──────────────────────────────────────────────
-\input{chapters/00_acknowledgments}
-\cleardoublepage
 
 % ── Tóm tắt ─────────────────────────────────────────────────
 \input{chapters/00_abstract}

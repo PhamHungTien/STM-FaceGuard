@@ -97,7 +97,7 @@ static volatile uint8_t  btn_exit_armed   = 0;
 static volatile uint8_t  btn_enroll_armed = 0;
 static volatile uint8_t  btn_delete_armed = 0;
 
-/* --- UART1 receive buffer (ESP32-S3 → STM32) --- */
+/* --- UART1 receive buffer (ESP32-S3 -> STM32) --- */
 #define ESP32_DMA_RX_SIZE      256U
 static uint8_t esp32_dma_rx_buf[ESP32_DMA_RX_SIZE];
 static char     uart1_queue[UART1_QUEUE_LEN][UART1_BUF_SIZE];
@@ -192,7 +192,7 @@ static uint8_t UART_DecodeLine(const char *line, char *out, uint16_t out_size);
 /* USER CODE BEGIN 0 */
 
 /* -----------------------------------------------------------------------
- * HAL UART RX Event callback – called when UART1 receives a full line or IDLE
+ * HAL UART RX Event callback - called when UART1 receives a full line or IDLE
  * ----------------------------------------------------------------------- */
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
@@ -243,7 +243,7 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 }
 
 /* -----------------------------------------------------------------------
- * HAL GPIO EXTI callback – button debouncing
+ * HAL GPIO EXTI callback - button debouncing
  * ----------------------------------------------------------------------- */
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
@@ -834,7 +834,7 @@ static void Parse_ESP32_Msg(const char *msg)
         UART_RequestSecureHello(1U); /* Re-initiate handshake immediately */
 
     } else if (strncmp(msg, "CAM_FAIL:", 9) == 0) {
-        /* ESP32 alive but camera not ready — keep link, let recovery timeout handle reset */
+        /* ESP32 alive but camera not ready - keep link, let recovery timeout handle reset */
         esp32_ready = 0; delete_hold_active = 0; Note_ESP32_Traffic();
         if (esp32_offline_tick == 0U) esp32_offline_tick = HAL_GetTick();
 
@@ -1166,14 +1166,14 @@ int main(void)
   /* USER CODE BEGIN 2 */
   App_Init();
 
-  /* ── Independent Watchdog (IWDG) ──────────────────────────────────────────
-   * STM32F411 LSI ≈ 32 kHz, prescaler = 64, reload = 2499 → timeout ≈ 5.0 s
+  /* -- Independent Watchdog (IWDG) ------------------------------------------
+   * STM32F411 LSI ~ 32 kHz, prescaler = 64, reload = 2499 -> timeout ~ 5.0 s
    * Started AFTER App_Init so DFPlayer HAL_Delay calls don't trigger a reset.
-   * ─────────────────────────────────────────────────────────────────────── */
+   * ----------------------------------------------------------------------- */
   IWDG->KR  = 0xCCCCU;           /* Enable IWDG                            */
   IWDG->KR  = 0x5555U;           /* Unlock PR / RLR registers              */
   IWDG->PR  = IWDG_PR_PR_2;      /* Prescaler = 64                         */
-  IWDG->RLR = 2499U;             /* Reload → 2499 × (64/32000) ≈ 5.0 s    */
+  IWDG->RLR = 2499U;             /* Reload -> 2499 x (64/32000) ~ 5.0 s    */
   while (IWDG->SR != 0U) {}      /* Wait for PR/RLR to be updated in HW    */
   IWDG->KR  = 0xAAAAU;           /* Reload counter (arm watchdog)          */
   /* USER CODE END 2 */

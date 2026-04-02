@@ -29,7 +29,7 @@ static void Parse_ESP32_Msg(const char *msg)
         enrolled_faces = (uint8_t)atoi(msg + 6);
     else if (strncmp(msg, "ENROLL_CFG:", 11) == 0)
         enroll_total_steps = (uint8_t)atoi(msg + 11);
-    /* ... (xem them trong repository) */
+    /* ... (xem them trong kho ma nguon) */
 }
 \end{lstlisting}
 
@@ -149,7 +149,7 @@ static void App_Loop(void)
             }
             break;
         case SYS_LOCKED:
-            /* cap nhat dem nguoc OLED */
+            /* Cap nhat dem nguoc OLED */
             break;
         default:
             break;

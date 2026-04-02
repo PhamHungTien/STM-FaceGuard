@@ -94,7 +94,7 @@ void DFPlayer_Play(uint8_t track)
         return;
     }
 
-    /* Skip stop+delay if nothing is playing (different track or idle) — avoids
+    /* Skip stop+delay if nothing is playing (different track or idle) - avoids
      * blocking App_Loop() with an unnecessary 80 ms HAL_Delay.              */
     if (dfp_last_track != 0xFFU) {
         dfp_send(0x16, 0x00, 0x00);

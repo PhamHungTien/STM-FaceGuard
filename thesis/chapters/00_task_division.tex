@@ -13,9 +13,8 @@
 \vspace{0.5cm}
 
 % ── Bảng phân công ──────────────────────────────────────────
-\begin{table}[H]
-\centering
-\caption*{\textbf{Bảng phân công nhiệm vụ các thành viên}}
+\begin{center}
+{\bfseries Bảng phân công nhiệm vụ các thành viên}\\[0.2cm]
 \small
 \setlength{\tabcolsep}{4pt}
 \setlength{\extrarowheight}{4pt}
@@ -86,11 +85,11 @@
 
   \bottomrule
 \end{tabular}
-\end{table}
+\end{center}
 
 \vspace{0.8cm}
 \begin{flushright}
-  \textit{TP. Hồ Chí Minh, ngày \underline{\phantom{XX}} tháng \underline{\phantom{XX}} năm 2026}
+  \textit{TP. Hồ Chí Minh, ngày 02 tháng 04 năm 2026}
 \end{flushright}
 
 \end{singlespace}
@@ -101,17 +100,15 @@
 \begin{singlespace}
 
 \begin{center}
-  {\normalsize\bfseries Biểu đồ Gantt --- Kế hoạch thực hiện dự án}\\[0.15cm]
-  {\normalsize\itshape Thời gian: 21/03/2026 -- 03/04/2026 \quad|\quad
+  {\small\bfseries Biểu đồ Gantt --- Kế hoạch thực hiện dự án}\\[0.08cm]
+  {\small\itshape Thời gian: 21/03/2026 -- 03/04/2026 \quad|\quad
   Ngày thuyết trình: 03/04/2026}
 \end{center}
 
-\vspace{0.1cm}
+\vspace{0.02cm}
 
 % slot 1--7  = Tuần 1: 21/03 -- 27/03/2026
 % slot 8--14 = Tuần 2: 28/03 -- 03/04/2026
-\begin{figure}[H]
-\centering
 \begin{ganttchart}[
     hgrid,
     vgrid,
@@ -123,13 +120,13 @@
     milestone label font    = \scriptsize\bfseries,
     title/.append style     = {fill=gray!15},
     title label font        = \scriptsize\bfseries,
-    x unit          = 1.18cm,
-    y unit title    = 0.52cm,
-    y unit chart    = 0.74cm,
-    bar height      = 0.46,
-    group height    = 0.40,
-    bar label node/.append style = {align=left, text width=5.2cm},
-    group label node/.append style = {align=left, text width=5.2cm},
+    x unit          = 1.12cm,
+    y unit title    = 0.48cm,
+    y unit chart    = 0.66cm,
+    bar height      = 0.42,
+    group height    = 0.36,
+    bar label node/.append style = {align=left, text width=4.8cm},
+    group label node/.append style = {align=left, text width=4.8cm},
     canvas/.append style    = {draw=gray!40}
 ]{1}{14}
 
@@ -179,7 +176,6 @@
   ]{Thuyết trình 03.04.2026}{14}
 
 \end{ganttchart}
-\end{figure}
 
 \end{singlespace}
 \end{landscape}

@@ -3,6 +3,12 @@
 % ============================================================
 \begin{titlepage}
 \begin{singlespace}
+\begin{tikzpicture}[remember picture, overlay]
+  \draw[line width=0.7pt, draw=black!45]
+    ([xshift=1.0cm,yshift=-1.0cm]current page.north west)
+      rectangle
+    ([xshift=-1.0cm,yshift=1.0cm]current page.south east);
+\end{tikzpicture}
 \centering
 
 \includegraphics[width=3.2cm]{hcmus_logo}\\[0.4cm]
@@ -40,7 +46,8 @@
 \hfill
 \begin{minipage}[t]{0.52\textwidth}
   \raggedleft
-  \textbf{Nhóm sinh viên thực hiện:}\\[4pt]
+  \textbf{Nhóm sinh viên thực hiện:}\\[2pt]
+  \textit{Cửu Dương Thần Công}\\[4pt]
   \begin{tabular}[t]{r @{\quad} l}
     24207043 & Phạm Hùng Tiến \\[2pt]
     24207029 & Trần Thái Nguyên \\[2pt]
@@ -52,7 +59,7 @@
 
 \vspace{1.8cm}
 
-{\large Thành phố Hồ Chí Minh, tháng \underline{\phantom{XX}} năm \underline{\phantom{XXXX}}}
+{\large Thành phố Hồ Chí Minh, ngày 02 tháng 04 năm 2026}
 
 \end{singlespace}
 \end{titlepage}

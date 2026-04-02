@@ -66,7 +66,9 @@ Hình \cref{fig:stm32_fsm} trình bày trực quan các chuyển đổi trạng 
   \begin{tikzpicture}[x=1cm, y=1cm, >=Stealth, font=\small,
     st/.style  = {draw, circle, minimum size=3.0cm, align=center,
                   fill=blue!8, draw=blue!50!black, line width=0.8pt},
-    lbl/.style = {font=\scriptsize, fill=white, inner sep=2pt, align=center}
+    lbl/.style = {font=\scriptsize, fill=white, draw=white, line width=0.8pt,
+                  inner xsep=2.5pt, inner ysep=1.5pt, rounded corners=1pt,
+                  align=center}
   ]
     %% ─── Layout (no text width → no hyphenation) ──────────────
     %%   Col:   x=-5.5     x=0      x=5.5
@@ -83,39 +85,39 @@ Hình \cref{fig:stm32_fsm} trình bày trực quan các chuyển đổi trạng 
     \node[st] (denied)   at ( 5.5, -3.5) {DENIED};
 
     %% CONNECTING → IDLE (straight down)
-    \draw[->] (conn)     -- node[lbl, right]{READY from ESP32}   (idle);
+    \draw[->] (conn)     -- node[lbl, pos=0.52, xshift=10pt]{READY from ESP32} (idle);
     %% CONNECTING → OFFLINE (diagonal)
-    \draw[->] (conn)     -- node[lbl, left, pos=0.4]{Timeout 30s} (offline);
+    \draw[->] (conn)     -- node[lbl, pos=0.42, xshift=-11pt]{Timeout 30s} (offline);
     %% OFFLINE → IDLE (horizontal)
-    \draw[->] (offline)  -- node[lbl, above]{STATUS resp}        (idle);
+    \draw[->] (offline)  -- node[lbl, midway, yshift=8pt]{STATUS resp} (idle);
 
     %% IDLE ↔ ENROLLING (two parallel arcs, same row)
     \draw[->, bend left=22]  (idle)     to
-      node[lbl, above]{BTN\_ENROLL / ESP ready}  (enrolling);
+      node[lbl, pos=0.5, yshift=13pt]{BTN\_ENROLL / ESP ready} (enrolling);
     \draw[->, bend left=22]  (enrolling)to
-      node[lbl, below]{ENROLLED}                 (idle);
+      node[lbl, pos=0.52, yshift=-14pt, xshift=4pt]{ENROLLED} (idle);
 
     %% ENROLLING → DENIED (straight down, same column — no crossing!)
-    \draw[->] (enrolling) -- node[lbl, right]{Timeout 15s}       (denied);
+    \draw[->] (enrolling) -- node[lbl, pos=0.52, xshift=10pt]{Timeout 15s} (denied);
 
     %% IDLE ↔ UNLOCKING (two parallel arcs, same column)
     \draw[->, bend left=22]  (idle)     to
-      node[lbl, right]{OPEN:\textit{<id>}}        (unlocking);
+      node[lbl, pos=0.52, xshift=10pt]{OPEN:\textit{<id>}} (unlocking);
     \draw[->, bend left=22]  (unlocking)to
-      node[lbl, left]{Relay timeout 3s}           (idle);
+      node[lbl, pos=0.52, xshift=-12pt]{Relay timeout 3s} (idle);
 
     %% IDLE → DENIED (diagonal, arcs to separate from return)
     \draw[->, bend left=12]  (idle)  to
-      node[lbl, above, pos=0.35]{DENIED}          (denied);
+      node[lbl, pos=0.34, yshift=14pt, xshift=4pt]{DENIED} (denied);
     %% DENIED → IDLE (return, bends opposite side)
     \draw[->, bend right=22] (denied)to
-      node[lbl, below, pos=0.4]{2.5s auto-return} (idle);
+      node[lbl, pos=0.42, yshift=-10pt]{2.5s auto-return} (idle);
 
     %% IDLE ↔ LOCKED (diagonal, two arcs)
     \draw[->, bend right=18] (idle)  to
-      node[lbl, left, pos=0.4]{5 failures}         (locked);
+      node[lbl, pos=0.42, xshift=-10pt]{5 failures} (locked);
     \draw[->, bend right=18] (locked)to
-      node[lbl, right, pos=0.6]{5 min elapsed}    (idle);
+      node[lbl, pos=0.58, xshift=12pt]{5 min elapsed} (idle);
 
   \end{tikzpicture}}
   \caption[Sơ đồ trạng thái hệ thống STM32F411CEU6]{Sơ đồ trạng thái STM32F411CEU6. Chuyển trạng thái được kích bởi nút nhấn, bản tin UART từ ESP32-S3 và các bộ định thời không chặn dựa trên \texttt{HAL\_GetTick()}.}

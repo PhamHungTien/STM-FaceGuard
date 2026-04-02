@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Copyright (C) 2026 Phạm Hùng Tiến et al. -- STM-FaceGuard project
+// Copyright (C) 2026 Pham Hung Tien et al. -- STM-FaceGuard project
 /*
- * STM-FaceGuard — ESP32-S3 Face Recognition Node
- * ─────────────────────────────────────────────────────────────────────────────
- * Board   : ESP32-S3 N16R8 (Freenove ESP32-S3 WROOM hoặc tương đương)
+ * STM-FaceGuard - ESP32-S3 Face Recognition Node
+ * -----------------------------------------------------------------------------
+ * Board   : ESP32-S3 N16R8 (Freenove ESP32-S3 WROOM hoac tuong duong)
  * Arduino : ESP32 Arduino core >= 2.0.6
  *   - Board: "ESP32S3 Dev Module"
  *   - USB CDC On Boot: Disabled
@@ -19,31 +19,31 @@
  *   GND             --- GND
  *   Note: Header pins "TX/RX" on this board are kept free for upload/Serial Monitor.
  *
- * ── Giao thức STM32 → ESP32 ──────────────────────────────────────────────────
- *   "ENROLL\n"   – bắt đầu đăng ký khuôn mặt mới
- *   "DEL_ALL\n"  – xoá toàn bộ khuôn mặt khỏi flash
- *   "CANCEL\n"   – huỷ đăng ký đang diễn ra
- *   "STATUS\n"   – yêu cầu ESP32 gửi lại READY/FACES để đồng bộ trạng thái
- *   "REBOOT\n"   – yêu cầu ESP32 tự khởi động lại bằng phần mềm
+ * -- Giao thuc STM32 -> ESP32 --------------------------------------------------
+ *   "ENROLL\n"   - bat dau dang ky khuon mat moi
+ *   "DEL_ALL\n"  - xoa toan bo khuon mat khoi flash
+ *   "CANCEL\n"   - huy dang ky dang dien ra
+ *   "STATUS\n"   - yeu cau ESP32 gui lai READY/FACES de dong bo trang thai
+ *   "REBOOT\n"   - yeu cau ESP32 tu khoi dong lai bang phan mem
  *   "SECURE_HELLO\n" / "SECURE_READY\n"
- *                – bootstrap tương thích ngược trước khi bật secure UART
+ *                - bootstrap tuong thich nguoc truoc khi bat secure UART
  *
- * ── Giao thức ESP32 → STM32 ──────────────────────────────────────────────────
- *   "READY\n"          – khởi động xong
- *   "BOOTING\n"        – ESP32 đang khởi động lại / mới boot
- *   "OPEN:<id>\n"      – nhận ra khuôn mặt id
- *   "DENIED\n"         – không nhận ra
- *   "ENROLLED:<id>\n"  – đăng ký thành công, ID mới = id
- *   "DELETED\n"        – đã xoá toàn bộ
- *   "CAM_FAIL:<err>\n" – camera init/runtime lỗi, STM32 có thể kích recovery
- *   Khi cả hai bên đều hỗ trợ, payload UART sẽ được đóng gói dạng
- *   !SEQ:CIPHERTEXT:TAG thay vì chuỗi văn bản trần.
- *   "ENROLL_FRONT\n"   – bước 1/5: nhìn thẳng
- *   "ENROLL_LEFT\n"    – bước 2/5: quay trái
- *   "ENROLL_RIGHT\n"   – bước 3/5: quay phải
- *   "ENROLL_UP\n"      – bước 4/5: ngẩng đầu
- *   "ENROLL_DOWN\n"    – bước 5/5: cúi đầu
- * ─────────────────────────────────────────────────────────────────────────────
+ * -- Giao thuc ESP32 -> STM32 --------------------------------------------------
+ *   "READY\n"          - khoi dong xong
+ *   "BOOTING\n"        - ESP32 dang khoi dong lai / moi boot
+ *   "OPEN:<id>\n"      - nhan ra khuon mat id
+ *   "DENIED\n"         - khong nhan ra
+ *   "ENROLLED:<id>\n"  - dang ky thanh cong, ID moi = id
+ *   "DELETED\n"        - da xoa toan bo
+ *   "CAM_FAIL:<err>\n" - camera init/runtime loi, STM32 co the kich recovery
+ *   Khi ca hai ben deu ho tro, payload UART se duoc dong goi dang
+ *   !SEQ:CIPHERTEXT:TAG thay vi chuoi van ban tran.
+ *   "ENROLL_FRONT\n"   - buoc 1/5: nhin thang
+ *   "ENROLL_LEFT\n"    - buoc 2/5: quay trai
+ *   "ENROLL_RIGHT\n"   - buoc 3/5: quay phai
+ *   "ENROLL_UP\n"      - buoc 4/5: ngang dau
+ *   "ENROLL_DOWN\n"    - buoc 5/5: cui dau
+ * -----------------------------------------------------------------------------
  */
 
 #include "esp_camera.h"
@@ -62,8 +62,8 @@
 #include <WebServer.h>
 #include <WiFi.h>
 
-// ── Camera pins — ESP32-S3 N16R8 CAM (OV3660 3MP) ───────────────────────────
-// Tích hợp sẵn trên board, không cần nối thêm dây camera
+// -- Camera pins - ESP32-S3 N16R8 CAM (OV3660 3MP) ---------------------------
+// Tich hop san tren board, khong can noi them day camera
 #define PWDN_GPIO_NUM   -1
 #define RESET_GPIO_NUM  -1
 #define XCLK_GPIO_NUM   15
@@ -81,12 +81,12 @@
 #define HREF_GPIO_NUM    7
 #define PCLK_GPIO_NUM   13
 
-// ── UART tới STM32 ────────────────────────────────────────────────────────────
+// -- UART toi STM32 ------------------------------------------------------------
 #define STM32_BAUD     115200
-#define STM32_TX_PIN      19    // GPIO19 → STM32 PA10 (USART1_RX)
-#define STM32_RX_PIN      20    // GPIO20 ← STM32 PA9  (USART1_TX)
+#define STM32_TX_PIN      19    // GPIO19 -> STM32 PA10 (USART1_RX)
+#define STM32_RX_PIN      20    // GPIO20 <- STM32 PA9  (USART1_TX)
 
-// ── Wi-Fi preview (HTTP snapshot view) ───────────────────────────────────────
+// -- Wi-Fi preview (HTTP snapshot view) ---------------------------------------
 #define PREVIEW_ENABLE                  1
 #define PREVIEW_AP_SSID  "STM-FaceGuard-Preview"
 #define PREVIEW_AP_PASS  "faceguard123"
@@ -103,11 +103,11 @@
 #define PREVIEW_JPEG_QUALITY           80
 #define CAMERA_JPEG_QUALITY            12
 
-// ── Đèn trợ sáng khuôn mặt ───────────────────────────────────────────────────
-// Nhiều board ESP32-S3-CAM kiểu này có cả:
-// - flash LED trắng thường ở GPIO47
-// - RGB/NeoPixel ở GPIO48
-// Ta bật cả hai kiểu để bao phủ các biến thể board phổ biến.
+// -- Den tro sang khuon mat ---------------------------------------------------
+// Nhieu board ESP32-S3-CAM kieu nay co ca:
+// - flash LED trang thuong o GPIO47
+// - RGB/NeoPixel o GPIO48
+// Ta bat ca hai kieu de bao phu cac bien the board pho bien.
 #define FACE_LIGHT_ENABLE              1
 #define FACE_LIGHT_DIGITAL_ENABLE      1
 #define FACE_LIGHT_DIGITAL_GPIO       47
@@ -122,71 +122,71 @@
 #define FACE_LIGHT_STATUS_IDLE_LEVEL   HIGH
 #define FACE_LIGHT_HOLD_MS           250
 
-// ── Tham số tuning ────────────────────────────────────────────────────────────
-#define OPEN_COOLDOWN_MS          2500   // ms sau OPEN trước khi nhận diện lại
-#define DENIED_COOLDOWN_MS         400   // ms sau DENIED trước khi thử lại
-#define ENROLL_FACE_TIMEOUT_MS   12000   // ms chờ phát hiện khuôn mặt mỗi bước
-#define ENROLL_STEP_DELAY_MS      2000   // ms tối thiểu giữ mỗi tư thế (bước 2–N, không dùng khi ENROLL_TOTAL_STEPS=1)
-#define ENROLL_TOTAL_STEPS           1   // 1 = chỉ chụp mặt thẳng, xong ngay; tăng lên 5 để yêu cầu đa góc độ
-#define MAX_ENROLLED_FACES           7   // giới hạn thư viện ESP32 face recognition
-#define RX_BUF_MAX_LEN              96   // đủ chỗ cho packet UART có xác thực
-#define AUTO_STATUS_BEACON_MS     2000   // phát READY/FACES định kỳ khi rảnh
+// -- Tham so tuning ------------------------------------------------------------
+#define OPEN_COOLDOWN_MS          2500   // ms sau OPEN truoc khi nhan dien lai
+#define DENIED_COOLDOWN_MS         400   // ms sau DENIED truoc khi thu lai
+#define ENROLL_FACE_TIMEOUT_MS   12000   // ms cho phat hien khuon mat moi buoc
+#define ENROLL_STEP_DELAY_MS      2000   // ms toi thieu giu moi tu the (buoc 2-N, khong dung khi ENROLL_TOTAL_STEPS=1)
+#define ENROLL_TOTAL_STEPS           1   // 1 = chi chup mat thang, xong ngay; tang len 5 de yeu cau da goc do
+#define MAX_ENROLLED_FACES           7   // gioi han thu vien ESP32 face recognition
+#define RX_BUF_MAX_LEN              96   // du cho cho packet UART co xac thuc
+#define AUTO_STATUS_BEACON_MS     2000   // phat READY/FACES dinh ky khi ranh
 #define LINK_PACKET_MAX_LEN        96
 #define LINK_CRYPT_MAX_LEN         32
 
-// ── Ngưỡng nhận diện ──────────────────────────────────────────────────────────
-// 0.42: nhạy hơn cho in-door, single-pose DB. Tăng lên 0.55+ nếu bị false positive.
+// -- Nguong nhan dien ----------------------------------------------------------
+// 0.42: nhay hon cho in-door, single-pose DB. Tang len 0.55+ neu bi false positive.
 #define RECOGNITION_THRESHOLD     0.42F
 
-// ── Voting: yêu cầu N frame liên tiếp khớp trước khi mở cửa ─────────────────
-// N=1: phản hồi ngay lập tức (1 frame). Tăng lên 2 nếu bị false positive.
+// -- Voting: yeu cau N frame lien tiep khop truoc khi mo cua -----------------
+// N=1: phan hoi ngay lap tuc (1 frame). Tang len 2 neu bi false positive.
 #define REQUIRED_MATCHES             1
 
-// ── Negative voting: chỉ DENIED sau N frame liên tiếp không khớp ────────────
+// -- Negative voting: chi DENIED sau N frame lien tiep khong khop ------------
 #define REQUIRED_NO_MATCHES          3
 
-// ── Lockout: khoá sau N lần thất bại liên tiếp ────────────────────────────────
+// -- Lockout: khoa sau N lan that bai lien tiep --------------------------------
 #define MAX_FAILURES                 5
-#define LOCKOUT_DURATION_MS  (5UL * 60UL * 1000UL)   // 5 phút
+#define LOCKOUT_DURATION_MS  (5UL * 60UL * 1000UL)   // 5 phut
 #define ENROLL_PROMPT_COUNT          5
 
 #if (ENROLL_TOTAL_STEPS < 1) || (ENROLL_TOTAL_STEPS > ENROLL_PROMPT_COUNT)
 #error "ENROLL_TOTAL_STEPS must be between 1 and 5"
 #endif
 
-// ── Chuỗi prompt gửi STM32 khi đăng ký ───────────────────────────────────────
+// -- Chuoi prompt gui STM32 khi dang ky ---------------------------------------
 static const char * const ENROLL_STEPS[ENROLL_PROMPT_COUNT] = {
-    "ENROLL_FRONT",   // bước 1: nhìn thẳng
-    "ENROLL_LEFT",    // bước 2: quay trái
-    "ENROLL_RIGHT",   // bước 3: quay phải
-    "ENROLL_UP",      // bước 4: ngẩng đầu
-    "ENROLL_DOWN"     // bước 5: cúi đầu
+    "ENROLL_FRONT",   // buoc 1: nhin thang
+    "ENROLL_LEFT",    // buoc 2: quay trai
+    "ENROLL_RIGHT",   // buoc 3: quay phai
+    "ENROLL_UP",      // buoc 4: ngang dau
+    "ENROLL_DOWN"     // buoc 5: cui dau
 };
 
-// ── State machine ─────────────────────────────────────────────────────────────
+// -- State machine -------------------------------------------------------------
 enum AppState { STATE_IDLE, STATE_ENROLLING };
 static AppState appState    = STATE_IDLE;
-static int      enrollStep  = 0;     // bước hiện tại 0..4
-static uint32_t stepStartMs = 0;     // millis() lúc bắt đầu bước
-static int      enrolledId  = -1;    // ID thực tế từ enroll_id() bước FRONT
+static int      enrollStep  = 0;     // buoc hien tai 0..4
+static uint32_t stepStartMs = 0;     // millis() luc bat dau buoc
+static int      enrolledId  = -1;    // ID thuc te tu enroll_id() buoc FRONT
 static int      step0FailCount   = 0;   // consecutive enroll_id() failures at step 0
 static int      step0StableCount = 0;   // consecutive frames with face detected (stability gate)
 
-// ── Face AI objects ───────────────────────────────────────────────────────────
+// -- Face AI objects -----------------------------------------------------------
 // Two-stage detection: MSR01 (stage 1 - detect regions) + MNP01 (stage 2 - refine keypoints)
-// Keypoints chính xác từ stage 2 là yếu tố quyết định recognition similarity.
-// Stage 1: score_threshold=0.12, nms=0.45, top_k=10, min_face_size=0.08 — nhạy hơn cho demo
+// Keypoints chinh xac tu stage 2 la yeu to quyet dinh recognition similarity.
+// Stage 1: score_threshold=0.12, nms=0.45, top_k=10, min_face_size=0.08 - nhay hon cho demo
 // Stage 2: score_threshold=0.45, nms=0.3,  top_k=5
 static HumanFaceDetectMSR01   s1(0.12F, 0.45F, 10, 0.08F);
 static HumanFaceDetectMNP01   s2(0.45F, 0.3F, 5);
-static FaceRecognition112V1S8 recognizer;   // tự nạp face DB từ NVS/flash
+static FaceRecognition112V1S8 recognizer;   // tu nap face DB tu NVS/flash
 
-// ── Misc ──────────────────────────────────────────────────────────────────────
+// -- Misc ----------------------------------------------------------------------
 static uint32_t lastOpenMs      = 0;   // cooldown sau OPEN
 static uint32_t lastDeniedMs    = 0;   // cooldown sau DENIED
-static uint32_t lastStatusTxMs  = 0;   // chống spam READY/FACES khi host hỏi dồn
-static uint32_t lastBeaconTxMs  = 0;   // heartbeat để STM32 tự bắt lại đồng bộ
-static String   rxBuf;                 // bộ đệm dòng UART từ STM32
+static uint32_t lastStatusTxMs  = 0;   // chong spam READY/FACES khi host hoi don
+static uint32_t lastBeaconTxMs  = 0;   // heartbeat de STM32 tu bat lai dong bo
+static String   rxBuf;                 // bo dem dong UART tu STM32
 static bool     linkSecureActive = false;
 static uint8_t  linkTxSeq = 1;
 static uint8_t  linkRxSeq = 0;
@@ -198,21 +198,21 @@ static bool     previewApReady = false;
 static uint32_t previewLastApCheckMs = 0;
 static uint32_t previewLastApRestartMs = 0;
 
-// ── Voting state ──────────────────────────────────────────────────────────────
-static int      matchCount      = 0;   // số frame khớp liên tiếp
-static int      lastMatchId     = -1;  // ID đang vote
-static int      noMatchCount    = 0;   // số frame liên tiếp không khớp
+// -- Voting state --------------------------------------------------------------
+static int      matchCount      = 0;   // so frame khop lien tiep
+static int      lastMatchId     = -1;  // ID dang vote
+static int      noMatchCount    = 0;   // so frame lien tiep khong khop
 
-// ── Lockout state ─────────────────────────────────────────────────────────────
-static int      failureCount    = 0;           // lần thất bại liên tiếp
-static uint32_t lockoutUntilMs  = 0;           // khóa đến thời điểm này
+// -- Lockout state -------------------------------------------------------------
+static int      failureCount    = 0;           // lan that bai lien tiep
+static uint32_t lockoutUntilMs  = 0;           // khoa den thoi diem nay
 
-// ── Web UI — event tracking ───────────────────────────────────────────────────
+// -- Web UI - event tracking ---------------------------------------------------
 static char     lastEventStr[12] = "";   // "OPEN","DENIED","ENROLLED","DELETED","LOCKOUT"
 static int      lastEventIdWeb   = -1;   // face ID cho OPEN / ENROLLED
-static float    lastEventSim     = 0.0F; // similarity của lần nhận diện gần nhất
-static uint32_t lastEventSeq     = 0;    // đếm tăng mỗi sự kiện; JS dùng để phát hiện thay đổi
-static esp_err_t cameraInitErr  = ESP_OK;      // lưu lỗi init camera để chẩn đoán
+static float    lastEventSim     = 0.0F; // similarity cua lan nhan dien gan nhat
+static uint32_t lastEventSeq     = 0;    // dem tang moi su kien; JS dung de phat hien thay doi
+static esp_err_t cameraInitErr  = ESP_OK;      // luu loi init camera de chan doan
 static bool     cameraReady     = false;
 static uint32_t lastCamFailTxMs = 0;
 static uint8_t *rgbFrameBuf     = nullptr;
@@ -825,7 +825,7 @@ static void preview_handle_status()
         json += "/";
     }
 
-    // ── Event tracking fields ──────────────────────────────────────────────────
+    // -- Event tracking fields --------------------------------------------------
     json += F("\",\"lastEvent\":\"");
     json += lastEventStr;
     json += F("\",\"lastEventId\":");
@@ -937,13 +937,13 @@ static bool preview_start_ap_try(int channel, bool openMode)
         : WiFi.softAP(PREVIEW_AP_SSID, PREVIEW_AP_PASS, channel, 0, PREVIEW_AP_MAX_CONN);
 
     if (apReady) {
-        // Ưu tiên tương thích client: b/g/n + HT20, TX power tối đa.
+        // Uu tien tuong thich client: b/g/n + HT20, TX power toi da.
         esp_err_t protocolErr = esp_wifi_set_protocol(
             WIFI_IF_AP,
             WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N
         );
         esp_err_t bwErr = esp_wifi_set_bandwidth(WIFI_IF_AP, WIFI_BW_HT20);
-        esp_err_t txErr = esp_wifi_set_max_tx_power(80);  // 20 dBm theo bảng mapping IDF
+        esp_err_t txErr = esp_wifi_set_max_tx_power(80);  // 20 dBm theo bang mapping IDF
 
         if (protocolErr != ESP_OK || bwErr != ESP_OK || txErr != ESP_OK) {
             Serial.printf("[PREVIEW] AP radio tune warning  protocol=%s  bw=%s  tx=%s\n",
@@ -985,7 +985,7 @@ static void preview_start_network()
     WiFi.mode(WIFI_MODE_NULL);
     delay(100);
 
-    // Để ổn định preview AP, mặc định tắt AP+STA (STA có thể ép AP đổi channel).
+    // De on dinh preview AP, mac dinh tat AP+STA (STA co the ep AP doi channel).
     const bool wantSta = (PREVIEW_STA_ENABLE != 0) && (strlen(PREVIEW_STA_SSID) > 0);
     WiFi.mode(wantSta ? WIFI_AP_STA : WIFI_AP);
     delay(100);
@@ -1013,7 +1013,7 @@ static void preview_poll()
     if (previewServerStarted) {
         previewServer.handleClient();
     }
-    esp_task_wdt_reset(); /* handleClient() có thể block lâu khi có client HTTP */
+    esp_task_wdt_reset(); /* handleClient() co the block lau khi co client HTTP */
 
     uint32_t now = millis();
     if ((now - previewLastApCheckMs) >= PREVIEW_AP_HEALTHCHECK_MS) {
@@ -1023,7 +1023,7 @@ static void preview_poll()
             previewLastApRestartMs = now;
             Serial.println("[PREVIEW] AP healthcheck failed -> restarting AP");
             WiFi.softAPdisconnect(true);
-            esp_task_wdt_reset(); /* WiFi teardown/restart có thể mất vài trăm ms */
+            esp_task_wdt_reset(); /* WiFi teardown/restart co the mat vai tram ms */
             delay(60);
             preview_start_ap_with_fallback();
             esp_task_wdt_reset();
@@ -1047,9 +1047,9 @@ static void preview_poll()
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Khởi tạo camera
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
+// Khoi tao camera
+// -----------------------------------------------------------------------------
 static bool camera_init()
 {
     camera_config_t cfg = {};
@@ -1072,8 +1072,8 @@ static bool camera_init()
     cfg.pin_pwdn      = PWDN_GPIO_NUM;
     cfg.pin_reset     = RESET_GPIO_NUM;
     cfg.xclk_freq_hz  = 20000000;
-    cfg.pixel_format  = PIXFORMAT_RGB565;    // fmt2rgb888(JPEG) có bug silent-corrupt; RGB565→RGB888 ổn định
-    cfg.frame_size    = FRAMESIZE_240X240;   // cân bằng tốt cho face AI
+    cfg.pixel_format  = PIXFORMAT_RGB565;    // fmt2rgb888(JPEG) co bug silent-corrupt; RGB565->RGB888 on dinh
+    cfg.frame_size    = FRAMESIZE_240X240;   // can bang tot cho face AI
     cfg.jpeg_quality  = CAMERA_JPEG_QUALITY;
     cfg.fb_count      = psramFound() ? 2 : 1;
     cfg.fb_location   = psramFound() ? CAMERA_FB_IN_PSRAM : CAMERA_FB_IN_DRAM;
@@ -1087,19 +1087,19 @@ static bool camera_init()
     sensor_t *s = esp_camera_sensor_get();
     if (s) {
         s->set_vflip(s, 0);
-        s->set_hmirror(s, 1);       // gương ngang — nhìn tự nhiên như selfie
+        s->set_hmirror(s, 1);       // guong ngang - nhin tu nhien nhu selfie
         s->set_whitebal(s, 1);      // auto white balance
         s->set_awb_gain(s, 1);      // auto WB gain
         s->set_exposure_ctrl(s, 1); // auto exposure
         s->set_aec2(s, 1);          // AEC algorithm 2 (better in low light)
-        s->set_ae_level(s, 1);      // tăng nhẹ exposure target — sáng hơn cho in-door demo
+        s->set_ae_level(s, 1);      // tang nhe exposure target - sang hon cho in-door demo
         s->set_gain_ctrl(s, 1);     // auto gain
-        s->set_agc_gain(s, 0);      // bắt đầu với gain thấp, để AEC tự điều chỉnh
-        s->set_brightness(s, 2);    // sáng hơn cho demo in-door (+2)
+        s->set_agc_gain(s, 0);      // bat dau voi gain thap, de AEC tu dieu chinh
+        s->set_brightness(s, 2);    // sang hon cho demo in-door (+2)
         s->set_contrast(s, 1);      // slightly higher contrast (+1)
         s->set_saturation(s, 0);    // neutral saturation
-        s->set_sharpness(s, 2);     // rõ nét hơn cho face detail (+2)
-        s->set_denoise(s, 1);       // giảm nhiễu — tốt cho môi trường tối
+        s->set_sharpness(s, 2);     // ro net hon cho face detail (+2)
+        s->set_denoise(s, 1);       // giam nhieu - tot cho moi truong toi
     }
 
     camera_fb_t *fb = esp_camera_fb_get();
@@ -1113,7 +1113,7 @@ static bool camera_init()
     return ok;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 static void send_status(bool includeConfig)
 {
     if (!cameraReady) {
@@ -1160,9 +1160,9 @@ static void abort_enroll(bool rollback_partial)
     step0StableCount  = 0;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Xử lý lệnh nhận từ STM32
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
+// Xu ly lenh nhan tu STM32
+// -----------------------------------------------------------------------------
 static void process_cmd(const String &cmd)
 {
     Serial.printf("[CMD] «%s»\n", cmd.c_str());
@@ -1187,7 +1187,7 @@ static void process_cmd(const String &cmd)
             Serial.println("[ENROLL] DB full → DB_FULL sent");
             return;
         }
-        // Restart enrollment unconditionally — handles STM32 retry correctly.
+        // Restart enrollment unconditionally - handles STM32 retry correctly.
         // If we were mid-enroll, roll back the partial capture first.
         abort_enroll(appState == STATE_ENROLLING);
         appState    = STATE_ENROLLING;
@@ -1225,9 +1225,9 @@ static void process_cmd(const String &cmd)
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Xử lý một frame camera: nhận diện hoặc đăng ký
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
+// Xu ly mot frame camera: nhan dien hoac dang ky
+// -----------------------------------------------------------------------------
 static void process_frame()
 {
     camera_fb_t *fb = esp_camera_fb_get();
@@ -1246,17 +1246,17 @@ static void process_frame()
         return;
     }
 
-    // Two-stage detection: stage 1 (MSR01) tìm vùng mặt → stage 2 (MNP01) tinh chỉnh keypoints
-    // Keypoints chính xác từ stage 2 giúp recognize() đạt similarity cao hơn đáng kể.
+    // Two-stage detection: stage 1 (MSR01) tim vung mat -> stage 2 (MNP01) tinh chinh keypoints
+    // Keypoints chinh xac tu stage 2 giup recognize() dat similarity cao hon dang ke.
     std::list<dl::detect::result_t> candidates =
         s1.infer(rgbFrameBuf, {(int)fb->height, (int)fb->width, 3});
     esp_task_wdt_reset();
 
     std::list<dl::detect::result_t> faces =
         s2.infer(rgbFrameBuf, {(int)fb->height, (int)fb->width, 3}, candidates);
-    esp_task_wdt_reset();   // two-stage inference có thể chậm — giữ WDT happy
+    esp_task_wdt_reset();   // two-stage inference co the cham - giu WDT happy
 
-    // Debug: in mỗi 2s để không spam, giúp xác nhận có detect được không
+    // Debug: in moi 2s de khong spam, giup xac nhan co detect duoc khong
     static uint32_t lastDetectLogMs = 0;
     if ((millis() - lastDetectLogMs) >= 2000U) {
         lastDetectLogMs = millis();
@@ -1265,12 +1265,12 @@ static void process_frame()
     }
 
     if (faces.empty()) {
-        // Không thấy khuôn mặt
+        // Khong thay khuon mat
         noMatchCount     = 0;
-        step0StableCount = 0;  // reset stability gate — face must reappear cleanly
+        step0StableCount = 0;  // reset stability gate - face must reappear cleanly
         if (appState == STATE_ENROLLING) {
             if ((millis() - stepStartMs) >= ENROLL_FACE_TIMEOUT_MS) {
-                // Hết giờ chờ, nhắc lại bước hiện tại
+                // Het gio cho, nhac lai buoc hien tai
                 stepStartMs = millis();
                 linkSend(ENROLL_STEPS[enrollStep]);
                 Serial.printf("[ENROLL] Timeout, re-prompt step %d\n", enrollStep + 1);
@@ -1296,19 +1296,19 @@ static void process_frame()
 
     dl::detect::result_t &face = *bestFaceIt;
 
-    // Bọc frame buffer thành Tensor (không copy, trỏ thẳng vào fb->buf)
+    // Boc frame buffer thanh Tensor (khong copy, tro thang vao fb->buf)
     Tensor<uint8_t> img;
     img.set_element(rgbFrameBuf)
        .set_shape({(int)fb->height, (int)fb->width, 3})
        .set_auto_free(false);
 
-    // ── Chế độ ĐĂNG KÝ ───────────────────────────────────────────────────────
+    // -- Che do DANG KY -------------------------------------------------------
     if (appState == STATE_ENROLLING)
     {
         if (enrollStep == 0) {
             int result = recognizer.enroll_id(img, face.keypoint, "", true);
             if (result < 0) {
-                // Alignment failed — reset stability and retry next detection
+                // Alignment failed - reset stability and retry next detection
                 step0FailCount++;
                 step0StableCount = 0;
                 Serial.printf("[ENROLL] enroll_id failed (attempt %d)\n", step0FailCount);
@@ -1320,7 +1320,7 @@ static void process_frame()
             enrolledId = result;
             Serial.printf("[ENROLL] Captured FRONT, ID=%d\n", result);
 
-            // Nếu chỉ có 1 bước (ENROLL_TOTAL_STEPS==1), hoàn tất enrollment ngay
+            // Neu chi co 1 buoc (ENROLL_TOTAL_STEPS==1), hoan tat enrollment ngay
             if (ENROLL_TOTAL_STEPS == 1) {
                 int persisted = recognizer.write_ids_to_flash();
                 if (persisted < 0) {
@@ -1346,7 +1346,7 @@ static void process_frame()
             Serial.printf("[ENROLL] Step 2/%d → %s\n", ENROLL_TOTAL_STEPS, ENROLL_STEPS[enrollStep]);
         }
         else {
-            // Bước 1–4: chờ đủ ENROLL_STEP_DELAY_MS để người dùng kịp xoay mặt
+            // Buoc 1-4: cho du ENROLL_STEP_DELAY_MS de nguoi dung kip xoay mat
             if ((millis() - stepStartMs) < ENROLL_STEP_DELAY_MS) {
                 esp_camera_fb_return(fb);
                 return;
@@ -1379,10 +1379,10 @@ static void process_frame()
             }
         }
     }
-    // ── Chế độ NHẬN DIỆN (IDLE) ───────────────────────────────────────────────
+    // -- Che do NHAN DIEN (IDLE) -----------------------------------------------
     else
     {
-        // Bỏ qua nếu không có mặt nào đăng ký
+        // Bo qua neu khong co mat nao dang ky
         if (recognizer.get_enrolled_id_num() == 0) {
             noMatchCount = 0;
             esp_camera_fb_return(fb);
@@ -1391,14 +1391,14 @@ static void process_frame()
 
         uint32_t now = millis();
 
-        // ── Lockout check ─────────────────────────────────────────────────────
+        // -- Lockout check -----------------------------------------------------
         if (now < lockoutUntilMs) {
             noMatchCount = 0;
             esp_camera_fb_return(fb);
             return;
         }
 
-        // ── Cooldown: khi đang trong open cooldown, reset vote và skip ────────
+        // -- Cooldown: khi dang trong open cooldown, reset vote va skip --------
         if ((now - lastOpenMs) < OPEN_COOLDOWN_MS) {
             matchCount  = 0;
             lastMatchId = -1;
@@ -1407,19 +1407,19 @@ static void process_frame()
             return;
         }
 
-        // Skip nếu denied cooldown còn hiệu lực
+        // Skip neu denied cooldown con hieu luc
         if ((now - lastDeniedMs) < DENIED_COOLDOWN_MS) {
             noMatchCount = 0;
             esp_camera_fb_return(fb);
             return;
         }
 
-        // ── Nhận diện ─────────────────────────────────────────────────────────
+        // -- Nhan dien ---------------------------------------------------------
         face_info_t res = recognizer.recognize(img, face.keypoint);
 
         if (res.id >= 0 && res.similarity >= RECOGNITION_THRESHOLD) {
             noMatchCount = 0;
-            // ── VOTING: tích lũy frame khớp liên tiếp ─────────────────────────
+            // -- VOTING: tich luy frame khop lien tiep -------------------------
             if (res.id == lastMatchId) {
                 matchCount++;
             } else {
@@ -1430,7 +1430,7 @@ static void process_frame()
                           matchCount, REQUIRED_MATCHES, res.id, res.similarity);
 
             if (matchCount >= REQUIRED_MATCHES) {
-                // Xác nhận — mở cửa
+                // Xac nhan - mo cua
                 failureCount = 0;      // reset failure counter on success
                 matchCount   = 0;
                 lastMatchId  = -1;
@@ -1442,7 +1442,7 @@ static void process_frame()
             }
         }
         else {
-            // Không khớp — reset vote
+            // Khong khop - reset vote
             matchCount  = 0;
             lastMatchId = -1;
             noMatchCount++;
@@ -1460,7 +1460,7 @@ static void process_frame()
             Serial.printf("[RECOG] DENIED  failures=%d/%d\n",
                           failureCount, MAX_FAILURES);
 
-            // ── Lockout trigger ───────────────────────────────────────────────
+            // -- Lockout trigger -----------------------------------------------
             if (failureCount >= MAX_FAILURES) {
                 failureCount   = 0;
                 lockoutUntilMs = now + LOCKOUT_DURATION_MS;
@@ -1468,8 +1468,8 @@ static void process_frame()
                 record_event("LOCKOUT", -1, res.similarity);
                 Serial.printf("[SECURITY] LOCKOUT for %lu ms\n", LOCKOUT_DURATION_MS);
 
-                // Gửi LOCKOUT_CLEAR sau khi hết thời gian (dùng một lần trigger)
-                // — được xử lý bởi lockout_check() trong loop()
+                // Gui LOCKOUT_CLEAR sau khi het thoi gian (dung mot lan trigger)
+                // - duoc xu ly boi lockout_check() trong loop()
             } else {
                 linkSend("DENIED");
                 record_event("DENIED", -1, res.similarity);
@@ -1480,7 +1480,7 @@ static void process_frame()
     esp_camera_fb_return(fb);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 void setup()
 {
@@ -1495,24 +1495,24 @@ void setup()
     face_light_init();
     face_light_self_test();
 
-    // UART tới STM32
+    // UART toi STM32
     Serial1.begin(STM32_BAUD, SERIAL_8N1, STM32_RX_PIN, STM32_TX_PIN);
     delay(10);
-    while (Serial1.available()) Serial1.read();  // flush garbage bytes từ STM32 lúc ESP32 power-up
+    while (Serial1.available()) Serial1.read();  // flush garbage bytes tu STM32 luc ESP32 power-up
     rxBuf.reserve(RX_BUF_MAX_LEN);
     linkSecureActive = false;
     linkTxSeq = 1U;
     linkRxSeq = 0U;
     linkRxSynced = false;
     linkSendPlain("BOOTING");
-    delay(50);  // đảm bảo STM32 nhận được BOOTING trước khi camera chiếm CPU
+    delay(50);  // dam bao STM32 nhan duoc BOOTING truoc khi camera chiem CPU
 
-    // Khởi động WiFi trước camera — AP luôn hiện ngay cả khi camera crash
+    // Khoi dong WiFi truoc camera - AP luon hien ngay ca khi camera crash
 #if PREVIEW_ENABLE
     preview_start_network();
 #endif
 
-    // Khởi tạo camera
+    // Khoi tao camera
     cameraReady = camera_init();
     if (!cameraReady) {
         Serial.printf("[SYS] Camera init FAILED err=0x%04X (%s)\n",
@@ -1523,12 +1523,12 @@ void setup()
                       psramFound() ? "yes" : "NO",
                       esp_get_free_heap_size());
     }
-    // Hiển thị số khuôn mặt đã đăng ký (nạp từ NVS flash)
+    // Hien thi so khuon mat da dang ky (nap tu NVS flash)
     Serial.printf("[SYS] Enrolled faces: %d\n", recognizer.get_enrolled_id_num());
 
-    // Bật task watchdog — reset ESP32 nếu vòng loop() bị kẹt quá 30 giây
+    // Bat task watchdog - reset ESP32 neu vong loop() bi ket qua 30 giay
     esp_task_wdt_init(30, true);   // 30 s timeout, panic + reset
-    esp_task_wdt_add(NULL);        // theo dõi task hiện tại (loopTask)
+    esp_task_wdt_add(NULL);        // theo doi task hien tai (loopTask)
 
     delay(300);
     if (cameraReady) {
@@ -1538,9 +1538,9 @@ void setup()
 
 void loop()
 {
-    esp_task_wdt_reset();   // reset WDT mỗi vòng loop để chứng minh không bị kẹt
+    esp_task_wdt_reset();   // reset WDT moi vong loop de chung minh khong bi ket
 
-    // ── Kiểm tra hết lockout ──────────────────────────────────────────────────
+    // -- Kiem tra het lockout --------------------------------------------------
     if (lockoutUntilMs > 0 && millis() >= lockoutUntilMs) {
         lockoutUntilMs = 0;
         failureCount   = 0;
@@ -1550,7 +1550,7 @@ void loop()
         Serial.println("[SECURITY] Lockout cleared");
     }
 
-    // ── Đọc UART từ STM32 ────────────────────────────────────────────────────
+    // -- Doc UART tu STM32 ----------------------------------------------------
     while (Serial1.available()) {
         char c = (char)Serial1.read();
         if (c == '\n') {
@@ -1561,7 +1561,7 @@ void loop()
             }
             rxBuf = "";
         } else if (rxBuf.length() >= RX_BUF_MAX_LEN) {
-            /* Command too long — discard and log */
+            /* Command too long - discard and log */
             Serial.printf("[CMD] RxBuf overflow, discarding: %s\n", rxBuf.c_str());
             rxBuf = "";
         } else if (c != '\r') {
@@ -1590,7 +1590,7 @@ void loop()
         send_status(false);
     }
 
-    /* Periodic health telemetry every 60 s — helps diagnose field issues */
+    /* Periodic health telemetry every 60 s - helps diagnose field issues */
     static uint32_t lastTelemetryMs = 0;
     if ((millis() - lastTelemetryMs) >= 60000UL) {
         lastTelemetryMs = millis();
@@ -1603,6 +1603,6 @@ void loop()
                       failureCount);
     }
 
-    // ── Xử lý một frame camera ───────────────────────────────────────────────
+    // -- Xu ly mot frame camera -----------------------------------------------
     process_frame();
 }

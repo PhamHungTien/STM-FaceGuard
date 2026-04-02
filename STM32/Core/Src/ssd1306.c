@@ -1,7 +1,7 @@
 #include "ssd1306.h"
 
 /* -----------------------------------------------------------------------
- * 5×7 ASCII font, characters 32 (space) … 126 (~)
+ * 5x7 ASCII font, characters 32 (space) ... 126 (~)
  * Each entry = 5 bytes (columns), MSB = top pixel
  * ----------------------------------------------------------------------- */
 static const uint8_t font5x7[][5] = {
@@ -108,7 +108,7 @@ static void OLED_Cmd(uint8_t cmd)
 {
     uint8_t buf[2] = {0x00, cmd};
     if (HAL_I2C_Master_Transmit(&hi2c1, SSD1306_I2C_ADDR, buf, 2, 10) != HAL_OK) {
-        /* I2C bus stuck – recover by reinitialising the peripheral */
+        /* I2C bus stuck - recover by reinitialising the peripheral */
         HAL_I2C_DeInit(&hi2c1);
         HAL_Delay(2);
         HAL_I2C_Init(&hi2c1);
@@ -153,7 +153,7 @@ void SSD1306_Init(void)
             HAL_Delay(80);
         }
         HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
-        return; /* I2C not working – skip init */
+        return; /* I2C not working - skip init */
     }
 
     static const uint8_t init_seq[] = {
@@ -376,7 +376,7 @@ void SSD1306_ShowEnrolled(uint8_t id, uint8_t count, uint8_t max_count)
 void SSD1306_ShowHoldDelete(uint8_t seconds)
 {
     char buf[22];
-    /* Progress bar: max 3 seconds → 10 chars */
+    /* Progress bar: max 3 seconds -> 10 chars */
     uint8_t prog = (seconds >= 3) ? 10 : (seconds * 10 / 3);
     char bar[11];
     for (uint8_t i = 0; i < 10; i++) bar[i] = (i < prog) ? '=' : '-';

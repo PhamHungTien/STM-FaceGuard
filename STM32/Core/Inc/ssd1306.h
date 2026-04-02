@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include "main.h"
 
-/* SSD1306 I2C address (7-bit 0x3C → 8-bit write 0x78) */
+/* SSD1306 I2C address (7-bit 0x3C -> 8-bit write 0x78) */
 #define SSD1306_I2C_ADDR    (0x3C << 1)
 #define SSD1306_WIDTH       128
 #define SSD1306_HEIGHT      64
@@ -28,7 +28,7 @@ void SSD1306_ShowESP32Offline(void);
 void SSD1306_ShowReady(void);
 void SSD1306_ShowReadyFaces(uint8_t count);  /* Shows face count below READY */
 void SSD1306_ShowDbFull(void);               /* DB at capacity, cannot enroll */
-void SSD1306_ShowLockout(void);              /* Security lockout — too many failures */
+void SSD1306_ShowLockout(void);              /* Security lockout - too many failures */
 void SSD1306_ShowLockedCountdown(uint32_t remaining_s); /* Lockout with countdown */
 void SSD1306_ShowScanning(void);
 void SSD1306_ShowUnlocked(uint8_t id);
