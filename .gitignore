@@ -23,9 +23,11 @@ RemoteSystemsTempFiles/
 .vscode/
 *.code-workspace
 .DS_Store
+.claude/
 
 # macOS
 .DS_Store
+.osx.project
 .AppleDouble
 .LSOverride
 .Spotlight-V100
