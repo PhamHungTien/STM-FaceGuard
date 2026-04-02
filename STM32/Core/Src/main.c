@@ -48,11 +48,11 @@ typedef enum {
 #define LOCKOUT_DISPLAY_MS  300000U  /* STM32-side lockout fallback: 5 minutes  */
 #define RELAY_OPEN_MS         3000U  /* Door stays unlocked for 3 seconds       */
 #define DELETE_HOLD_MS        3000U  /* Hold DELETE button 3s to confirm        */
-#define DENIED_DISPLAY_MS     2500U  /* "Access Denied" shown for 2.5 seconds   */
+#define DENIED_DISPLAY_MS     1500U  /* "Access Denied" shown for 1.5 seconds   */
 #define ENROLL_TIMEOUT_MS    15000U  /* Enrolling mode auto-cancels after 15s   */
 #define ENROLL_RETRY_MAX         2U  /* Retries if ENROLL command seems lost     */
 #define CONNECT_TIMEOUT_MS   30000U  /* Fallback if ESP32 never sends READY     */
-#define RESULT_DISPLAY_MS     3000U  /* ENROLLED/DELETED/DB_FULL display time   */
+#define RESULT_DISPLAY_MS     2000U  /* ENROLLED/DELETED/DB_FULL display time   */
 #define DEBOUNCE_MS            200U  /* Minimum ms between button events        */
 #define MAX_ENROLLED_FACES_STM32 7U  /* Must match MAX_ENROLLED_FACES on ESP32  */
 #define ESP32_SYNC_RETRY_MS   1000U  /* Periodic STATUS sync while link unknown  */
@@ -817,32 +817,52 @@ static void Parse_ESP32_Msg(const char *msg)
     } else if (strcmp(msg, "BOOTING") == 0) {
         esp32_ready = 0; delete_hold_active = 0; Note_ESP32_Traffic();
         esp32_offline_tick = 0U;
+        /* Reset secure link so re-handshake starts cleanly after ESP32 restart.
+         * Without this, STM32 would keep sending encrypted STATUS to a freshly
+         * booted ESP32 that has not yet enabled secure mode. */
+        uart_secure_active    = 0U;
+        uart_secure_tx_seq    = 1U;
+        uart_secure_rx_seq    = 0U;
+        uart_secure_rx_synced = 0U;
+        uart_secure_hello_tick = 0U;
         if (sys_state != SYS_UNLOCKING) {
             sys_state = SYS_CONNECTING;
             state_tick = HAL_GetTick();
             esp32_sync_start_tick = state_tick;
             SSD1306_ShowConnecting();
         }
+        UART_RequestSecureHello(1U); /* Re-initiate handshake immediately */
 
     } else if (strncmp(msg, "CAM_FAIL:", 9) == 0) {
-        esp32_ready = 0; delete_hold_active = 0; Note_ESP32_Traffic(); Mark_ESP32_Offline();
+        /* ESP32 alive but camera not ready — keep link, let recovery timeout handle reset */
+        esp32_ready = 0; delete_hold_active = 0; Note_ESP32_Traffic();
+        if (esp32_offline_tick == 0U) esp32_offline_tick = HAL_GetTick();
 
     } else if (strcmp(msg, "READY") == 0) {
         Mark_ESP32_Alive();
-        btn_enroll_flag = 0; btn_delete_flag = 0; btn_exit_flag = 0;
-        delete_hold_active = 0;
         if (sys_state == SYS_CONNECTING || sys_state == SYS_OFFLINE) {
+            /* Discard stale button presses that accumulated while offline/connecting */
+            btn_enroll_flag = 0; btn_delete_flag = 0; btn_exit_flag = 0;
+            delete_hold_active = 0;
             sys_state = SYS_IDLE; Show_Ready();
         }
 
     } else if (strncmp(msg, "FACES:", 6) == 0) {
         Mark_ESP32_Alive();
         uint8_t n = (uint8_t)atoi(msg + 6);
-        enrolled_faces = (n <= MAX_ENROLLED_FACES_STM32) ? n : MAX_ENROLLED_FACES_STM32;
-        if (sys_state == SYS_CONNECTING || sys_state == SYS_OFFLINE) {
+        uint8_t new_count = (n <= MAX_ENROLLED_FACES_STM32) ? n : MAX_ENROLLED_FACES_STM32;
+        uint8_t was_not_idle = (sys_state == SYS_CONNECTING || sys_state == SYS_OFFLINE) ? 1U : 0U;
+        if (was_not_idle) {
             sys_state = SYS_IDLE; delete_hold_active = 0;
         }
-        if (sys_state == SYS_IDLE) Show_Ready();
+        /* Only redraw when transitioning to IDLE or when count actually changed.
+         * Avoids rewriting the OLED on every 2-second beacon (which caused flicker). */
+        if (sys_state == SYS_IDLE && (was_not_idle || new_count != enrolled_faces)) {
+            enrolled_faces = new_count;
+            Show_Ready();
+        } else {
+            enrolled_faces = new_count;
+        }
 
     } else if (strncmp(msg, "ENROLL_CFG:", 11) == 0) {
         Mark_ESP32_Alive();

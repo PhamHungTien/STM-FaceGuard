@@ -123,10 +123,10 @@
 #define FACE_LIGHT_HOLD_MS           250
 
 // ── Tham số tuning ────────────────────────────────────────────────────────────
-#define OPEN_COOLDOWN_MS          3000   // ms sau OPEN trước khi nhận diện lại
-#define DENIED_COOLDOWN_MS         800   // ms sau DENIED trước khi thử lại
-#define ENROLL_FACE_TIMEOUT_MS   10000   // ms chờ phát hiện khuôn mặt mỗi bước
-#define ENROLL_STEP_DELAY_MS      2500   // ms tối thiểu giữ mỗi tư thế (bước 2–N, không dùng khi ENROLL_TOTAL_STEPS=1)
+#define OPEN_COOLDOWN_MS          2500   // ms sau OPEN trước khi nhận diện lại
+#define DENIED_COOLDOWN_MS         400   // ms sau DENIED trước khi thử lại
+#define ENROLL_FACE_TIMEOUT_MS   12000   // ms chờ phát hiện khuôn mặt mỗi bước
+#define ENROLL_STEP_DELAY_MS      2000   // ms tối thiểu giữ mỗi tư thế (bước 2–N, không dùng khi ENROLL_TOTAL_STEPS=1)
 #define ENROLL_TOTAL_STEPS           1   // 1 = chỉ chụp mặt thẳng, xong ngay; tăng lên 5 để yêu cầu đa góc độ
 #define MAX_ENROLLED_FACES           7   // giới hạn thư viện ESP32 face recognition
 #define RX_BUF_MAX_LEN              96   // đủ chỗ cho packet UART có xác thực
@@ -135,15 +135,15 @@
 #define LINK_CRYPT_MAX_LEN         32
 
 // ── Ngưỡng nhận diện ──────────────────────────────────────────────────────────
-// 0.45: nhạy hơn cho in-door, single-pose DB. Tăng lên 0.55+ nếu bị false positive.
-#define RECOGNITION_THRESHOLD     0.45F
+// 0.42: nhạy hơn cho in-door, single-pose DB. Tăng lên 0.55+ nếu bị false positive.
+#define RECOGNITION_THRESHOLD     0.42F
 
 // ── Voting: yêu cầu N frame liên tiếp khớp trước khi mở cửa ─────────────────
 // N=1: phản hồi ngay lập tức (1 frame). Tăng lên 2 nếu bị false positive.
 #define REQUIRED_MATCHES             1
 
 // ── Negative voting: chỉ DENIED sau N frame liên tiếp không khớp ────────────
-#define REQUIRED_NO_MATCHES          2
+#define REQUIRED_NO_MATCHES          3
 
 // ── Lockout: khoá sau N lần thất bại liên tiếp ────────────────────────────────
 #define MAX_FAILURES                 5
@@ -175,10 +175,10 @@ static int      step0StableCount = 0;   // consecutive frames with face detected
 // ── Face AI objects ───────────────────────────────────────────────────────────
 // Two-stage detection: MSR01 (stage 1 - detect regions) + MNP01 (stage 2 - refine keypoints)
 // Keypoints chính xác từ stage 2 là yếu tố quyết định recognition similarity.
-// Stage 1: score_threshold=0.15, nms=0.5, top_k=10, min_face_size=0.10
-// Stage 2: score_threshold=0.5,  nms=0.3, top_k=5
-static HumanFaceDetectMSR01   s1(0.15F, 0.5F, 10, 0.10F);
-static HumanFaceDetectMNP01   s2(0.5F,  0.3F, 5);
+// Stage 1: score_threshold=0.12, nms=0.45, top_k=10, min_face_size=0.08 — nhạy hơn cho demo
+// Stage 2: score_threshold=0.45, nms=0.3,  top_k=5
+static HumanFaceDetectMSR01   s1(0.12F, 0.45F, 10, 0.08F);
+static HumanFaceDetectMNP01   s2(0.45F, 0.3F, 5);
 static FaceRecognition112V1S8 recognizer;   // tự nạp face DB từ NVS/flash
 
 // ── Misc ──────────────────────────────────────────────────────────────────────
@@ -695,6 +695,11 @@ static void preview_handle_root()
               ".evt{font-size:10px;color:#4a6a8a}"
               ".info{display:flex;gap:14px;font-size:11px;color:#4a6a8a;margin-top:10px;flex-wrap:wrap}"
               ".mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}"
+              ".btn{display:block;width:100%;padding:12px;border:none;border-radius:10px;"
+              "cursor:pointer;font-size:15px;font-weight:700;margin-top:12px;transition:opacity .15s}"
+              ".btn:active{opacity:.7}"
+              ".btn-unlock{background:#22c55e;color:#fff}"
+              ".btn-unlock:disabled{background:#1e3a2a;color:#3a7a50;cursor:not-allowed}"
               "@media(max-width:680px){.hero{grid-template-columns:1fr}}"
               "</style></head><body><div class='wrap'>"
               "<span class='pill'>ESP32-S3 Face Recognition</span>"
@@ -719,6 +724,7 @@ static void preview_handle_root()
               "<div class='evbox' id='evlog'>"
               "<div class='ev'><span style='color:#4a6a8a'>Chưa có sự kiện</span></div>"
               "</div>"
+              "<button class='btn btn-unlock' id='btnUnlock' onclick='doUnlock()'>🔓 Mở khóa từ xa</button>"
               "<div class='info'>"
               "<span>Uptime: <b id='vuptime'>…</b>s</span>"
               "<span>Heap: <b id='vheap'>…</b> KB</span>"
@@ -768,6 +774,16 @@ static void preview_handle_root()
               "'<div class=\"ev\"><b style=\"color:'+e.c+'\">'+e.ev+'</b>"
               "<span class=\"evt\">'+e.t+'</span></div>').join('');"
               "}}).catch(()=>{});}"
+              "function doUnlock(){"
+              "const btn=document.getElementById('btnUnlock');"
+              "btn.disabled=true;btn.textContent='Đang mở...';"
+              "fetch('/unlock',{method:'POST',cache:'no-store'})"
+              ".then(r=>r.json())"
+              ".then(d=>{"
+              "btn.textContent=d.ok?'✓ Đã mở cửa!':'✗ '+(d.error||'Lỗi');"
+              "setTimeout(()=>{btn.disabled=false;btn.textContent='🔓 Mở khóa từ xa';},2500);"
+              "updateStatus();"
+              "}).catch(()=>{btn.disabled=false;btn.textContent='🔓 Mở khóa từ xa';});}"
               "const camImg=document.getElementById('cam');"
               "function refreshCam(){camImg.src='/capture?t='+Date.now();}"
               "refreshCam();updateStatus();"
@@ -873,6 +889,26 @@ static void preview_handle_capture()
     esp_camera_fb_return(fb);
 }
 
+static void preview_handle_unlock()
+{
+    if (previewServer.method() != HTTP_POST) {
+        previewServer.send(405, "text/plain; charset=utf-8", "POST required");
+        return;
+    }
+    uint32_t now = millis();
+    if (now < lockoutUntilMs) {
+        previewServer.sendHeader("Cache-Control", "no-store");
+        previewServer.send(403, "application/json", "{\"ok\":false,\"error\":\"LOCKOUT\"}");
+        return;
+    }
+    linkSend("OPEN:0");
+    lastOpenMs = now;
+    record_event("OPEN", 0, 1.0F);
+    Serial.println("[WEB] Remote unlock triggered");
+    previewServer.sendHeader("Cache-Control", "no-store");
+    previewServer.send(200, "application/json", "{\"ok\":true}");
+}
+
 static void preview_handle_not_found()
 {
     previewServer.send(404, "text/plain; charset=utf-8", "Not found");
@@ -887,6 +923,7 @@ static void preview_start_server()
     previewServer.on("/", HTTP_GET, preview_handle_root);
     previewServer.on("/status", HTTP_GET, preview_handle_status);
     previewServer.on("/capture", HTTP_GET, preview_handle_capture);
+    previewServer.on("/unlock", HTTP_POST, preview_handle_unlock);
     previewServer.onNotFound(preview_handle_not_found);
     previewServer.begin();
     previewServerStarted = true;
@@ -976,6 +1013,7 @@ static void preview_poll()
     if (previewServerStarted) {
         previewServer.handleClient();
     }
+    esp_task_wdt_reset(); /* handleClient() có thể block lâu khi có client HTTP */
 
     uint32_t now = millis();
     if ((now - previewLastApCheckMs) >= PREVIEW_AP_HEALTHCHECK_MS) {
@@ -985,8 +1023,10 @@ static void preview_poll()
             previewLastApRestartMs = now;
             Serial.println("[PREVIEW] AP healthcheck failed -> restarting AP");
             WiFi.softAPdisconnect(true);
+            esp_task_wdt_reset(); /* WiFi teardown/restart có thể mất vài trăm ms */
             delay(60);
             preview_start_ap_with_fallback();
+            esp_task_wdt_reset();
         }
     }
 
@@ -1052,11 +1092,14 @@ static bool camera_init()
         s->set_awb_gain(s, 1);      // auto WB gain
         s->set_exposure_ctrl(s, 1); // auto exposure
         s->set_aec2(s, 1);          // AEC algorithm 2 (better in low light)
+        s->set_ae_level(s, 1);      // tăng nhẹ exposure target — sáng hơn cho in-door demo
         s->set_gain_ctrl(s, 1);     // auto gain
-        s->set_brightness(s, 1);    // slightly brighter for indoor use (+1)
+        s->set_agc_gain(s, 0);      // bắt đầu với gain thấp, để AEC tự điều chỉnh
+        s->set_brightness(s, 2);    // sáng hơn cho demo in-door (+2)
         s->set_contrast(s, 1);      // slightly higher contrast (+1)
         s->set_saturation(s, 0);    // neutral saturation
-        s->set_sharpness(s, 1);     // mild sharpening for face detail
+        s->set_sharpness(s, 2);     // rõ nét hơn cho face detail (+2)
+        s->set_denoise(s, 1);       // giảm nhiễu — tốt cho môi trường tối
     }
 
     camera_fb_t *fb = esp_camera_fb_get();
@@ -1263,13 +1306,6 @@ static void process_frame()
     if (appState == STATE_ENROLLING)
     {
         if (enrollStep == 0) {
-            // Stability gate: require 2 consecutive frames with face before capturing.
-            step0StableCount++;
-            if (step0StableCount < 2) {
-                esp_camera_fb_return(fb);
-                return;
-            }
-
             int result = recognizer.enroll_id(img, face.keypoint, "", true);
             if (result < 0) {
                 // Alignment failed — reset stability and retry next detection
@@ -1467,6 +1503,12 @@ void setup()
     linkRxSeq = 0U;
     linkRxSynced = false;
     linkSendPlain("BOOTING");
+    delay(50);  // đảm bảo STM32 nhận được BOOTING trước khi camera chiếm CPU
+
+    // Khởi động WiFi trước camera — AP luôn hiện ngay cả khi camera crash
+#if PREVIEW_ENABLE
+    preview_start_network();
+#endif
 
     // Khởi tạo camera
     cameraReady = camera_init();
@@ -1481,10 +1523,6 @@ void setup()
     }
     // Hiển thị số khuôn mặt đã đăng ký (nạp từ NVS flash)
     Serial.printf("[SYS] Enrolled faces: %d\n", recognizer.get_enrolled_id_num());
-
-#if PREVIEW_ENABLE
-    preview_start_network();
-#endif
 
     // Bật task watchdog — reset ESP32 nếu vòng loop() bị kẹt quá 30 giây
     esp_task_wdt_init(30, true);   // 30 s timeout, panic + reset
