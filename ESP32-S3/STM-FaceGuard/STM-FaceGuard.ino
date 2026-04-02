@@ -57,10 +57,13 @@
 #include "esp_task_wdt.h"
 #include "esp_heap_caps.h"
 #include "esp_wifi.h"
+#include "freertos/semphr.h"
 #include <stdarg.h>
 #include <string.h>
 #include <WebServer.h>
 #include <WiFi.h>
+
+SET_LOOP_TASK_STACK_SIZE(16 * 1024);
 
 // -- Camera pins - ESP32-S3 N16R8 CAM (OV3660 3MP) ---------------------------
 // Tich hop san tren board, khong can noi them day camera
@@ -82,9 +85,14 @@
 #define PCLK_GPIO_NUM   13
 
 // -- UART toi STM32 ------------------------------------------------------------
-#define STM32_BAUD     115200
-#define STM32_TX_PIN      19    // GPIO19 -> STM32 PA10 (USART1_RX)
-#define STM32_RX_PIN      20    // GPIO20 <- STM32 PA9  (USART1_TX)
+// ESP32-S3 co USB native tren GPIO19/GPIO20, nen khi debug doc lap
+// co the tat hẳn link nay de tranh xung dot pin / reset loop.
+#define STM32_LINK_ENABLE    0    // 0 = standalone debug, 1 = noi vao STM32
+#define STM32_BAUD      115200
+#define STM32_TX_PIN        19    // GPIO19 -> STM32 PA10 (USART1_RX)
+#define STM32_RX_PIN        20    // GPIO20 <- STM32 PA9  (USART1_TX)
+#define STANDALONE_DEBUG_BOOT_DELAY_MS  1200
+#define TASK_WDT_ENABLE      STM32_LINK_ENABLE
 
 // -- Wi-Fi preview (HTTP snapshot view) ---------------------------------------
 #define PREVIEW_ENABLE                  1
@@ -94,6 +102,10 @@
 #define PREVIEW_AP_FALLBACK_CHANNEL     6
 #define PREVIEW_AP_MAX_CONN             2
 #define PREVIEW_AP_ALLOW_OPEN_FALLBACK  1
+#define PREVIEW_AP_TX_POWER_QDBM       44   // esp_wifi_set_max_tx_power: 44 -> 11 dBm
+#define PREVIEW_RADIO_TUNE_DELAY_MS  1500
+#define PREVIEW_BOOT_DELAY_MS        2000
+#define PREVIEW_RETRY_DELAY_MS       5000
 #define PREVIEW_AP_HEALTHCHECK_MS    5000
 #define PREVIEW_AP_RESTART_GAP_MS    3000
 #define PREVIEW_STA_ENABLE              0
@@ -102,6 +114,11 @@
 #define PREVIEW_REFRESH_MS            700
 #define PREVIEW_JPEG_QUALITY           80
 #define CAMERA_JPEG_QUALITY            12
+#define VISION_BOOT_DELAY_MS         1200
+#define VISION_TASK_STACK_BYTES      8192
+#define VISION_TASK_PRIORITY            2
+#define VISION_TASK_CORE               0
+#define VISION_TASK_IDLE_MS            1
 
 // -- Den tro sang khuon mat ---------------------------------------------------
 // Nhieu board ESP32-S3-CAM kieu nay co ca:
@@ -113,14 +130,18 @@
 #define FACE_LIGHT_DIGITAL_GPIO       47
 #define FACE_LIGHT_ACTIVE_LEVEL     HIGH
 #define FACE_LIGHT_IDLE_LEVEL       LOW
-#define FACE_LIGHT_NEOPIXEL_ENABLE     0
+#define FACE_LIGHT_NEOPIXEL_ENABLE     1
 #define FACE_LIGHT_NEOPIXEL_GPIO      48
-#define FACE_LIGHT_NEOPIXEL_WHITE     96
+#define FACE_LIGHT_NEOPIXEL_WHITE    255
+#define FACE_LIGHT_NEOPIXEL_READY_R    0
+#define FACE_LIGHT_NEOPIXEL_READY_G  255
+#define FACE_LIGHT_NEOPIXEL_READY_B    0
 #define FACE_LIGHT_STATUS_ENABLE       0
 #define FACE_LIGHT_STATUS_GPIO         2
 #define FACE_LIGHT_STATUS_ACTIVE_LEVEL LOW
 #define FACE_LIGHT_STATUS_IDLE_LEVEL   HIGH
-#define FACE_LIGHT_HOLD_MS           250
+#define FACE_LIGHT_HOLD_MS           500
+#define FACE_LIGHT_SELF_TEST_ENABLE     0
 
 // -- Tham so tuning ------------------------------------------------------------
 #define OPEN_COOLDOWN_MS          2500   // ms sau OPEN truoc khi nhan dien lai
@@ -172,12 +193,7 @@ static int      enrolledId  = -1;    // ID thuc te tu enroll_id() buoc FRONT
 static int      step0FailCount   = 0;   // consecutive enroll_id() failures at step 0
 
 // -- Face AI objects -----------------------------------------------------------
-// Two-stage detection: MSR01 (stage 1 - detect regions) + MNP01 (stage 2 - refine keypoints)
-// Keypoints chinh xac tu stage 2 la yeu to quyet dinh recognition similarity.
-// Stage 1: score_threshold=0.12, nms=0.45, top_k=10, min_face_size=0.08 - nhay hon cho demo
-// Stage 2: score_threshold=0.45, nms=0.3,  top_k=5
-static HumanFaceDetectMSR01   s1(0.12F, 0.45F, 10, 0.08F);
-static HumanFaceDetectMNP01   s2(0.45F, 0.3F, 5);
+// Doi detector sang lazy-init trong luc chay de tranh static init phuc tap tren S3-CAM.
 static FaceRecognition112V1S8 recognizer;   // tu nap face DB tu NVS/flash
 
 // -- Misc ----------------------------------------------------------------------
@@ -194,6 +210,10 @@ static WebServer previewServer(80);
 static bool     previewServerStarted = false;
 static wl_status_t previewLastStaStatus = WL_IDLE_STATUS;
 static bool     previewApReady = false;
+static bool     previewStartPending = false;
+static bool     previewRadioTunePending = false;
+static uint32_t previewRadioTuneAfterMs = 0;
+static uint32_t previewNextStartMs = 0;
 static uint32_t previewLastApCheckMs = 0;
 static uint32_t previewLastApRestartMs = 0;
 
@@ -214,6 +234,9 @@ static uint32_t lastEventSeq     = 0;    // dem tang moi su kien; JS dung de pha
 static esp_err_t cameraInitErr  = ESP_OK;      // luu loi init camera de chan doan
 static bool     cameraReady     = false;
 static uint32_t lastCamFailTxMs = 0;
+static uint32_t visionStartAfterMs = 0;
+static TaskHandle_t visionTaskHandle = nullptr;
+static SemaphoreHandle_t cameraMutex = nullptr;
 static uint8_t *rgbFrameBuf     = nullptr;
 static size_t   rgbFrameBufLen  = 0;
 static bool     faceLightOn     = false;
@@ -431,17 +454,29 @@ static bool linkAcceptSeq(uint8_t seq, const char *plain)
 
 static void linkSendPlain(const char *msg)
 {
+#if STM32_LINK_ENABLE
     Serial1.print(msg);
     Serial1.write('\n');
+#else
+    (void)msg;
+#endif
 }
 
 static void linkEnableSecure()
 {
+#if STM32_LINK_ENABLE
     linkSecureActive = true;
+#else
+    linkSecureActive = false;
+#endif
 }
 
 static void linkSend(const char *msg)
 {
+#if !STM32_LINK_ENABLE
+    (void)msg;
+    return;
+#endif
     size_t plainLen = strlen(msg);
 
     if (plainLen == 0U) return;
@@ -575,6 +610,21 @@ static bool ensure_rgb_frame_buf(size_t width, size_t height)
     return true;
 }
 
+static bool camera_lock(TickType_t timeoutTicks = pdMS_TO_TICKS(250))
+{
+    if (!cameraMutex) {
+        return true;
+    }
+    return xSemaphoreTake(cameraMutex, timeoutTicks) == pdTRUE;
+}
+
+static void camera_unlock()
+{
+    if (cameraMutex) {
+        xSemaphoreGive(cameraMutex);
+    }
+}
+
 static void face_light_apply(bool on)
 {
 #if FACE_LIGHT_ENABLE
@@ -587,6 +637,11 @@ static void face_light_apply(bool on)
                       FACE_LIGHT_NEOPIXEL_WHITE,
                       FACE_LIGHT_NEOPIXEL_WHITE,
                       FACE_LIGHT_NEOPIXEL_WHITE);
+    } else if (cameraReady) {
+        neopixelWrite(FACE_LIGHT_NEOPIXEL_GPIO,
+                      FACE_LIGHT_NEOPIXEL_READY_R,
+                      FACE_LIGHT_NEOPIXEL_READY_G,
+                      FACE_LIGHT_NEOPIXEL_READY_B);
     } else {
         neopixelWrite(FACE_LIGHT_NEOPIXEL_GPIO, 0, 0, 0);
     }
@@ -615,6 +670,7 @@ static void face_light_init()
 static void face_light_self_test()
 {
 #if FACE_LIGHT_ENABLE
+#if FACE_LIGHT_SELF_TEST_ENABLE
     Serial.println("[LIGHT] Self-test GPIO47");
   #if FACE_LIGHT_DIGITAL_ENABLE
     digitalWrite(FACE_LIGHT_DIGITAL_GPIO, FACE_LIGHT_ACTIVE_LEVEL);
@@ -643,6 +699,7 @@ static void face_light_self_test()
 
     Serial.println("[LIGHT] Self-test OFF");
 #endif
+#endif
 }
 
 static void face_light_touch(uint32_t holdMs = FACE_LIGHT_HOLD_MS)
@@ -663,6 +720,23 @@ static void face_light_poll()
         face_light_apply(false);
         Serial.println("[LIGHT] Face light OFF");
     }
+}
+
+static inline void feed_task_wdt()
+{
+#if TASK_WDT_ENABLE
+    esp_task_wdt_reset();
+#endif
+}
+
+static inline void enable_task_wdt()
+{
+#if TASK_WDT_ENABLE
+    esp_task_wdt_init(30, true);   // 30 s timeout, panic + reset
+    esp_task_wdt_add(NULL);        // theo doi loopTask
+#else
+    Serial.println("[SYS] Task WDT disabled (standalone debug mode)");
+#endif
 }
 
 static void preview_handle_root()
@@ -854,8 +928,14 @@ static void preview_handle_capture()
         return;
     }
 
+    if (!camera_lock(pdMS_TO_TICKS(500))) {
+        previewServer.send(503, "text/plain; charset=utf-8", "Camera busy");
+        return;
+    }
+
     camera_fb_t *fb = esp_camera_fb_get();
     if (!fb) {
+        camera_unlock();
         previewServer.send(500, "text/plain; charset=utf-8", "Camera frame unavailable");
         return;
     }
@@ -870,6 +950,7 @@ static void preview_handle_capture()
     } else {
         if (!frame2jpg(fb, PREVIEW_JPEG_QUALITY, &jpgBuf, &jpgLen)) {
             esp_camera_fb_return(fb);
+            camera_unlock();
             previewServer.send(500, "text/plain; charset=utf-8", "JPEG encode failed");
             return;
         }
@@ -886,6 +967,7 @@ static void preview_handle_capture()
         free(jpgBuf);
     }
     esp_camera_fb_return(fb);
+    camera_unlock();
 }
 
 static void preview_handle_unlock()
@@ -929,6 +1011,31 @@ static void preview_start_server()
     Serial.println("[PREVIEW] HTTP server ready");
 }
 
+static void preview_schedule_start(uint32_t delayMs)
+{
+    previewStartPending = true;
+    previewNextStartMs = millis() + delayMs;
+}
+
+static void preview_tune_radio_now()
+{
+    esp_err_t protocolErr = esp_wifi_set_protocol(
+        WIFI_IF_AP,
+        WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N
+    );
+    esp_err_t bwErr = esp_wifi_set_bandwidth(WIFI_IF_AP, WIFI_BW_HT20);
+    esp_err_t txErr = esp_wifi_set_max_tx_power(PREVIEW_AP_TX_POWER_QDBM);
+
+    if (protocolErr != ESP_OK || bwErr != ESP_OK || txErr != ESP_OK) {
+        Serial.printf("[PREVIEW] AP radio tune warning  protocol=%s  bw=%s  tx=%s\n",
+                      esp_err_to_name(protocolErr),
+                      esp_err_to_name(bwErr),
+                      esp_err_to_name(txErr));
+    } else {
+        Serial.printf("[PREVIEW] AP radio tuned  tx=%d\n", PREVIEW_AP_TX_POWER_QDBM);
+    }
+}
+
 static bool preview_start_ap_try(int channel, bool openMode)
 {
     bool apReady = openMode
@@ -936,20 +1043,8 @@ static bool preview_start_ap_try(int channel, bool openMode)
         : WiFi.softAP(PREVIEW_AP_SSID, PREVIEW_AP_PASS, channel, 0, PREVIEW_AP_MAX_CONN);
 
     if (apReady) {
-        // Uu tien tuong thich client: b/g/n + HT20, TX power toi da.
-        esp_err_t protocolErr = esp_wifi_set_protocol(
-            WIFI_IF_AP,
-            WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N
-        );
-        esp_err_t bwErr = esp_wifi_set_bandwidth(WIFI_IF_AP, WIFI_BW_HT20);
-        esp_err_t txErr = esp_wifi_set_max_tx_power(80);  // 20 dBm theo bang mapping IDF
-
-        if (protocolErr != ESP_OK || bwErr != ESP_OK || txErr != ESP_OK) {
-            Serial.printf("[PREVIEW] AP radio tune warning  protocol=%s  bw=%s  tx=%s\n",
-                          esp_err_to_name(protocolErr),
-                          esp_err_to_name(bwErr),
-                          esp_err_to_name(txErr));
-        }
+        previewRadioTunePending = true;
+        previewRadioTuneAfterMs = millis() + PREVIEW_RADIO_TUNE_DELAY_MS;
     }
 
     Serial.printf("[PREVIEW] AP %s  mode=%s  ch=%d  SSID=%s  URL=http://%s/\n",
@@ -979,19 +1074,16 @@ static bool preview_start_ap_with_fallback()
 static void preview_start_network()
 {
     WiFi.persistent(false);
-    WiFi.disconnect(true, true);
-    delay(100);
-    WiFi.mode(WIFI_MODE_NULL);
-    delay(100);
 
     // De on dinh preview AP, mac dinh tat AP+STA (STA co the ep AP doi channel).
     const bool wantSta = (PREVIEW_STA_ENABLE != 0) && (strlen(PREVIEW_STA_SSID) > 0);
+    previewApReady = false;
+    previewRadioTunePending = false;
     WiFi.mode(wantSta ? WIFI_AP_STA : WIFI_AP);
-    delay(100);
+    delay(150);
 
-    WiFi.setSleep(false);
-    esp_wifi_set_ps(WIFI_PS_NONE);
-    WiFi.setTxPower(WIFI_POWER_19_5dBm);
+    // Giu bootstrap AP toi thieu nhat co the. Radio tuning nang hon se doi
+    // AP len on dinh roi moi ap dung o preview_poll().
 
     bool apReady = preview_start_ap_with_fallback();
     if (!apReady) {
@@ -1007,14 +1099,46 @@ static void preview_start_network()
     preview_start_server();
 }
 
+static void preview_bootstrap_poll()
+{
+#if PREVIEW_ENABLE
+    uint32_t now = millis();
+
+    if (!previewStartPending || previewApReady) {
+        return;
+    }
+    if ((int32_t)(now - previewNextStartMs) < 0) {
+        return;
+    }
+
+    previewStartPending = false;
+    Serial.println("[PREVIEW] Starting WiFi AP bootstrap...");
+    preview_start_network();
+
+    if (previewApReady) {
+        Serial.println("[PREVIEW] WiFi AP bootstrap complete");
+    } else {
+        Serial.printf("[PREVIEW] WiFi AP bootstrap failed, retry in %lu ms\n",
+                      (unsigned long)PREVIEW_RETRY_DELAY_MS);
+        preview_schedule_start(PREVIEW_RETRY_DELAY_MS);
+    }
+#endif
+}
+
 static void preview_poll()
 {
     if (previewServerStarted) {
         previewServer.handleClient();
     }
-    esp_task_wdt_reset(); /* handleClient() co the block lau khi co client HTTP */
+    feed_task_wdt(); /* handleClient() co the block lau khi co client HTTP */
 
     uint32_t now = millis();
+    if (previewApReady && previewRadioTunePending &&
+        (int32_t)(now - previewRadioTuneAfterMs) >= 0) {
+        previewRadioTunePending = false;
+        preview_tune_radio_now();
+    }
+
     if ((now - previewLastApCheckMs) >= PREVIEW_AP_HEALTHCHECK_MS) {
         previewLastApCheckMs = now;
         bool apSeemsDown = !previewApReady || (WiFi.softAPIP()[0] == 0);
@@ -1022,10 +1146,10 @@ static void preview_poll()
             previewLastApRestartMs = now;
             Serial.println("[PREVIEW] AP healthcheck failed -> restarting AP");
             WiFi.softAPdisconnect(true);
-            esp_task_wdt_reset(); /* WiFi teardown/restart co the mat vai tram ms */
+            feed_task_wdt(); /* WiFi teardown/restart co the mat vai tram ms */
             delay(60);
             preview_start_ap_with_fallback();
-            esp_task_wdt_reset();
+            feed_task_wdt();
         }
     }
 
@@ -1070,13 +1194,13 @@ static bool camera_init()
     cfg.pin_sccb_scl  = SIOC_GPIO_NUM;
     cfg.pin_pwdn      = PWDN_GPIO_NUM;
     cfg.pin_reset     = RESET_GPIO_NUM;
-    cfg.xclk_freq_hz  = 20000000;
+    cfg.xclk_freq_hz  = 10000000;       // 10 MHz on dinh hon cho mot so S3-CAM
     cfg.pixel_format  = PIXFORMAT_RGB565;    // fmt2rgb888(JPEG) co bug silent-corrupt; RGB565->RGB888 on dinh
     cfg.frame_size    = FRAMESIZE_240X240;   // can bang tot cho face AI
     cfg.jpeg_quality  = CAMERA_JPEG_QUALITY;
-    cfg.fb_count      = psramFound() ? 2 : 1;
+    cfg.fb_count      = 1;
     cfg.fb_location   = psramFound() ? CAMERA_FB_IN_PSRAM : CAMERA_FB_IN_DRAM;
-    cfg.grab_mode     = CAMERA_GRAB_WHEN_EMPTY;
+    cfg.grab_mode     = CAMERA_GRAB_LATEST;
 
     cameraInitErr = esp_camera_init(&cfg);
     if (cameraInitErr != ESP_OK) {
@@ -1228,35 +1352,35 @@ static void process_cmd(const String &cmd)
 // -----------------------------------------------------------------------------
 // Xu ly mot frame camera: nhan dien hoac dang ky
 // -----------------------------------------------------------------------------
-static void process_frame()
+static void process_frame(HumanFaceDetectMSR01 &s1, HumanFaceDetectMNP01 &s2)
 {
+    if (!camera_lock()) {
+        return;
+    }
+
     camera_fb_t *fb = esp_camera_fb_get();
-    if (!fb) return;
+    if (!fb) {
+        camera_unlock();
+        return;
+    }
 
-    if (!ensure_rgb_frame_buf(fb->width, fb->height)) {
+    if (fb->format != PIXFORMAT_RGB565) {
+        Serial.printf("[SYS] Unexpected camera pixel format: %d\n", (int)fb->format);
         esp_camera_fb_return(fb);
+        camera_unlock();
         delay(10);
         return;
     }
 
-    if (!fmt2rgb888(fb->buf, fb->len, fb->format, rgbFrameBuf)) {
-        Serial.println("[SYS] fmt2rgb888 FAILED");
-        esp_camera_fb_return(fb);
-        delay(10);
-        return;
-    }
+    // Detect truc tiep tren RGB565 tu camera theo dung cach example cua Espressif.
+    std::list<dl::detect::result_t> &candidates =
+        s1.infer((uint16_t *)fb->buf, {(int)fb->height, (int)fb->width, 3});
+    feed_task_wdt();
 
-    // Two-stage detection: stage 1 (MSR01) tim vung mat -> stage 2 (MNP01) tinh chinh keypoints
-    // Keypoints chinh xac tu stage 2 giup recognize() dat similarity cao hon dang ke.
-    std::list<dl::detect::result_t> candidates =
-        s1.infer(rgbFrameBuf, {(int)fb->height, (int)fb->width, 3});
-    esp_task_wdt_reset();
+    std::list<dl::detect::result_t> &faces =
+        s2.infer((uint16_t *)fb->buf, {(int)fb->height, (int)fb->width, 3}, candidates);
+    feed_task_wdt();
 
-    std::list<dl::detect::result_t> faces =
-        s2.infer(rgbFrameBuf, {(int)fb->height, (int)fb->width, 3}, candidates);
-    esp_task_wdt_reset();   // two-stage inference co the cham - giu WDT happy
-
-    // Debug: in moi 2s de khong spam, giup xac nhan co detect duoc khong
     static uint32_t lastDetectLogMs = 0;
     if ((millis() - lastDetectLogMs) >= 2000U) {
         lastDetectLogMs = millis();
@@ -1265,17 +1389,15 @@ static void process_frame()
     }
 
     if (faces.empty()) {
-        // Khong thay khuon mat
         noMatchCount = 0;
-        if (appState == STATE_ENROLLING) {
-            if ((millis() - stepStartMs) >= ENROLL_FACE_TIMEOUT_MS) {
-                // Het gio cho, nhac lai buoc hien tai
-                stepStartMs = millis();
-                linkSend(ENROLL_STEPS[enrollStep]);
-                Serial.printf("[ENROLL] Timeout, re-prompt step %d\n", enrollStep + 1);
-            }
+        if (appState == STATE_ENROLLING &&
+            (millis() - stepStartMs) >= ENROLL_FACE_TIMEOUT_MS) {
+            stepStartMs = millis();
+            linkSend(ENROLL_STEPS[enrollStep]);
+            Serial.printf("[ENROLL] Timeout, re-prompt step %d\n", enrollStep + 1);
         }
         esp_camera_fb_return(fb);
+        camera_unlock();
         return;
     }
 
@@ -1292,161 +1414,163 @@ static void process_frame()
     }
 
     face_light_touch();
-
     dl::detect::result_t &face = *bestFaceIt;
 
-    // Boc frame buffer thanh Tensor (khong copy, tro thang vao fb->buf)
+    if (appState != STATE_ENROLLING && recognizer.get_enrolled_id_num() == 0) {
+        noMatchCount = 0;
+        esp_camera_fb_return(fb);
+        camera_unlock();
+        return;
+    }
+
+    if (!ensure_rgb_frame_buf(fb->width, fb->height)) {
+        esp_camera_fb_return(fb);
+        camera_unlock();
+        delay(10);
+        return;
+    }
+
+    if (!fmt2rgb888(fb->buf, fb->len, fb->format, rgbFrameBuf)) {
+        Serial.println("[SYS] fmt2rgb888 FAILED");
+        esp_camera_fb_return(fb);
+        camera_unlock();
+        delay(10);
+        return;
+    }
+
     Tensor<uint8_t> img;
     img.set_element(rgbFrameBuf)
        .set_shape({(int)fb->height, (int)fb->width, 3})
        .set_auto_free(false);
 
-    // -- Che do DANG KY -------------------------------------------------------
-    if (appState == STATE_ENROLLING)
-    {
+    if (appState == STATE_ENROLLING) {
         if (enrollStep == 0) {
             int result = recognizer.enroll_id(img, face.keypoint, "", true);
             if (result < 0) {
-                // Alignment failed - reset stability and retry next detection
                 step0FailCount++;
-                        Serial.printf("[ENROLL] enroll_id failed (attempt %d)\n", step0FailCount);
+                Serial.printf("[ENROLL] enroll_id failed (attempt %d)\n", step0FailCount);
                 esp_camera_fb_return(fb);
+                camera_unlock();
                 return;
             }
-            step0FailCount   = 0;
-                enrolledId = result;
+
+            step0FailCount = 0;
+            enrolledId = result;
             Serial.printf("[ENROLL] Captured FRONT, ID=%d\n", result);
 
-            // Neu chi co 1 buoc (ENROLL_TOTAL_STEPS==1), hoan tat enrollment ngay
             if (ENROLL_TOTAL_STEPS == 1) {
                 int persisted = recognizer.write_ids_to_flash();
                 if (persisted < 0) {
                     delay(50);
-                    persisted = recognizer.write_ids_to_flash(); // retry once
-                    if (persisted < 0)
+                    persisted = recognizer.write_ids_to_flash();
+                    if (persisted < 0) {
                         Serial.println("[ENROLL] WARNING: flash write failed x2 - embedding in RAM only");
+                    }
                 }
                 Serial.printf("[ENROLL] Done! ID=%d  total=%d  flash=%d\n",
                               enrolledId, recognizer.get_enrolled_id_num(), persisted);
                 linkSendf("ENROLLED:%d", enrolledId);
                 record_event("ENROLLED", enrolledId);
-                appState     = STATE_IDLE;
-                enrollStep   = 0;
-                enrolledId   = -1;
-                matchCount   = 0;
+                appState = STATE_IDLE;
+                enrollStep = 0;
+                enrolledId = -1;
+                matchCount = 0;
                 noMatchCount = 0;
-                lastMatchId  = -1;
+                lastMatchId = -1;
                 esp_camera_fb_return(fb);
+                camera_unlock();
                 return;
             }
 
             enrollStep++;
             stepStartMs = millis();
             linkSend(ENROLL_STEPS[enrollStep]);
-            Serial.printf("[ENROLL] Step 2/%d → %s\n", ENROLL_TOTAL_STEPS, ENROLL_STEPS[enrollStep]);
-        }
-        else {
-            // Buoc 1-4: cho du ENROLL_STEP_DELAY_MS de nguoi dung kip xoay mat
+            Serial.printf("[ENROLL] Step 2/%d -> %s\n", ENROLL_TOTAL_STEPS, ENROLL_STEPS[enrollStep]);
+        } else {
             if ((millis() - stepStartMs) < ENROLL_STEP_DELAY_MS) {
                 esp_camera_fb_return(fb);
+                camera_unlock();
                 return;
             }
 
             bool is_last = (enrollStep == ENROLL_TOTAL_STEPS - 1);
-
             if (is_last) {
                 int persisted = recognizer.write_ids_to_flash();
                 if (persisted < 0) {
                     delay(50);
-                    persisted = recognizer.write_ids_to_flash(); // retry once
-                    if (persisted < 0)
+                    persisted = recognizer.write_ids_to_flash();
+                    if (persisted < 0) {
                         Serial.println("[ENROLL] WARNING: flash write failed x2 - embedding in RAM only");
+                    }
                 }
                 Serial.printf("[ENROLL] Done! ID=%d  total=%d  flash=%d\n",
                               enrolledId, recognizer.get_enrolled_id_num(), persisted);
                 linkSendf("ENROLLED:%d", enrolledId);
                 record_event("ENROLLED", enrolledId);
-                appState     = STATE_IDLE;
-                enrollStep   = 0;
-                enrolledId   = -1;
-                matchCount   = 0;
+                appState = STATE_IDLE;
+                enrollStep = 0;
+                enrolledId = -1;
+                matchCount = 0;
                 noMatchCount = 0;
-                lastMatchId  = -1;
-            }
-            else {
+                lastMatchId = -1;
+            } else {
                 enrollStep++;
                 stepStartMs = millis();
                 linkSend(ENROLL_STEPS[enrollStep]);
-                Serial.printf("[ENROLL] Step %d/%d → %s\n",
+                Serial.printf("[ENROLL] Step %d/%d -> %s\n",
                               enrollStep + 1, ENROLL_TOTAL_STEPS, ENROLL_STEPS[enrollStep]);
             }
         }
-    }
-    // -- Che do NHAN DIEN (IDLE) -----------------------------------------------
-    else
-    {
-        // Bo qua neu khong co mat nao dang ky
-        if (recognizer.get_enrolled_id_num() == 0) {
-            noMatchCount = 0;
-            esp_camera_fb_return(fb);
-            return;
-        }
-
+    } else {
         uint32_t now = millis();
 
-        // -- Lockout check -----------------------------------------------------
         if (now < lockoutUntilMs) {
             noMatchCount = 0;
             esp_camera_fb_return(fb);
+            camera_unlock();
             return;
         }
 
-        // -- Cooldown: khi dang trong open cooldown, reset vote va skip --------
         if ((now - lastOpenMs) < OPEN_COOLDOWN_MS) {
-            matchCount  = 0;
+            matchCount = 0;
             lastMatchId = -1;
             noMatchCount = 0;
             esp_camera_fb_return(fb);
+            camera_unlock();
             return;
         }
 
-        // Skip neu denied cooldown con hieu luc
         if ((now - lastDeniedMs) < DENIED_COOLDOWN_MS) {
             noMatchCount = 0;
             esp_camera_fb_return(fb);
+            camera_unlock();
             return;
         }
 
-        // -- Nhan dien ---------------------------------------------------------
         face_info_t res = recognizer.recognize(img, face.keypoint);
-
         if (res.id >= 0 && res.similarity >= RECOGNITION_THRESHOLD) {
             noMatchCount = 0;
-            // -- VOTING: tich luy frame khop lien tiep -------------------------
             if (res.id == lastMatchId) {
                 matchCount++;
             } else {
-                matchCount  = 1;
+                matchCount = 1;
                 lastMatchId = res.id;
             }
             Serial.printf("[RECOG] Vote %d/%d  id=%d  sim=%.3f\n",
                           matchCount, REQUIRED_MATCHES, res.id, res.similarity);
 
             if (matchCount >= REQUIRED_MATCHES) {
-                // Xac nhan - mo cua
-                failureCount = 0;      // reset failure counter on success
-                matchCount   = 0;
-                lastMatchId  = -1;
-                lastOpenMs   = now;
+                failureCount = 0;
+                matchCount = 0;
+                lastMatchId = -1;
+                lastOpenMs = now;
                 linkSendf("OPEN:%d", res.id);
                 record_event("OPEN", res.id, res.similarity);
                 Serial.printf("[RECOG] CONFIRMED  id=%d  sim=%.3f\n",
                               res.id, res.similarity);
             }
-        }
-        else {
-            // Khong khop - reset vote
-            matchCount  = 0;
+        } else {
+            matchCount = 0;
             lastMatchId = -1;
             noMatchCount++;
             Serial.printf("[RECOG] NO MATCH  vote=%d/%d  id=%d  sim=%.3f\n",
@@ -1454,6 +1578,7 @@ static void process_frame()
 
             if (noMatchCount < REQUIRED_NO_MATCHES) {
                 esp_camera_fb_return(fb);
+                camera_unlock();
                 return;
             }
 
@@ -1463,16 +1588,12 @@ static void process_frame()
             Serial.printf("[RECOG] DENIED  failures=%d/%d\n",
                           failureCount, MAX_FAILURES);
 
-            // -- Lockout trigger -----------------------------------------------
             if (failureCount >= MAX_FAILURES) {
-                failureCount   = 0;
+                failureCount = 0;
                 lockoutUntilMs = now + LOCKOUT_DURATION_MS;
                 linkSendf("LOCKOUT:%lu", LOCKOUT_DURATION_MS);
                 record_event("LOCKOUT", -1, res.similarity);
                 Serial.printf("[SECURITY] LOCKOUT for %lu ms\n", LOCKOUT_DURATION_MS);
-
-                // Gui LOCKOUT_CLEAR sau khi het thoi gian (dung mot lan trigger)
-                // - duoc xu ly boi lockout_check() trong loop()
             } else {
                 linkSend("DENIED");
                 record_event("DENIED", -1, res.similarity);
@@ -1481,6 +1602,31 @@ static void process_frame()
     }
 
     esp_camera_fb_return(fb);
+    camera_unlock();
+}
+
+static void vision_task(void *param)
+{
+    (void)param;
+
+    HumanFaceDetectMSR01 s1(0.10F, 0.50F, 10, 0.20F);
+    HumanFaceDetectMNP01 s2(0.50F, 0.30F, 5);
+
+    Serial.printf("[VISION] Task running on core=%d\n", xPortGetCoreID());
+    for (;;) {
+        if (!cameraReady) {
+            face_light_apply(false);
+            vTaskDelay(pdMS_TO_TICKS(20));
+            continue;
+        }
+        if ((int32_t)(millis() - visionStartAfterMs) < 0) {
+            vTaskDelay(pdMS_TO_TICKS(5));
+            continue;
+        }
+
+        process_frame(s1, s2);
+        vTaskDelay(pdMS_TO_TICKS(VISION_TASK_IDLE_MS));
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -1488,12 +1634,7 @@ static void process_frame()
 void setup()
 {
     Serial.begin(115200);
-
-    // Cau hinh WDT 30s TRUOC khi bat dau bat ky tac vu dai nao (WiFi, camera).
-    // Arduino 2.x co the da init WDT mac dinh 5s; deinit truoc de tranh conflict.
-    esp_task_wdt_deinit();
-    esp_task_wdt_init(30, true);   // 30 s timeout, panic + reset
-    esp_task_wdt_add(NULL);        // theo doi loopTask tu day
+    delay(STANDALONE_DEBUG_BOOT_DELAY_MS);
 
     esp_reset_reason_t rr = esp_reset_reason();
     Serial.printf("\n[SYS] STM-FaceGuard ESP32-S3 starting... reset=%s\n",
@@ -1504,27 +1645,30 @@ void setup()
     }
     face_light_init();
     face_light_self_test();
+    cameraMutex = xSemaphoreCreateMutex();
+    if (!cameraMutex) {
+        Serial.println("[SYS] Camera mutex allocation failed");
+    }
 
-    // UART toi STM32
-    Serial1.begin(STM32_BAUD, SERIAL_8N1, STM32_RX_PIN, STM32_TX_PIN);
-    delay(10);
-    while (Serial1.available()) Serial1.read();  // flush garbage bytes tu STM32 luc ESP32 power-up
     rxBuf.reserve(RX_BUF_MAX_LEN);
     linkSecureActive = false;
     linkTxSeq = 1U;
     linkRxSeq = 0U;
     linkRxSynced = false;
+
+#if STM32_LINK_ENABLE
+    Serial.println("[UART] STM32 link enabled");
+    Serial1.begin(STM32_BAUD, SERIAL_8N1, STM32_RX_PIN, STM32_TX_PIN);
+    delay(10);
+    while (Serial1.available()) Serial1.read();  // flush garbage bytes tu STM32 luc ESP32 power-up
     linkSendPlain("BOOTING");
     delay(50);  // dam bao STM32 nhan duoc BOOTING truoc khi camera chiem CPU
-
-    // Khoi dong WiFi truoc camera - AP luon hien ngay ca khi camera crash
-#if PREVIEW_ENABLE
-    esp_task_wdt_reset();
-    preview_start_network();
+#else
+    Serial.println("[UART] STM32 link disabled (standalone debug mode)");
 #endif
 
     // Khoi tao camera
-    esp_task_wdt_reset();
+    Serial.println("[SYS] Starting camera...");
     cameraReady = camera_init();
     if (!cameraReady) {
         Serial.printf("[SYS] Camera init FAILED err=0x%04X (%s)\n",
@@ -1537,16 +1681,46 @@ void setup()
     }
     // Hien thi so khuon mat da dang ky (nap tu NVS flash)
     Serial.printf("[SYS] Enrolled faces: %d\n", recognizer.get_enrolled_id_num());
+    face_light_apply(false);  // idle: xanh khi camera ready, tat khi camera loi
+    visionStartAfterMs = millis() + VISION_BOOT_DELAY_MS;
+    Serial.printf("[SYS] Vision task armed in %lu ms\n",
+                  (unsigned long)VISION_BOOT_DELAY_MS);
+    if (cameraReady) {
+        BaseType_t visionTaskOk = xTaskCreatePinnedToCore(
+            vision_task,
+            "vision_task",
+            VISION_TASK_STACK_BYTES,
+            nullptr,
+            VISION_TASK_PRIORITY,
+            &visionTaskHandle,
+            VISION_TASK_CORE
+        );
+        if (visionTaskOk != pdPASS) {
+            visionTaskHandle = nullptr;
+            Serial.println("[SYS] Failed to start vision task");
+        }
+    }
+
+#if PREVIEW_ENABLE
+    preview_schedule_start(PREVIEW_BOOT_DELAY_MS);
+    Serial.printf("[SYS] WiFi AP scheduled in %lu ms\n",
+                  (unsigned long)PREVIEW_BOOT_DELAY_MS);
+#endif
+
+    // Cau hinh task watchdog SAU KHI init xong - standalone debug co the tat han.
+    Serial.println("[SYS] Init done, configuring task watchdog...");
+    enable_task_wdt();
 
     delay(300);
     if (cameraReady) {
         send_status(true);
     }
+    Serial.println("[SYS] Setup complete, entering loop");
 }
 
 void loop()
 {
-    esp_task_wdt_reset();   // reset WDT moi vong loop de chung minh khong bi ket
+    feed_task_wdt();   // reset WDT moi vong loop de chung minh khong bi ket
 
     // -- Kiem tra het lockout --------------------------------------------------
     if (lockoutUntilMs > 0 && millis() >= lockoutUntilMs) {
@@ -1559,6 +1733,7 @@ void loop()
     }
 
     // -- Doc UART tu STM32 ----------------------------------------------------
+#if STM32_LINK_ENABLE
     while (Serial1.available()) {
         char c = (char)Serial1.read();
         if (c == '\n') {
@@ -1576,8 +1751,10 @@ void loop()
             rxBuf += c;
         }
     }
+#endif
 
 #if PREVIEW_ENABLE
+    preview_bootstrap_poll();
     preview_poll();
 #endif
 
@@ -1593,6 +1770,11 @@ void loop()
         return;
     }
 
+    if ((int32_t)(millis() - visionStartAfterMs) < 0) {
+        delay(5);
+        return;
+    }
+
     if (appState == STATE_IDLE &&
         (millis() - lastBeaconTxMs) >= AUTO_STATUS_BEACON_MS) {
         lastBeaconTxMs = millis();
@@ -1603,15 +1785,17 @@ void loop()
     static uint32_t lastTelemetryMs = 0;
     if ((millis() - lastTelemetryMs) >= 60000UL) {
         lastTelemetryMs = millis();
+        UBaseType_t visionStackWords = visionTaskHandle
+            ? uxTaskGetStackHighWaterMark(visionTaskHandle)
+            : 0;
         Serial.printf("[HEALTH] heap_free=%u  psram_free=%u  uptime=%lus  "
-                      "faces=%d  failures=%d  wdt=ok\n",
+                      "faces=%d  failures=%d  wdt=%s  vision_stack=%u\n",
                       esp_get_free_heap_size(),
                       heap_caps_get_free_size(MALLOC_CAP_SPIRAM),
                       millis() / 1000UL,
                       recognizer.get_enrolled_id_num(),
-                      failureCount);
+                      failureCount,
+                      TASK_WDT_ENABLE ? "on" : "off",
+                      (unsigned int)visionStackWords);
     }
-
-    // -- Xu ly mot frame camera -----------------------------------------------
-    process_frame();
 }
