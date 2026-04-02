@@ -753,9 +753,9 @@ arduino-cli upload -p /dev/cu.usbserial-A5069RR4 \
   /Users/phamhungtien/Documents/STM-FaceGuard/ESP32-S3/STM-FaceGuard
 ```
 
-Ghi chú runtime của bản debug này:
+Ghi chú runtime của bản hiện tại:
 
-- `STM32_LINK_ENABLE = 0` để debug ESP32 độc lập; khi cắm lại với STM32 thật cần đổi về `1`.
+- `STM32_LINK_ENABLE = 1` để chạy tích hợp với STM32; nếu cần debug ESP32 độc lập thì đổi tạm về `0`.
 - Camera khởi động trước, sau đó `vision_task` riêng được pin sang `Core 0` để chạy `HumanFaceDetectMSR01/MNP01`.
 - Wi-Fi preview AP khởi động trễ sau boot và dùng mutex chia sẻ camera với vision task, nên panic cũ ở nhánh `infer()` không còn tái hiện trong lần test hiện tại.
 - Cấu hình detect hiện tại đã nới `MSR01/MNP01` để dễ bắt khuôn mặt ở xa hơn, còn enroll vẫn giữ chế độ `1 frame / 1 tư thế`.

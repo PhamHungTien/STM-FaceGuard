@@ -86,9 +86,9 @@ SET_LOOP_TASK_STACK_SIZE(16 * 1024);
 #define PCLK_GPIO_NUM   13
 
 // -- UART toi STM32 ------------------------------------------------------------
-// ESP32-S3 co USB native tren GPIO19/GPIO20, nen khi debug doc lap
-// co the tat hẳn link nay de tranh xung dot pin / reset loop.
-#define STM32_LINK_ENABLE    0    // 0 = standalone debug, 1 = noi vao STM32
+// ESP32-S3 co USB native tren GPIO19/GPIO20. Ban nay bat lai UART link
+// de chay tich hop voi STM32; khi can debug doc lap thi doi ve 0.
+#define STM32_LINK_ENABLE    1    // 0 = standalone debug, 1 = noi vao STM32
 #define STM32_BAUD      115200
 #define STM32_TX_PIN        19    // GPIO19 -> STM32 PA10 (USART1_RX)
 #define STM32_RX_PIN        20    // GPIO20 <- STM32 PA9  (USART1_TX)
