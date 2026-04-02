@@ -178,8 +178,8 @@ SET_LOOP_TASK_STACK_SIZE(16 * 1024);
 #define LINK_CRYPT_MAX_LEN         32
 
 // -- Nguong nhan dien ----------------------------------------------------------
-// 0.42: nhay hon cho in-door, single-pose DB. Tang len 0.55+ neu bi false positive.
-#define RECOGNITION_THRESHOLD     0.42F
+// 0.40: nhay hon cho in-door, khoang cach xa hon. Tang len 0.50+ neu bi false positive.
+#define RECOGNITION_THRESHOLD     0.40F
 
 // -- Voting: yeu cau N frame lien tiep khop truoc khi mo cua -----------------
 // N=1: phan hoi ngay lap tuc (1 frame). Tang len 2 neu bi false positive.
@@ -192,6 +192,18 @@ SET_LOOP_TASK_STACK_SIZE(16 * 1024);
 #define MAX_FAILURES                 5
 #define LOCKOUT_DURATION_MS  (5UL * 60UL * 1000UL)   // 5 phut
 #define ENROLL_PROMPT_COUNT          5
+
+// -- Face detector tuning -----------------------------------------------------
+// Nhe detector mot chut de bat duoc mat nho hon o xa:
+// - giam score threshold
+// - tang top_k de giu them candidate cho stage refine
+#define DETECT_MSR01_SCORE_THRESHOLD  0.08F
+#define DETECT_MSR01_NMS_THRESHOLD    0.50F
+#define DETECT_MSR01_TOP_K              16
+#define DETECT_MSR01_RESIZE_SCALE     0.20F
+#define DETECT_MNP01_SCORE_THRESHOLD  0.40F
+#define DETECT_MNP01_NMS_THRESHOLD    0.30F
+#define DETECT_MNP01_TOP_K               8
 
 #if (ENROLL_TOTAL_STEPS < 1) || (ENROLL_TOTAL_STEPS > ENROLL_PROMPT_COUNT)
 #error "ENROLL_TOTAL_STEPS must be between 1 and 5"
@@ -253,6 +265,18 @@ static char     lastEventStr[12] = "";   // "OPEN","DENIED","ENROLLED","DELETED"
 static int      lastEventIdWeb   = -1;   // face ID cho OPEN / ENROLLED
 static float    lastEventSim     = 0.0F; // similarity cua lan nhan dien gan nhat
 static uint32_t lastEventSeq     = 0;    // dem tang moi su kien; JS dung de phat hien thay doi
+struct PreviewFaceBoxState {
+    bool     valid;
+    uint16_t frameW;
+    uint16_t frameH;
+    uint16_t x;
+    uint16_t y;
+    uint16_t w;
+    uint16_t h;
+    uint32_t seenAtMs;
+};
+static portMUX_TYPE previewFaceBoxMux = portMUX_INITIALIZER_UNLOCKED;
+static PreviewFaceBoxState previewFaceBox = {};
 static esp_err_t cameraInitErr  = ESP_OK;      // luu loi init camera de chan doan
 static bool     cameraReady     = false;
 static uint32_t lastCamFailTxMs = 0;
@@ -295,6 +319,44 @@ static void record_event(const char *type, int id = -1, float sim = 0.0F)
     lastEventIdWeb = id;
     lastEventSim   = sim;
     lastEventSeq++;
+}
+
+static void preview_face_box_clear()
+{
+    portENTER_CRITICAL(&previewFaceBoxMux);
+    previewFaceBox.valid = false;
+    previewFaceBox.w = 0;
+    previewFaceBox.h = 0;
+    previewFaceBox.seenAtMs = millis();
+    portEXIT_CRITICAL(&previewFaceBoxMux);
+}
+
+static void preview_face_box_update(const dl::detect::result_t &face, uint16_t frameW, uint16_t frameH)
+{
+    int x0 = (int)face.box[0];
+    int y0 = (int)face.box[1];
+    int x1 = (int)face.box[2];
+    int y1 = (int)face.box[3];
+
+    if (x0 < 0) x0 = 0;
+    if (y0 < 0) y0 = 0;
+    if (x1 >= (int)frameW) x1 = (int)frameW - 1;
+    if (y1 >= (int)frameH) y1 = (int)frameH - 1;
+    if (x1 < x0 || y1 < y0) {
+        preview_face_box_clear();
+        return;
+    }
+
+    portENTER_CRITICAL(&previewFaceBoxMux);
+    previewFaceBox.valid = true;
+    previewFaceBox.frameW = frameW;
+    previewFaceBox.frameH = frameH;
+    previewFaceBox.x = (uint16_t)x0;
+    previewFaceBox.y = (uint16_t)y0;
+    previewFaceBox.w = (uint16_t)(x1 - x0 + 1);
+    previewFaceBox.h = (uint16_t)(y1 - y0 + 1);
+    previewFaceBox.seenAtMs = millis();
+    portEXIT_CRITICAL(&previewFaceBoxMux);
 }
 
 static const char *wifi_status_name(wl_status_t status)
@@ -838,8 +900,12 @@ static void preview_handle_root()
               ".sub{margin:0 0 14px;color:#97b7d9;font-size:13px}"
               ".pill{display:inline-block;padding:3px 10px;border-radius:999px;background:#16314b;"
               "color:#9fd2ff;font-size:11px;margin-bottom:10px}"
+              ".camstage{position:relative;width:100%;aspect-ratio:1/1}"
               ".cam{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:12px;"
               "background:#07111c;border:1px solid #1e3851;display:block}"
+              ".fbox{position:absolute;border:2px solid #22d3ee;border-radius:14px;box-shadow:0 0 0 1px rgba(34,211,238,.28),0 0 18px rgba(34,211,238,.24);pointer-events:none;transition:all .15s ease}"
+              ".fbox.hide{display:none}"
+              ".fbox span{position:absolute;top:-22px;left:0;padding:2px 8px;border-radius:999px;background:#22d3ee;color:#082032;font-size:10px;font-weight:700;letter-spacing:.04em}"
               ".grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}"
               ".cell{padding:8px 10px;background:#0d1c2e;border-radius:10px}"
               ".lbl{font-size:10px;color:#97b7d9;text-transform:uppercase;letter-spacing:.06em}"
@@ -867,7 +933,10 @@ static void preview_handle_root()
     html += F("</span></p>"
               "<div class='hero'>"
               "<div class='card'>"
+              "<div class='camstage'>"
               "<img id='cam' class='cam' src='/capture' alt=''>"
+              "<div id='fbox' class='fbox hide'><span>FACE</span></div>"
+              "</div>"
               "</div>"
               "<div class='card'>"
               "<div class='grid'>"
@@ -906,6 +975,15 @@ static void preview_handle_root()
               "if(sec>0){sv('vlockout','🔒 '+sec+'s','#f87171');"
               "lockTimer=setInterval(tickLock,1000);}"
               "else sv('vlockout','Bình thường','#4ade80');}"
+              "function drawFaceBox(s){"
+              "const box=document.getElementById('fbox');"
+              "if(!s.boxValid||!s.boxFrameW||!s.boxFrameH||s.boxAgeMs>1600){box.classList.add('hide');return;}"
+              "box.classList.remove('hide');"
+              "box.style.left=(100*s.boxX/s.boxFrameW)+'%';"
+              "box.style.top=(100*s.boxY/s.boxFrameH)+'%';"
+              "box.style.width=(100*s.boxW/s.boxFrameW)+'%';"
+              "box.style.height=(100*s.boxH/s.boxFrameH)+'%';"
+              "}"
               "function updateStatus(){"
               "fetch('/status',{cache:'no-store'}).then(r=>r.json()).then(s=>{"
               "sv('vcam',s.cameraReady?'OK':'LỖI',s.cameraReady?'#4ade80':'#f87171');"
@@ -919,6 +997,7 @@ static void preview_handle_root()
               "else if(!s.lockout&&lockRemain<=0)sv('vlockout','Bình thường','#4ade80');"
               "document.getElementById('vapurl').textContent=s.apUrl;"
               "sv('vuptime',s.uptimeSec);sv('vheap',s.heapFreeKB);"
+              "drawFaceBox(s);"
               "if(s.lastEventSeq!==evSeq&&s.lastEvent){"
               "evSeq=s.lastEventSeq;"
               "const col=EV_COL[s.lastEvent]||'#eaf2ff';"
@@ -955,10 +1034,15 @@ static void preview_handle_root()
 static void preview_handle_status()
 {
     String json;
-    json.reserve(320);
+    json.reserve(480);
 
     const bool staConnected = (WiFi.status() == WL_CONNECTED);
     const bool lockoutActive = (lockoutUntilMs > millis());
+    PreviewFaceBoxState box;
+    portENTER_CRITICAL(&previewFaceBoxMux);
+    box = previewFaceBox;
+    portEXIT_CRITICAL(&previewFaceBoxMux);
+    uint32_t boxAgeMs = box.valid ? (millis() - box.seenAtMs) : 0U;
 
     json += F("{\"cameraReady\":");
     json += cameraReady ? "true" : "false";
@@ -998,6 +1082,22 @@ static void preview_handle_status()
     json += String(millis() / 1000UL);
     json += F(",\"heapFreeKB\":");
     json += String(esp_get_free_heap_size() / 1024U);
+    json += F(",\"boxValid\":");
+    json += box.valid ? "true" : "false";
+    json += F(",\"boxFrameW\":");
+    json += String(box.frameW);
+    json += F(",\"boxFrameH\":");
+    json += String(box.frameH);
+    json += F(",\"boxX\":");
+    json += String(box.x);
+    json += F(",\"boxY\":");
+    json += String(box.y);
+    json += F(",\"boxW\":");
+    json += String(box.w);
+    json += F(",\"boxH\":");
+    json += String(box.h);
+    json += F(",\"boxAgeMs\":");
+    json += String(boxAgeMs);
     json += F("}");
 
     previewServer.sendHeader("Cache-Control", "no-store, no-cache, must-revalidate");
@@ -1517,6 +1617,7 @@ static void process_frame(HumanFaceDetectMSR01 &s1, HumanFaceDetectMNP01 &s2)
 
     if (faces.empty()) {
         noMatchCount = 0;
+        preview_face_box_clear();
         if (appState == STATE_ENROLLING &&
             (millis() - stepStartMs) >= ENROLL_FACE_TIMEOUT_MS) {
             stepStartMs = millis();
@@ -1542,6 +1643,7 @@ static void process_frame(HumanFaceDetectMSR01 &s1, HumanFaceDetectMNP01 &s2)
 
     face_light_touch();
     dl::detect::result_t &face = *bestFaceIt;
+    preview_face_box_update(face, fb->width, fb->height);
 
     if (appState != STATE_ENROLLING && recognizer.get_enrolled_id_num() == 0) {
         noMatchCount = 0;
@@ -1736,10 +1838,25 @@ static void vision_task(void *param)
 {
     (void)param;
 
-    HumanFaceDetectMSR01 s1(0.10F, 0.50F, 10, 0.20F);
-    HumanFaceDetectMNP01 s2(0.50F, 0.30F, 5);
+    HumanFaceDetectMSR01 s1(
+        DETECT_MSR01_SCORE_THRESHOLD,
+        DETECT_MSR01_NMS_THRESHOLD,
+        DETECT_MSR01_TOP_K,
+        DETECT_MSR01_RESIZE_SCALE
+    );
+    HumanFaceDetectMNP01 s2(
+        DETECT_MNP01_SCORE_THRESHOLD,
+        DETECT_MNP01_NMS_THRESHOLD,
+        DETECT_MNP01_TOP_K
+    );
 
     Serial.printf("[VISION] Task running on core=%d\n", xPortGetCoreID());
+    Serial.printf("[VISION] Detector tune: msr(score=%.2f topk=%d scale=%.2f)  mnp(score=%.2f topk=%d)\n",
+                  DETECT_MSR01_SCORE_THRESHOLD,
+                  DETECT_MSR01_TOP_K,
+                  DETECT_MSR01_RESIZE_SCALE,
+                  DETECT_MNP01_SCORE_THRESHOLD,
+                  DETECT_MNP01_TOP_K);
     for (;;) {
         if (!cameraReady) {
             face_light_apply(false);
