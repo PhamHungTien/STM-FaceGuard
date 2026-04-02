@@ -14,11 +14,10 @@
 
 % ── Bảng phân công ──────────────────────────────────────────
 \begin{center}
-{\bfseries Bảng phân công nhiệm vụ các thành viên}\\[0.2cm]
-\small
-\setlength{\tabcolsep}{4pt}
-\setlength{\extrarowheight}{4pt}
-\begin{tabular}{c p{3.2cm} c p{7.0cm} c}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\setlength{\extrarowheight}{2pt}
+\begin{tabular}{c >{\raggedright\arraybackslash}p{3.2cm} c >{\raggedright\arraybackslash}p{7.0cm} c}
   \toprule
   \textbf{STT} & \textbf{Họ và tên} & \textbf{MSSV} & \textbf{Nhiệm vụ} & \textbf{Ký tên} \\
   \midrule
@@ -26,13 +25,14 @@
   1 &
   \textbf{Phạm Hùng Tiến}\newline\textit{(Nhóm trưởng)} &
   24207043 &
-  \vspace{-10pt}\begin{itemize}[leftmargin=1em, topsep=0pt, itemsep=1pt, parsep=0pt]
+  \vspace{-8pt}\begin{itemize}[leftmargin=1em, topsep=0pt, itemsep=0pt, parsep=0pt]
     \item Thiết kế kiến trúc hệ thống tổng thể
     \item Lập trình firmware STM32F411CEU6
     \item Lập trình firmware ESP32-S3
-    \item Viết tiểu luận (tất cả các chương)
-    \item Tổng hợp, review và hoàn thiện tài liệu
-  \end{itemize}\vspace{-6pt} &
+    \item Biên soạn và tích hợp toàn bộ tiểu luận bằng LaTeX
+    \item Đồng bộ mã nguồn, README, hình vẽ và tài liệu
+    \item Tổng hợp, review, build PDF và hoàn thiện bản nộp cuối
+  \end{itemize}\vspace{-4pt} &
   \\
 
   \midrule
@@ -40,11 +40,12 @@
   2 &
   Trần Thái Nguyên &
   24207029 &
-  \vspace{-10pt}\begin{itemize}[leftmargin=1em, topsep=0pt, itemsep=1pt, parsep=0pt]
+  \vspace{-8pt}\begin{itemize}[leftmargin=1em, topsep=0pt, itemsep=0pt, parsep=0pt]
     \item Thiết kế sơ đồ kết nối phần cứng
     \item Lắp ráp và kiểm tra mạch thực tế
-    \item Hỗ trợ viết Chương 3 (Phần cứng)
-  \end{itemize}\vspace{-6pt} &
+    \item Chuẩn hóa BOM, pinout và mô tả kết nối cho Chương 3
+    \item Cung cấp ảnh minh họa, sơ đồ và dữ liệu phần cứng cho tài liệu LaTeX
+  \end{itemize}\vspace{-4pt} &
   \\
 
   \midrule
@@ -52,11 +53,12 @@
   3 &
   Hồ Sĩ Phú &
   24207101 &
-  \vspace{-10pt}\begin{itemize}[leftmargin=1em, topsep=0pt, itemsep=1pt, parsep=0pt]
+  \vspace{-8pt}\begin{itemize}[leftmargin=1em, topsep=0pt, itemsep=0pt, parsep=0pt]
     \item Nghiên cứu thuật toán nhận diện khuôn mặt
     \item Cài đặt và cấu hình Arduino core cho ESP32-S3, ESP-WHO
-    \item Hỗ trợ viết Chương 2 (Cơ sở lý thuyết)
-  \end{itemize}\vspace{-6pt} &
+    \item Hỗ trợ viết Chương 2 và Chương 4 (cơ sở lý thuyết, pipeline AI)
+    \item Chuẩn hóa mô tả tham số nhận diện và cơ chế voting trong tài liệu
+  \end{itemize}\vspace{-4pt} &
   \\
 
   \midrule
@@ -64,11 +66,12 @@
   4 &
   Quách Gia Thịnh &
   24207105 &
-  \vspace{-10pt}\begin{itemize}[leftmargin=1em, topsep=0pt, itemsep=1pt, parsep=0pt]
+  \vspace{-8pt}\begin{itemize}[leftmargin=1em, topsep=0pt, itemsep=0pt, parsep=0pt]
     \item Thực nghiệm và thu thập số liệu kiểm thử
     \item Đánh giá độ chính xác và thời gian phản hồi
-    \item Hỗ trợ viết Chương 5 (Kết quả)
-  \end{itemize}\vspace{-6pt} &
+    \item Lập bảng số liệu, đối chiếu KPI và hỗ trợ viết Chương 5
+    \item Kiểm tra tính nhất quán giữa kết quả đo và nội dung báo cáo
+  \end{itemize}\vspace{-4pt} &
   \\
 
   \midrule
@@ -76,20 +79,21 @@
   5 &
   Lê Quang\newline Bảo Trung &
   24207111 &
-  \vspace{-10pt}\begin{itemize}[leftmargin=1em, topsep=0pt, itemsep=1pt, parsep=0pt]
+  \vspace{-8pt}\begin{itemize}[leftmargin=1em, topsep=0pt, itemsep=0pt, parsep=0pt]
     \item Tổng hợp tài liệu tham khảo
+    \item Chuẩn hóa trích dẫn, danh mục tài liệu và rà soát hình thức trình bày
     \item Chuẩn bị slide thuyết trình
-    \item Hỗ trợ viết Chương 6 (Kết luận)
-  \end{itemize}\vspace{-6pt} &
+    \item Hỗ trợ viết Chương 6 và rà soát lỗi chính tả, bố cục tài liệu
+  \end{itemize}\vspace{-4pt} &
   \\
 
   \bottomrule
 \end{tabular}
 \end{center}
 
-\vspace{0.8cm}
+\vspace{0.25cm}
 \begin{flushright}
-  \textit{TP. Hồ Chí Minh, ngày 02 tháng 04 năm 2026}
+  {\footnotesize\textit{TP. Hồ Chí Minh, ngày 02 tháng 04 năm 2026}}
 \end{flushright}
 
 \end{singlespace}
@@ -165,10 +169,11 @@
   \ganttbar{Kiểm thử thời gian phản hồi}{10}{11} \\
 
   %% ── Giai đoạn 5 ─────────────────────────────────────────
-  \ganttgroup{5. Hoàn thiện tài liệu}{10}{14} \\
-  \ganttbar{Viết tiểu luận (các chương)}{10}{12} \\
-  \ganttbar{Hoàn thiện và chuẩn bị slide}{12}{13} \\
-  \ganttbar{Rà soát và nộp bài}{13}{14} \\
+  \ganttgroup{5. Biên soạn tiểu luận LaTeX và hoàn thiện hồ sơ}{10}{14} \\
+  \ganttbar{Soạn thảo các chương bằng LaTeX}{10}{11} \\
+  \ganttbar{Chèn hình, bảng, mã nguồn và chuẩn hóa tham chiếu}{11}{12} \\
+  \ganttbar{Rà soát, build PDF và chuẩn bị slide}{12}{13} \\
+  \ganttbar{Kiểm tra lần cuối và nộp bài}{13}{14} \\
 
   %% ── Milestone ────────────────────────────────────────────
   \ganttmilestone[

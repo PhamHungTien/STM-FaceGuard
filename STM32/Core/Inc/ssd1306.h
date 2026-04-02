@@ -33,6 +33,7 @@ void SSD1306_ShowLockedCountdown(uint32_t remaining_s); /* Lockout with countdow
 void SSD1306_ShowScanning(void);
 void SSD1306_ShowUnlocked(uint8_t id);
 void SSD1306_ShowUnlockedExit(void);
+void SSD1306_ShowUnlockedRemote(void);
 void SSD1306_ShowDenied(void);
 void SSD1306_ShowEnrolling(void);
 void SSD1306_ShowEnrollStep(uint8_t step, uint8_t total);

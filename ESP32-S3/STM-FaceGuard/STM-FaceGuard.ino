@@ -13,7 +13,7 @@
  *   - Partition Scheme: Huge APP (3MB No OTA / 1MB SPIFFS)
  *   - Upload Mode: UART0 / Hardware CDC
  *
- * Wiring (ESP32-S3 <-> STM32F303RE Nucleo):
+ * Wiring (ESP32-S3 <-> STM32F411RE Nucleo):
  *   GPIO19 (ESP TX) --> PA10 (STM32 USART1_RX)
  *   GPIO20 (ESP RX) <-- PA9  (STM32 USART1_TX)
  *   GND             --- GND
@@ -143,7 +143,7 @@
 #define REQUIRED_MATCHES             1
 
 // -- Negative voting: chi DENIED sau N frame lien tiep khong khop ------------
-#define REQUIRED_NO_MATCHES          3
+#define REQUIRED_NO_MATCHES          2
 
 // -- Lockout: khoa sau N lan that bai lien tiep --------------------------------
 #define MAX_FAILURES                 5
@@ -170,7 +170,6 @@ static int      enrollStep  = 0;     // buoc hien tai 0..4
 static uint32_t stepStartMs = 0;     // millis() luc bat dau buoc
 static int      enrolledId  = -1;    // ID thuc te tu enroll_id() buoc FRONT
 static int      step0FailCount   = 0;   // consecutive enroll_id() failures at step 0
-static int      step0StableCount = 0;   // consecutive frames with face detected (stability gate)
 
 // -- Face AI objects -----------------------------------------------------------
 // Two-stage detection: MSR01 (stage 1 - detect regions) + MNP01 (stage 2 - refine keypoints)
@@ -901,9 +900,9 @@ static void preview_handle_unlock()
         previewServer.send(403, "application/json", "{\"ok\":false,\"error\":\"LOCKOUT\"}");
         return;
     }
-    linkSend("OPEN:0");
+    linkSend("OPEN:255");   // 255 = web/remote unlock, STM32 shows "Remote/Web"
     lastOpenMs = now;
-    record_event("OPEN", 0, 1.0F);
+    record_event("OPEN", 255, 1.0F);
     Serial.println("[WEB] Remote unlock triggered");
     previewServer.sendHeader("Cache-Control", "no-store");
     previewServer.send(200, "application/json", "{\"ok\":true}");
@@ -1092,10 +1091,9 @@ static bool camera_init()
         s->set_awb_gain(s, 1);      // auto WB gain
         s->set_exposure_ctrl(s, 1); // auto exposure
         s->set_aec2(s, 1);          // AEC algorithm 2 (better in low light)
-        s->set_ae_level(s, 1);      // tang nhe exposure target - sang hon cho in-door demo
         s->set_gain_ctrl(s, 1);     // auto gain
         s->set_agc_gain(s, 0);      // bat dau voi gain thap, de AEC tu dieu chinh
-        s->set_brightness(s, 2);    // sang hon cho demo in-door (+2)
+        s->set_brightness(s, 1);    // +1 cho in-door demo (tranh overexpose khi co den manh)
         s->set_contrast(s, 1);      // slightly higher contrast (+1)
         s->set_saturation(s, 0);    // neutral saturation
         s->set_sharpness(s, 2);     // ro net hon cho face detail (+2)
@@ -1157,7 +1155,6 @@ static void abort_enroll(bool rollback_partial)
     stepStartMs       = millis();
     enrolledId        = -1;
     step0FailCount    = 0;
-    step0StableCount  = 0;
 }
 
 // -----------------------------------------------------------------------------
@@ -1266,8 +1263,7 @@ static void process_frame()
 
     if (faces.empty()) {
         // Khong thay khuon mat
-        noMatchCount     = 0;
-        step0StableCount = 0;  // reset stability gate - face must reappear cleanly
+        noMatchCount = 0;
         if (appState == STATE_ENROLLING) {
             if ((millis() - stepStartMs) >= ENROLL_FACE_TIMEOUT_MS) {
                 // Het gio cho, nhac lai buoc hien tai
@@ -1310,21 +1306,22 @@ static void process_frame()
             if (result < 0) {
                 // Alignment failed - reset stability and retry next detection
                 step0FailCount++;
-                step0StableCount = 0;
-                Serial.printf("[ENROLL] enroll_id failed (attempt %d)\n", step0FailCount);
+                        Serial.printf("[ENROLL] enroll_id failed (attempt %d)\n", step0FailCount);
                 esp_camera_fb_return(fb);
                 return;
             }
             step0FailCount   = 0;
-            step0StableCount = 0;
-            enrolledId = result;
+                enrolledId = result;
             Serial.printf("[ENROLL] Captured FRONT, ID=%d\n", result);
 
             // Neu chi co 1 buoc (ENROLL_TOTAL_STEPS==1), hoan tat enrollment ngay
             if (ENROLL_TOTAL_STEPS == 1) {
                 int persisted = recognizer.write_ids_to_flash();
                 if (persisted < 0) {
-                    Serial.println("[ENROLL] WARNING: flash write failed — embedding in RAM only");
+                    delay(50);
+                    persisted = recognizer.write_ids_to_flash(); // retry once
+                    if (persisted < 0)
+                        Serial.println("[ENROLL] WARNING: flash write failed x2 - embedding in RAM only");
                 }
                 Serial.printf("[ENROLL] Done! ID=%d  total=%d  flash=%d\n",
                               enrolledId, recognizer.get_enrolled_id_num(), persisted);
@@ -1357,7 +1354,10 @@ static void process_frame()
             if (is_last) {
                 int persisted = recognizer.write_ids_to_flash();
                 if (persisted < 0) {
-                    Serial.println("[ENROLL] WARNING: flash write failed — embedding in RAM only");
+                    delay(50);
+                    persisted = recognizer.write_ids_to_flash(); // retry once
+                    if (persisted < 0)
+                        Serial.println("[ENROLL] WARNING: flash write failed x2 - embedding in RAM only");
                 }
                 Serial.printf("[ENROLL] Done! ID=%d  total=%d  flash=%d\n",
                               enrolledId, recognizer.get_enrolled_id_num(), persisted);

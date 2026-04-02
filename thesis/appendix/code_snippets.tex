@@ -16,7 +16,7 @@ và có thể tham khảo tại kho lưu trữ GitHub của nhóm:
 \begin{lstlisting}[style=cstyle,
   caption={Hàm \texttt{Parse\_ESP32\_Msg} --- phân tích giao thức ESP32 $\to$ STM32},
   label={lst:parse_msg}]
-// Xem day du tai: STM32/Core/Src/main.c
+// Full source: STM32/Core/Src/main.c
 static void Parse_ESP32_Msg(const char *msg)
 {
     if (strcmp(msg, "SECURE_READY") == 0)
@@ -29,7 +29,7 @@ static void Parse_ESP32_Msg(const char *msg)
         enrolled_faces = (uint8_t)atoi(msg + 6);
     else if (strncmp(msg, "ENROLL_CFG:", 11) == 0)
         enroll_total_steps = (uint8_t)atoi(msg + 11);
-    /* ... (xem them trong kho ma nguon) */
+    /* ... (see the repository for the full implementation) */
 }
 \end{lstlisting}
 
@@ -38,7 +38,7 @@ static void Parse_ESP32_Msg(const char *msg)
 \begin{lstlisting}[style=cstyle,
   caption={Voting pipeline nhận diện khuôn mặt (ESP32-S3)},
   label={lst:fr_loop}]
-// Xem day du tai: ESP32-S3/STM-FaceGuard/STM-FaceGuard.ino
+// Full source: ESP32-S3/STM-FaceGuard/STM-FaceGuard.ino
 face_info_t res = recognizer.recognize(img, face.keypoint);
 if (res.id >= 0 && res.similarity >= RECOGNITION_THRESHOLD) {
     if (res.id == lastMatchId) matchCount++;
@@ -149,7 +149,7 @@ static void App_Loop(void)
             }
             break;
         case SYS_LOCKED:
-            /* Cap nhat dem nguoc OLED */
+            /* Update the OLED countdown */
             break;
         default:
             break;
@@ -170,8 +170,8 @@ IWDG->RLR = 2499U;        // ~5.0 s timeout with LSI ~32 kHz
 while (IWDG->SR != 0U) {}
 IWDG->KR  = 0xAAAAU;      // Reload counter
 
-// Trong App_Loop():
-IWDG->KR = 0xAAAAU;       // Feed watchdog moi vong lap
+// In App_Loop():
+IWDG->KR = 0xAAAAU;       // Feed the watchdog on each iteration
 \end{lstlisting}
 
 \begin{lstlisting}[style=cstyle,
@@ -193,7 +193,34 @@ void setup() {
 
 void loop() {
     esp_task_wdt_reset();
-    /* process_cmd() co the nhan STATUS / REBOOT / SECURE_HELLO */
+    /* process_cmd() may receive STATUS / REBOOT / SECURE_HELLO */
     process_frame();
+}
+\end{lstlisting}
+
+\section*{B.7 \quad Mở khóa từ xa qua Web UI --- ESP32-S3}
+
+\begin{lstlisting}[style=cstyle,
+  caption={Endpoint \texttt{/unlock} chuyển lệnh HTTP thành \texttt{OPEN:0}},
+  label={lst:web_unlock}]
+// ESP32-S3/STM-FaceGuard/STM-FaceGuard.ino
+static void preview_handle_unlock()
+{
+    if (previewServer.method() != HTTP_POST) {
+        previewServer.send(405, "text/plain; charset=utf-8", "POST required");
+        return;
+    }
+
+    uint32_t now = millis();
+    if (now < lockoutUntilMs) {
+        previewServer.send(403, "application/json",
+                           "{\"ok\":false,\"error\":\"LOCKOUT\"}");
+        return;
+    }
+
+    linkSend("OPEN:0");
+    lastOpenMs = now;
+    record_event("OPEN", 0, 1.0F);
+    previewServer.send(200, "application/json", "{\"ok\":true}");
 }
 \end{lstlisting}

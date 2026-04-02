@@ -14,8 +14,8 @@ Sơ đồ khối tổng quan hệ thống được trình bày trong \cref{fig:b
 Luồng hoạt động cơ bản như sau:
 \begin{enumerate}[label=\arabic*.]
   \item Camera OV3660 cung cấp liên tục luồng ảnh cho ESP32-S3.
-  \item ESP32-S3 xử lý ảnh, phát hiện và nhận diện khuôn mặt.
-  \item Kết quả nhận diện được gửi sang STM32F411CEU6 qua UART.
+  \item ESP32-S3 xử lý ảnh, phát hiện và nhận diện khuôn mặt, đồng thời duy trì Wi-Fi AP/Web UI cục bộ để preview và nhận lệnh mở khóa từ xa.
+  \item STM32 nhận kết quả nhận diện hoặc lệnh mở khóa từ Web UI qua UART.
   \item STM32F411CEU6 điều khiển relay mở khóa, cập nhật OLED và phát âm thanh phản hồi.
   \item Người dùng tương tác qua 3 nút nhấn rời bên ngoài để đăng ký, xóa dữ liệu hoặc mở cửa từ bên trong.
 \end{enumerate}
@@ -96,7 +96,7 @@ Mặc dù nhiều các lựa chọn thay thế tồn tại đối với mỗi th
   \item \textbf{Dual-core CPU}: 2 lõi 240 MHz cung cấp sức mạnh tính toán đủ cho TensorFlow Lite Micro inference (MSR01 + MNP01 models $\approx$ 100 MFLOPS).
   \item \textbf{Camera tích hợp}: Hỗ trợ giao diện DVP (Digital Video Port) song song, loại bỏ nhu cầu cầu nối camera riêng. OV3660 chạy trên 8 chân dữ liệu + 4 chân điều khiển không cần UART/SPI overhead.
   \item \textbf{Bộ nhớ}: 16 MB flash + 8 MB OPI PSRAM cung cấp không gian cho firmware nhận diện, cơ sở dữ liệu khuôn mặt trong NVS flash và bộ đệm ảnh RGB888 240$\times$240$\times$3 $\approx$ 173 KB.
-  \item \textbf{Tính năng}: UART, I2C, GPIO đầy đủ; Wi-Fi 2.4 GHz tích hợp (khả năng mở rộng cho preview hoặc logging nội bộ).
+  \item \textbf{Tính năng}: UART, I2C, GPIO đầy đủ; Wi-Fi 2.4 GHz tích hợp được tận dụng trực tiếp để phát AP/Web UI cục bộ, preview camera và mở khóa từ xa mà không cần module mạng rời.
   \item \textbf{Hỗ trợ TensorFlow}: esp-who framework, TensorFlow Lite Micro, công cụ chuyên dụng cho nhận diện khuôn mặt.
   \item \textbf{Phù hợp với firmware hiện tại}: Board được nạp theo cấu hình Arduino ``ESP32S3 Dev Module'' với Flash 16 MB, Partition ``Huge APP'', PSRAM OPI và UART riêng GPIO19/GPIO20 tới STM32; không cần tạo thêm các task ứng dụng thủ công để đạt yêu cầu đồ án.
 \end{itemize}
@@ -186,7 +186,7 @@ Mặc dù nhiều các lựa chọn thay thế tồn tại đối với mỗi th
 Thay vì lựa chọn một vi điều khiển ``super-MCU'' chứa cả AI lẫn điều khiển, các hệ thống được thiết kế với \textbf{hai MCU độc lập}:
 
 \begin{itemize}
-  \item \textbf{ESP32-S3}: Chuyên nhận diện khuôn mặt, inference (AI edge).
+  \item \textbf{ESP32-S3}: Chuyên nhận diện khuôn mặt, inference (AI edge), đồng thời xử lý Wi-Fi AP/Web UI cục bộ.
   \item \textbf{STM32F411}: Chuyên điều khiển relay, OLED, DFPlayer; quản lý state machine người dùng.
   \item \textbf{UART DMA}: Giao tiếp ở 115,200 baud không chặn, tối ưu độ trễ.
 \end{itemize}

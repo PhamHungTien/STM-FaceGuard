@@ -88,7 +88,7 @@ Hệ thống được kiểm thử với ma trận điều kiện hoàn toàn ki
 
 \subsection{Phân tích tác động của ngưỡng cosine similarity}
 
-Ngưỡng $\theta = 0.45$ được lựa chọn qua quá trình thực nghiệm quét tham số từ 0.40 đến 0.60 trên tập kiểm thử điều kiện ánh sáng tốt (Điều kiện 1 và 3). \cref{tab:threshold_sweep} tổng hợp kết quả.
+Ngưỡng $\theta = 0.42$ đang được sử dụng trong firmware hiện tại. \Cref{tab:threshold_sweep} cho thấy khi quét tham số từ 0.40 đến 0.60 trên tập kiểm thử điều kiện ánh sáng tốt (Điều kiện 1 và 3), ngưỡng này giữ được FNR thấp hơn đáng kể so với 0.45 trong khi FAR vẫn nằm dưới mức 5\% chấp nhận được cho ứng dụng dân dụng.
 
 \begin{table}[H]
   \centering
@@ -99,9 +99,9 @@ Ngưỡng $\theta = 0.45$ được lựa chọn qua quá trình thực nghiệm 
     \textbf{Ngưỡng $\theta$} & \textbf{FAR (\%)} & \textbf{FNR (\%)} & \textbf{Ghi chú} \\
     \midrule
     0.40 & 5.3 & 5.8  & Quá dễ chấp nhận, FAR cao \\
-    0.42 & 4.1 & 7.2  & Vẫn còn FAR trên ngưỡng cho phép \\
+    \textbf{0.42} & \textbf{4.1} & \textbf{7.2}  & \textbf{$\leftarrow$ Giá trị đang dùng trong firmware} \\
     0.44 & 2.8 & 9.5  & Cân bằng khá tốt \\
-    \textbf{0.45} & \textbf{2.0} & \textbf{11.4} & \textbf{$\leftarrow$ Giá trị được chọn} \\
+    0.45 & 2.0 & 11.4 & Bảo thủ hơn, nhưng tăng FNR \\
     0.48 & 1.2 & 14.7 & FNR tăng rõ, người dùng phải thử lại nhiều \\
     0.50 & 0.7 & 18.3 & Từ chối người hợp lệ quá thường xuyên \\
     0.55 & 0.2 & 26.1 & Không phù hợp cho khóa cửa \\
@@ -110,7 +110,7 @@ Ngưỡng $\theta = 0.45$ được lựa chọn qua quá trình thực nghiệm 
   \end{tabularx}
 \end{table}
 
-\noindent Ngưỡng $\theta = 0.45$ đạt FAR = 2.0\% (dưới mức cho phép 5\%) và FNR = 11.4\% (người dùng cần thử lại trung bình 1--2 lần trong điều kiện góc lệch hoặc ánh sáng thay đổi), phù hợp với ứng dụng khóa cửa gia đình.
+\noindent Ở cấu hình hiện tại, ngưỡng $\theta = 0.42$ đạt FAR = 4.1\% và FNR = 7.2\% trên tập kiểm thử ánh sáng tốt, tức ưu tiên giảm số lần từ chối nhầm người hợp lệ khi sử dụng hằng ngày. Đây là lựa chọn thiên về trải nghiệm sử dụng trong môi trường trong nhà hơn là bảo thủ tối đa về FAR.
 
 \section{Phân tích hiệu suất: Tradeoff số frame voting}
 \label{sec:voting_tradeoff}
@@ -119,7 +119,7 @@ Một quyết định thiết kế quan trọng là số lượng frame liên ti
 
 \subsection{Cơ sở lựa chọn 1-frame voting}
 
-Hệ thống STM-FaceGuard sử dụng \textbf{1-frame voting} có nghĩa là chỉ cần một frame khớp với cosine similarity $\geq 0.45$ để mở khóa. Lựa chọn này dựa trên tradeoff sau:
+Hệ thống STM-FaceGuard sử dụng \textbf{1-frame voting} có nghĩa là chỉ cần một frame khớp với cosine similarity $\geq 0.42$ để mở khóa. Lựa chọn này dựa trên tradeoff sau:
 
 \begin{table}[H]
   \centering
@@ -139,6 +139,8 @@ Hệ thống STM-FaceGuard sử dụng \textbf{1-frame voting} có nghĩa là ch
     \bottomrule
   \end{tabularx}
 \end{table}
+
+\noindent Bên cạnh đường nhận diện khuôn mặt, firmware hiện còn có đường mở khóa từ xa qua Wi-Fi cục bộ. Lệnh \texttt{POST /unlock} trên Web UI được ESP32 chuyển thành \texttt{OPEN:0} gửi sang STM32, nên không đi qua detector/embedding và không được tính vào KPI latency của pipeline nhận diện ở phần này.
 
 \subsection{Giải thích lựa chọn 1-frame cho khóa cửa}
 

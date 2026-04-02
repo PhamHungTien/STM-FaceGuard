@@ -13,7 +13,8 @@ Tiểu luận đã trình bày toàn bộ quá trình thiết kế và hiện th
   \item \textbf{Kiến trúc Dual-MCU hợp lý}: Phân tách rõ ràng tầng xử lý AI (ESP32-S3) và tầng điều khiển ngoại vi (STM32F411CEU6) giúp mỗi vi điều khiển tập trung vào thế mạnh của mình, đồng thời tăng tính mô-đun và khả năng bảo trì của hệ thống.
   \item \textbf{Giao thức UART nội bộ có tự phục hồi}: Thiết kế UART hai lớp giữa hai MCU giữ được khả năng debug ở bước bootstrap, đồng thời bổ sung xác thực gói, heartbeat và supervisor để tăng độ tin cậy vận hành thực tế.
   \item \textbf{Trải nghiệm người dùng đa kênh}: Tích hợp phản hồi qua OLED, âm thanh và LED tạo ra trải nghiệm rõ ràng, trực quan cho người dùng ở mọi điều kiện môi trường.
-  \item \textbf{Vận hành độc lập, không cần internet}: Toàn bộ thuật toán nhận diện và cơ sở dữ liệu khuôn mặt được lưu trữ và xử lý trực tiếp trên thiết bị, đảm bảo tính riêng tư và hoạt động liên tục kể cả khi mất kết nối mạng.
+  \item \textbf{Vận hành độc lập, không phụ thuộc Internet/WAN}: Toàn bộ thuật toán nhận diện và cơ sở dữ liệu khuôn mặt được lưu trữ và xử lý trực tiếp trên thiết bị, đảm bảo tính riêng tư và hoạt động liên tục kể cả khi không có kết nối ra internet công cộng.
+  \item \textbf{Bổ sung kênh điều khiển cục bộ qua Wi-Fi}: ESP32-S3 đồng thời cung cấp Web UI để preview camera, theo dõi trạng thái và phát lệnh mở khóa từ xa trong mạng nội bộ mà không cần thêm phần cứng mạng riêng.
 \end{enumerate}
 
 Kết quả thực nghiệm cho thấy hệ thống hoạt động ổn định, đạt tỉ lệ nhận diện chính xác cao trong điều kiện ánh sáng bình thường và thời gian phản hồi chấp nhận được cho ứng dụng kiểm soát truy cập thực tế.
@@ -35,6 +36,8 @@ Bên cạnh những kết quả đạt được, hệ thống hiện tại còn 
   \item \textbf{Bảo vệ UART mới dừng ở mức nhẹ}: Firmware hiện đã có bắt tay, sequence counter, auth tag và cơ chế che payload trên UART. Tuy vậy, khóa bí mật vẫn nằm trong flash firmware của hai MCU; nếu đối tượng tấn công có toàn quyền truy cập vật lý và trích xuất firmware, mức bảo vệ này chưa thể so sánh với secure element hoặc secure boot hoàn chỉnh.
   
   \item \textbf{Phục hồi ESP32 chưa xử lý được mọi nguyên nhân gốc}: Hiện tại STM32 đã có thể thử \texttt{STATUS}, gửi \texttt{REBOOT} và kéo reset cứng qua \texttt{PB1 -> EN/RESET}. Dù vậy, nếu nguyên nhân đến từ sụt áp nguồn 5~V, tiếp xúc GND kém hoặc lỗi camera phần cứng lặp lại, việc reset vẫn chỉ giải quyết triệu chứng chứ không loại bỏ hoàn toàn nguyên nhân nền.
+
+  \item \textbf{Mở khóa từ xa qua Wi-Fi mới phù hợp cho mạng nội bộ tin cậy}: Web UI cục bộ hiện ưu tiên tính đơn giản để demo và vận hành trong lab. Endpoint \texttt{/unlock} chưa có lớp đăng nhập riêng, chưa dùng TLS, và còn tồn tại tùy chọn fallback AP mở nếu cấu hình bảo vệ thất bại. Vì vậy, tính năng này chưa đủ mạnh cho môi trường có đối tượng truy cập mạng không đáng tin cậy.
   
   \item \textbf{Dữ liệu khuôn mặt không được backup}: Cơ sở dữ liệu 7 khuôn mặt được lưu trong NVS Flash của ESP32-S3. Nếu flash bị lỗi hoặc bị xóa tình cờ, toàn bộ dữ liệu khuôn mặt sẽ mất mà không có cách phục hồi (không có backup on-cloud hay on-device ngoài).
 \end{enumerate}
@@ -61,6 +64,8 @@ Từ những hạn chế trên, nhóm đề xuất các hướng phát triển t
 \begin{enumerate}[label=\arabic*.]
   \item \textbf{Nâng cấp bảo vệ khoá bí mật UART}: Kết hợp Secure Boot / Flash Encryption của ESP32-S3 và RDP của STM32 để bảo vệ khóa bí mật hiện đang lưu trong firmware.
   
+  \item \textbf{Gia cố xác thực cho Web UI mở khóa từ xa}: Bổ sung đăng nhập, token phiên, mật khẩu riêng theo thiết bị và vô hiệu hóa fallback AP mở trong bản triển khai thực tế.
+  
   \item \textbf{Backup \& restore khuôn mặt}: Triển khai cơ chế xuất/nhập dữ liệu khuôn mặt qua UART hoặc USB, cho phép backup lên máy tính hoặc SD card bên ngoài.
   
   \item \textbf{Supervisor thông minh hơn}: Bổ sung ghi log nguyên nhân reset, đếm số lần phục hồi liên tiếp và phân loại lỗi brownout / camera / UART để tránh reset lặp vô ích.
@@ -71,7 +76,7 @@ Từ những hạn chế trên, nhóm đề xuất các hướng phát triển t
 \subsection{Ưu tiên thấp (Low Priority)}
 
 \begin{enumerate}[label=\arabic*.]
-  \item \textbf{Ứng dụng di động (Mobile App)}: Phát triển app iOS/Android để quản lý người dùng từ xa qua BLE hoặc Wi-Fi.
+  \item \textbf{Ứng dụng di động (Mobile App)}: Phát triển app iOS/Android để thay thế Web UI thử nghiệm bằng giao diện quản trị hoàn chỉnh hơn qua BLE hoặc Wi-Fi.
   
   \item \textbf{Nâng cấp RTOS cho STM32}: Chuyển từ superloop sang FreeRTOS để xử lý đa nhiệm thực sự, khử hoàn toàn blocking delay.
   

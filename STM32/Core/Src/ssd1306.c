@@ -314,6 +314,11 @@ void SSD1306_ShowUnlockedExit(void)
     draw_status("", " ** UNLOCKED **", "", "  (Exit button)");
 }
 
+void SSD1306_ShowUnlockedRemote(void)
+{
+    draw_status("", " ** UNLOCKED **", "", "  (Remote/Web)");
+}
+
 void SSD1306_ShowDenied(void)
 {
     draw_status("", " ** DENIED **", "", " Face not found!");

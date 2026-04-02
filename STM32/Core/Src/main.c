@@ -792,9 +792,19 @@ static void Parse_ESP32_Msg(const char *msg)
     } else if (strncmp(msg, "OPEN:", 5) == 0) {
         if (strlen(msg) <= 5) return;
         Mark_ESP32_Alive();
-        uint8_t id = (uint8_t)atoi(msg + 5);
-        if (id >= MAX_ENROLLED_FACES_STM32) id = 0;
-        Enter_Unlocked(id, 0);
+        int raw_id = atoi(msg + 5);
+        if (raw_id == 255) {
+            /* Remote/web unlock — show dedicated screen */
+            Relay_Open();
+            sys_state  = SYS_UNLOCKING;
+            state_tick = HAL_GetTick();
+            SSD1306_ShowUnlockedRemote();
+            DFPlayer_Play(DFP_TRACK_OPEN_DOOR);
+        } else {
+            uint8_t id = (raw_id >= 0 && raw_id < MAX_ENROLLED_FACES_STM32)
+                         ? (uint8_t)raw_id : 0U;
+            Enter_Unlocked(id, 0);
+        }
 
     } else if (strcmp(msg, "DENIED") == 0) {
         Mark_ESP32_Alive();

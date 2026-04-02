@@ -3,6 +3,7 @@
 % ============================================================
 \chapter*{Tóm tắt}
 \addcontentsline{toc}{chapter}{Tóm tắt}
+\markboth{Tóm tắt}{Tóm tắt}
 
 \begin{singlespace}
 \noindent\textbf{Tên đề tài:} Thiết Kế Khóa Thông Minh Sử Dụng Nhận Diện Khuôn Mặt
@@ -15,9 +16,9 @@
 
 Tiểu luận trình bày quá trình thiết kế và hiện thực hệ thống khóa thông minh tích hợp công nghệ nhận diện khuôn mặt, hướng đến thay thế các cơ chế kiểm soát truy cập truyền thống (chìa khóa, mã PIN) vốn tiềm ẩn nhiều rủi ro bảo mật.
 
-Hệ thống sử dụng kiến trúc \textbf{Dual-MCU}: vi điều khiển \textbf{STM32F411CEU6} (Black Pill) đảm nhận vai trò điều khiển toàn bộ ngoại vi gồm module relay 1 kênh 5~V điều khiển khóa SM1373 12~V, màn hình OLED SSD1306, module âm thanh DFPlayer Mini và ba nút nhấn rời; trong khi \textbf{ESP32-S3-N16R8} --- được trang bị bộ tăng tốc vector AI tích hợp --- xử lý luồng ảnh từ camera và thực thi thuật toán nhận diện khuôn mặt theo thời gian thực. Hai vi điều khiển giao tiếp qua UART \SI{115200}{baud} với cơ chế bắt tay tương thích ngược và đóng gói có xác thực ở firmware hiện tại; đồng thời STM32 có thể yêu cầu ESP32 tự khởi động lại hoặc kéo reset cứng qua đường \texttt{PB1 -> EN/RESET} khi mất kết nối kéo dài.
+Hệ thống sử dụng kiến trúc \textbf{Dual-MCU}: vi điều khiển \textbf{STM32F411CEU6} (Black Pill) đảm nhận vai trò điều khiển toàn bộ ngoại vi gồm module relay 1 kênh 5~V điều khiển khóa SM1373 12~V, màn hình OLED SSD1306, module âm thanh DFPlayer Mini và ba nút nhấn rời; trong khi \textbf{ESP32-S3-N16R8} --- được trang bị bộ tăng tốc vector AI tích hợp --- xử lý luồng ảnh từ camera, thực thi thuật toán nhận diện khuôn mặt theo thời gian thực, đồng thời cung cấp giao diện Wi-Fi cục bộ để preview và mở khóa từ xa trong mạng nội bộ. Hai vi điều khiển giao tiếp qua UART \SI{115200}{baud} với cơ chế bắt tay tương thích ngược và đóng gói có xác thực ở firmware hiện tại; đồng thời STM32 có thể yêu cầu ESP32 tự khởi động lại hoặc kéo reset cứng qua đường \texttt{PB1 -> EN/RESET} khi mất kết nối kéo dài.
 
-Kết quả thực nghiệm cho thấy hệ thống đạt tỉ lệ nhận diện chính xác trên \SI{90}{\percent} trong điều kiện ánh sáng bình thường với ngưỡng cosine similarity = 0.45, thời gian phản hồi trung bình ở mức vài trăm mili giây từ lúc phát hiện khuôn mặt đến khi mở khóa. Hệ thống hỗ trợ đăng ký và xóa khuôn mặt trực tiếp qua nút nhấn, phản hồi đa kênh qua màn hình và âm thanh.
+Kết quả thực nghiệm cho thấy hệ thống đạt tỉ lệ nhận diện chính xác trên \SI{90}{\percent} trong điều kiện ánh sáng bình thường với ngưỡng cosine similarity = 0.42, thời gian phản hồi trung bình ở mức vài trăm mili giây từ lúc phát hiện khuôn mặt đến khi mở khóa. Hệ thống hỗ trợ đăng ký và xóa khuôn mặt trực tiếp qua nút nhấn, phản hồi đa kênh qua màn hình và âm thanh, đồng thời duy trì Web UI cục bộ để theo dõi trạng thái và phát lệnh mở khóa từ xa.
 
 \medskip
 \noindent\textbf{Từ khóa:} nhận diện khuôn mặt, hệ thống nhúng, STM32, ESP32-S3, khóa thông minh, kiểm soát truy cập.
