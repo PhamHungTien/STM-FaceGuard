@@ -1115,6 +1115,9 @@ static bool camera_init()
 static void send_status(bool includeConfig)
 {
     if (!cameraReady) {
+        /* Vẫn gửi READY trước để STM32 thoát SYS_CONNECTING,
+         * sau đó báo lỗi camera để STM32 hiển thị đúng trạng thái. */
+        linkSendPlain("READY");
         linkSendf("CAM_FAIL:%d", (int)cameraInitErr);
         return;
     }
@@ -1576,8 +1579,9 @@ void loop()
     face_light_poll();
 
     if (!cameraReady) {
-        if ((millis() - lastCamFailTxMs) >= 1000U) {
+        if ((millis() - lastCamFailTxMs) >= 3000U) {
             lastCamFailTxMs = millis();
+            linkSendPlain("READY");          // giữ link alive với STM32
             linkSendf("CAM_FAIL:%d", (int)cameraInitErr);
         }
         delay(10);

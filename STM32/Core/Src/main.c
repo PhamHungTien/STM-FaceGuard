@@ -844,9 +844,14 @@ static void Parse_ESP32_Msg(const char *msg)
         UART_RequestSecureHello(1U); /* Re-initiate handshake immediately */
 
     } else if (strncmp(msg, "CAM_FAIL:", 9) == 0) {
-        /* ESP32 alive but camera not ready - keep link, let recovery timeout handle reset */
-        esp32_ready = 0; delete_hold_active = 0; Note_ESP32_Traffic();
+        /* ESP32 alive but camera not ready */
+        Note_ESP32_Traffic();
+        esp32_ready = 0; delete_hold_active = 0;
         if (esp32_offline_tick == 0U) esp32_offline_tick = HAL_GetTick();
+        if (sys_state == SYS_CONNECTING || sys_state == SYS_OFFLINE) {
+            sys_state = SYS_OFFLINE;
+            SSD1306_ShowESP32Offline();
+        }
 
     } else if (strcmp(msg, "READY") == 0) {
         Mark_ESP32_Alive();
