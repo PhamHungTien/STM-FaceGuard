@@ -58,6 +58,7 @@
 #include "esp_heap_caps.h"
 #include "esp_wifi.h"
 #include "freertos/semphr.h"
+#include <math.h>
 #include <stdarg.h>
 #include <string.h>
 #include <WebServer.h>
@@ -119,19 +120,27 @@ SET_LOOP_TASK_STACK_SIZE(16 * 1024);
 #define VISION_TASK_PRIORITY            2
 #define VISION_TASK_CORE               0
 #define VISION_TASK_IDLE_MS            1
-#define PREVIEW_CAPTURE_LIGHT_ENABLE    1
-#define PREVIEW_CAPTURE_LIGHT_WARMUP_MS 35
-#define PREVIEW_CAPTURE_LIGHT_HOLD_MS  180
+#define PREVIEW_CAPTURE_LIGHT_ENABLE    0
+#define PREVIEW_CAPTURE_LIGHT_WARMUP_MS 150
+#define PREVIEW_CAPTURE_LIGHT_HOLD_MS 1200
+#define PREVIEW_SOFT_TONEMAP_ENABLE     1
+#define PREVIEW_SOFT_TONEMAP_GAMMA   0.75f
+#define PREVIEW_SOFT_TONEMAP_LIFT        4
+#define CAMERA_ROTATE_RIGHT_90          1
+#define CAMERA_SELFIE_MIRROR            1
 
 // -- Low-light tuning ----------------------------------------------------------
 #define CAMERA_LOW_LIGHT_PRESET_ENABLE  1
-#define CAMERA_BRIGHTNESS_LEVEL         2
-#define CAMERA_CONTRAST_LEVEL           1
-#define CAMERA_SATURATION_LEVEL        -1
-#define CAMERA_SHARPNESS_LEVEL          2
-#define CAMERA_DENOISE_LEVEL            2
-#define CAMERA_AE_LEVEL                 2
-#define CAMERA_GAINCEILING_LEVEL   GAINCEILING_32X
+#define CAMERA_LOW_LIGHT_MANUAL_EXPOSURE 1
+#define CAMERA_BRIGHTNESS_LEVEL         3
+#define CAMERA_CONTRAST_LEVEL           0
+#define CAMERA_SATURATION_LEVEL         0
+#define CAMERA_SHARPNESS_LEVEL          1
+#define CAMERA_DENOISE_LEVEL            3
+#define CAMERA_AE_LEVEL                 5
+#define CAMERA_GAINCEILING_LEVEL   GAINCEILING_128X
+#define CAMERA_MANUAL_AGC_GAIN         32
+#define CAMERA_MANUAL_AEC_VALUE      1200
 
 // -- Den tro sang khuon mat ---------------------------------------------------
 // Nhieu board ESP32-S3-CAM kieu nay co ca:
@@ -252,6 +261,8 @@ static TaskHandle_t visionTaskHandle = nullptr;
 static SemaphoreHandle_t cameraMutex = nullptr;
 static uint8_t *rgbFrameBuf     = nullptr;
 static size_t   rgbFrameBufLen  = 0;
+static bool     previewToneLutReady = false;
+static uint8_t  previewToneLut[256];
 static bool     faceLightOn     = false;
 static uint32_t faceLightUntilMs = 0;
 
@@ -638,6 +649,65 @@ static void camera_unlock()
     }
 }
 
+static void preview_tonemap_init()
+{
+#if PREVIEW_SOFT_TONEMAP_ENABLE
+    if (previewToneLutReady) {
+        return;
+    }
+
+    for (int i = 0; i < 256; ++i) {
+        float normalized = (float)i / 255.0f;
+        float mapped = powf(normalized, PREVIEW_SOFT_TONEMAP_GAMMA) * 255.0f
+                     + (float)PREVIEW_SOFT_TONEMAP_LIFT;
+        if (mapped > 255.0f) {
+            mapped = 255.0f;
+        }
+        previewToneLut[i] = (uint8_t)(mapped + 0.5f);
+    }
+    previewToneLutReady = true;
+#endif
+}
+
+static void preview_tonemap_rgb888(uint8_t *rgbBuf, size_t rgbLen)
+{
+#if PREVIEW_SOFT_TONEMAP_ENABLE
+    if (!rgbBuf || rgbLen == 0U) {
+        return;
+    }
+
+    preview_tonemap_init();
+
+    for (size_t i = 0; i < rgbLen; ++i) {
+        rgbBuf[i] = previewToneLut[rgbBuf[i]];
+    }
+#endif
+}
+
+static void camera_rotate_rgb565_right_90(camera_fb_t *fb)
+{
+#if CAMERA_ROTATE_RIGHT_90
+    if (!fb || fb->format != PIXFORMAT_RGB565 || !fb->buf || fb->width != fb->height || fb->len < 2U) {
+        return;
+    }
+
+    uint16_t *pixels = (uint16_t *)fb->buf;
+    size_t n = fb->width;
+    for (size_t layer = 0; layer < (n / 2U); ++layer) {
+        size_t first = layer;
+        size_t last = n - 1U - layer;
+        for (size_t i = first; i < last; ++i) {
+            size_t offset = i - first;
+            uint16_t top = pixels[first * n + i];
+            pixels[first * n + i] = pixels[(last - offset) * n + first];
+            pixels[(last - offset) * n + first] = pixels[last * n + (last - offset)];
+            pixels[last * n + (last - offset)] = pixels[i * n + last];
+            pixels[i * n + last] = top;
+        }
+    }
+#endif
+}
+
 static void face_light_apply(bool on)
 {
 #if FACE_LIGHT_ENABLE
@@ -958,6 +1028,8 @@ static void preview_handle_capture()
         return;
     }
 
+    camera_rotate_rgb565_right_90(fb);
+
     uint8_t *jpgBuf = nullptr;
     size_t jpgLen = 0;
     bool mustFreeJpg = false;
@@ -966,7 +1038,22 @@ static void preview_handle_capture()
         jpgBuf = fb->buf;
         jpgLen = fb->len;
     } else {
-        if (!frame2jpg(fb, PREVIEW_JPEG_QUALITY, &jpgBuf, &jpgLen)) {
+        if (!ensure_rgb_frame_buf(fb->width, fb->height)) {
+            esp_camera_fb_return(fb);
+            camera_unlock();
+            previewServer.send(500, "text/plain; charset=utf-8", "RGB buffer unavailable");
+            return;
+        }
+        if (!fmt2rgb888(fb->buf, fb->len, fb->format, rgbFrameBuf)) {
+            esp_camera_fb_return(fb);
+            camera_unlock();
+            previewServer.send(500, "text/plain; charset=utf-8", "RGB convert failed");
+            return;
+        }
+        preview_tonemap_rgb888(rgbFrameBuf, fb->width * fb->height * 3U);
+        if (!fmt2jpg(rgbFrameBuf, fb->width * fb->height * 3U,
+                     fb->width, fb->height, PIXFORMAT_RGB888,
+                     PREVIEW_JPEG_QUALITY, &jpgBuf, &jpgLen)) {
             esp_camera_fb_return(fb);
             camera_unlock();
             previewServer.send(500, "text/plain; charset=utf-8", "JPEG encode failed");
@@ -1228,12 +1315,12 @@ static bool camera_init()
     sensor_t *s = esp_camera_sensor_get();
     if (s) {
         s->set_vflip(s, 0);
-        s->set_hmirror(s, 1);       // guong ngang - nhin tu nhien nhu selfie
+        s->set_hmirror(s, CAMERA_SELFIE_MIRROR ? 1 : 0);
         s->set_whitebal(s, 1);      // auto white balance
         s->set_awb_gain(s, 1);      // auto WB gain
-        s->set_exposure_ctrl(s, 1); // auto exposure
+        s->set_exposure_ctrl(s, CAMERA_LOW_LIGHT_MANUAL_EXPOSURE ? 0 : 1);
         s->set_aec2(s, 1);          // AEC algorithm 2 (better in low light)
-        s->set_gain_ctrl(s, 1);     // auto gain
+        s->set_gain_ctrl(s, CAMERA_LOW_LIGHT_MANUAL_EXPOSURE ? 0 : 1);
         s->set_brightness(s, CAMERA_BRIGHTNESS_LEVEL);
         s->set_contrast(s, CAMERA_CONTRAST_LEVEL);
         s->set_saturation(s, CAMERA_SATURATION_LEVEL);
@@ -1242,15 +1329,24 @@ static bool camera_init()
 #if CAMERA_LOW_LIGHT_PRESET_ENABLE
         s->set_gainceiling(s, CAMERA_GAINCEILING_LEVEL);
         s->set_ae_level(s, CAMERA_AE_LEVEL);
+#if CAMERA_LOW_LIGHT_MANUAL_EXPOSURE
+        s->set_agc_gain(s, CAMERA_MANUAL_AGC_GAIN);
+        s->set_aec_value(s, CAMERA_MANUAL_AEC_VALUE);
 #endif
-        Serial.printf("[SYS] Camera tune: brightness=%d contrast=%d saturation=%d sharpness=%d denoise=%d ae_level=%d gainceiling=%d\n",
+#endif
+        Serial.printf("[SYS] Camera tune: brightness=%d contrast=%d saturation=%d sharpness=%d denoise=%d ae_level=%d gainceiling=%d manual_exp=%d agc_gain=%d aec_value=%d rot_right_90=%d selfie_mirror=%d\n",
                       CAMERA_BRIGHTNESS_LEVEL,
                       CAMERA_CONTRAST_LEVEL,
                       CAMERA_SATURATION_LEVEL,
                       CAMERA_SHARPNESS_LEVEL,
                       CAMERA_DENOISE_LEVEL,
                       CAMERA_AE_LEVEL,
-                      (int)CAMERA_GAINCEILING_LEVEL);
+                      (int)CAMERA_GAINCEILING_LEVEL,
+                      CAMERA_LOW_LIGHT_MANUAL_EXPOSURE ? 1 : 0,
+                      CAMERA_LOW_LIGHT_MANUAL_EXPOSURE ? CAMERA_MANUAL_AGC_GAIN : -1,
+                      CAMERA_LOW_LIGHT_MANUAL_EXPOSURE ? CAMERA_MANUAL_AEC_VALUE : -1,
+                      CAMERA_ROTATE_RIGHT_90 ? 1 : 0,
+                      CAMERA_SELFIE_MIRROR ? 1 : 0);
     }
 
     camera_fb_t *fb = esp_camera_fb_get();
@@ -1400,6 +1496,8 @@ static void process_frame(HumanFaceDetectMSR01 &s1, HumanFaceDetectMNP01 &s2)
         delay(10);
         return;
     }
+
+    camera_rotate_rgb565_right_90(fb);
 
     // Detect truc tiep tren RGB565 tu camera theo dung cach example cua Espressif.
     std::list<dl::detect::result_t> &candidates =
