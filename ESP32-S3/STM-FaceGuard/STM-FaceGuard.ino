@@ -1488,6 +1488,13 @@ static void process_frame()
 void setup()
 {
     Serial.begin(115200);
+
+    // Cau hinh WDT 30s TRUOC khi bat dau bat ky tac vu dai nao (WiFi, camera).
+    // Arduino 2.x co the da init WDT mac dinh 5s; deinit truoc de tranh conflict.
+    esp_task_wdt_deinit();
+    esp_task_wdt_init(30, true);   // 30 s timeout, panic + reset
+    esp_task_wdt_add(NULL);        // theo doi loopTask tu day
+
     esp_reset_reason_t rr = esp_reset_reason();
     Serial.printf("\n[SYS] STM-FaceGuard ESP32-S3 starting... reset=%s\n",
                   reset_reason_name(rr));
@@ -1512,10 +1519,12 @@ void setup()
 
     // Khoi dong WiFi truoc camera - AP luon hien ngay ca khi camera crash
 #if PREVIEW_ENABLE
+    esp_task_wdt_reset();
     preview_start_network();
 #endif
 
     // Khoi tao camera
+    esp_task_wdt_reset();
     cameraReady = camera_init();
     if (!cameraReady) {
         Serial.printf("[SYS] Camera init FAILED err=0x%04X (%s)\n",
@@ -1528,10 +1537,6 @@ void setup()
     }
     // Hien thi so khuon mat da dang ky (nap tu NVS flash)
     Serial.printf("[SYS] Enrolled faces: %d\n", recognizer.get_enrolled_id_num());
-
-    // Bat task watchdog - reset ESP32 neu vong loop() bi ket qua 30 giay
-    esp_task_wdt_init(30, true);   // 30 s timeout, panic + reset
-    esp_task_wdt_add(NULL);        // theo doi task hien tai (loopTask)
 
     delay(300);
     if (cameraReady) {
