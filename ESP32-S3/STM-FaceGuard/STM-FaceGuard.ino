@@ -124,23 +124,23 @@ SET_LOOP_TASK_STACK_SIZE(16 * 1024);
 #define PREVIEW_CAPTURE_LIGHT_WARMUP_MS 150
 #define PREVIEW_CAPTURE_LIGHT_HOLD_MS 1200
 #define PREVIEW_SOFT_TONEMAP_ENABLE     1
-#define PREVIEW_SOFT_TONEMAP_GAMMA   0.75f
-#define PREVIEW_SOFT_TONEMAP_LIFT        4
+#define PREVIEW_SOFT_TONEMAP_GAMMA   0.82f
+#define PREVIEW_SOFT_TONEMAP_LIFT        2
 #define CAMERA_ROTATE_RIGHT_90          1
 #define CAMERA_SELFIE_MIRROR            1
 
 // -- Low-light tuning ----------------------------------------------------------
 #define CAMERA_LOW_LIGHT_PRESET_ENABLE  1
 #define CAMERA_LOW_LIGHT_MANUAL_EXPOSURE 1
-#define CAMERA_BRIGHTNESS_LEVEL         3
+#define CAMERA_BRIGHTNESS_LEVEL         2
 #define CAMERA_CONTRAST_LEVEL           0
 #define CAMERA_SATURATION_LEVEL         0
 #define CAMERA_SHARPNESS_LEVEL          1
 #define CAMERA_DENOISE_LEVEL            3
-#define CAMERA_AE_LEVEL                 5
+#define CAMERA_AE_LEVEL                 3
 #define CAMERA_GAINCEILING_LEVEL   GAINCEILING_128X
 #define CAMERA_MANUAL_AGC_GAIN         32
-#define CAMERA_MANUAL_AEC_VALUE      1200
+#define CAMERA_MANUAL_AEC_VALUE       950
 
 // -- Den tro sang khuon mat ---------------------------------------------------
 // Nhieu board ESP32-S3-CAM kieu nay co ca:
